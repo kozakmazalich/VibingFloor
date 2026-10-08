@@ -97,6 +97,7 @@ export class Robot {
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
     this.fxPushCount = 0; // incremented on each push (host broadcasts as fx event)
     this.netPose = null; // latest authoritative pose from the host (guest only)
+    this.predictingHop = false; // guest predicted a jump locally (mid-flight)
     this._netTarget = new THREE.Vector3();
 
     // Root 3D group
@@ -263,6 +264,7 @@ export class Robot {
     this.hitShakeTimer = 0;
     this.facingAngle = this.isPlayer ? -Math.PI / 4 : (3 * Math.PI) / 4;
     this.netPose = null; // drop stale snapshot target (online guest: fresh ones arrive ~33ms later)
+    this.predictingHop = false;
 
     this.jumpCooldown = 0;
     this.pushCooldown = 0;
@@ -925,14 +927,20 @@ export class Robot {
       this.spearCooldown = pose.cd[2] || 0;
       this.grenadeCooldown = pose.cd[3] || 0;
     }
-    this.isGrounded = pose.st === "alive";
+    // Don't stomp a locally predicted hop: while we are mid-air locally the
+    // host's pose (one RTT behind) still reports the robot as grounded.
+    if (pose.st !== "alive") {
+      this.isGrounded = false;
+    } else if (!this.predictingHop) {
+      this.isGrounded = true;
+    }
   }
 
   // Smoothly drive the visual state toward the host's snapshot (online guest
   // does not simulate authoritative physics — it renders with interpolation).
   // inputActive = the guest is steering right now: correction is gentler so
   // local prediction is not pulled back by snapshots that are one RTT old.
-  netTick(dt, inputActive = false) {
+  netTick(dt, inputActive = false, island = null) {
     const pose = this.netPose;
     if (!pose) {
       // Never received a snapshot yet — keep the spawn pose
@@ -954,7 +962,17 @@ export class Robot {
     // robust to jitter). While steering, correct drift only slowly.
     this._netTarget.set(pose.x, pose.y, pose.z);
     const k = 1 - Math.exp(-dt * (inputActive ? 1.8 : 14));
-    this.pos.lerp(this._netTarget, k);
+    const surf = island ? island.getSurfaceAt(this.pos.x, this.pos.z) : null;
+    const surfY = surf ? surf.y : 0;
+    // The host's robot is still mid-air (its hop is one RTT behind ours)
+    const hostAirborne = pose.st === "alive" && pose.y > surfY + 0.2;
+    if ((!this.isGrounded && this.state === "alive") || hostAirborne) {
+      // Predicted hop in flight: keep the local Y, only correct X/Z gently.
+      this.pos.x += (pose.x - this.pos.x) * k;
+      this.pos.z += (pose.z - this.pos.z) * k;
+    } else {
+      this.pos.lerp(this._netTarget, k);
+    }
 
     // Shortest-arc facing interpolation (skip while steering: the local
     // prediction owns the facing, the snapshot is one RTT behind)

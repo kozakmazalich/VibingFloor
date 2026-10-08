@@ -127,8 +127,10 @@ export class FXManager {
 
   // Guest-side visual-only grenade: flies the same arc and explodes with FX,
   // but has NO gameplay effect (tile damage / knockback are synced by the
-  // host via authoritative snapshots).
-  spawnNetGrenade({ id, x, y, z, tx, ty, tz, ft, color = 0x00e5ff }) {
+  // host via authoritative snapshots). onBoom(x, z) lets the guest collapse
+  // the tiles LOCALLY at detonation for an instant visual (the authoritative
+  // tile deltas arrive right after and are idempotent).
+  spawnNetGrenade({ id, x, y, z, tx, ty, tz, ft, color = 0x00e5ff, onBoom = null }) {
     const geo = new THREE.SphereGeometry(0.22, 16, 16);
     const mat = new THREE.MeshStandardMaterial({
       color: 0x1e293b,
@@ -158,6 +160,7 @@ export class FXManager {
         audio.playExplosion();
         this.spawnExplosionShockwave(ex, ey, ez, color, 2.6);
         this.spawnSparkBurst(ex, ey, ez, 36, 0xff5c1a, 1.8);
+        if (onBoom) onBoom(ex, ez);
       },
     });
   }

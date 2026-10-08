@@ -331,6 +331,54 @@ async function runScenario(label, hostMobile, guestMobile) {
       guest.log("FAIL: spear cooldown stuck");
     }
 
+    // Round-trip 3: the GUEST's grenade must break the floor on BOTH sides
+    const count = async (s) => parseInt(await s.eval(`document.getElementById("tile-count").textContent.split("/")[0]`), 10);
+    const hostTilesBefore = await count(host);
+    const guestTilesBefore = await count(guest);
+    await guest.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyG", bubbles: true, cancelable: true }))`);
+    await sleep(250);
+    await guest.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyG", bubbles: true, cancelable: true }))`);
+    await sleep(1600); // flight 0.65s + detonation + tile delta sync
+    const hostTilesAfter = await count(host);
+    const guestTilesAfter = await count(guest);
+    if (hostTilesBefore - hostTilesAfter >= 3) {
+      host.log(`OK: guest grenade broke the host floor (${hostTilesBefore} -> ${hostTilesAfter})`);
+    } else {
+      failures++;
+      host.log(`FAIL: guest grenade did not break the host floor (${hostTilesBefore} -> ${hostTilesAfter})`);
+    }
+    if (guestTilesBefore - guestTilesAfter >= 3) {
+      guest.log(`OK: guest floor broke instantly (${guestTilesBefore} -> ${guestTilesAfter})`);
+    } else {
+      failures++;
+      guest.log(`FAIL: guest floor did not break (${guestTilesBefore} -> ${guestTilesAfter})`);
+    }
+    if (Math.abs(hostTilesAfter - guestTilesAfter) <= 3) {
+      guest.log("OK: tile states synced (within tolerance)");
+    } else {
+      failures++;
+      guest.log(`FAIL: tile counts diverge (host ${hostTilesAfter} vs guest ${guestTilesAfter})`);
+    }
+
+    // Round-trip 4: the HOST's grenade must break the floor on the guest.
+    // Nudge the host robot inward first so the grenade lands on the island.
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", bubbles: true, cancelable: true }))`);
+    await sleep(600);
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyS", bubbles: true, cancelable: true }))`);
+    await sleep(300);
+    const guestTilesBefore2 = await count(guest);
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyG", bubbles: true, cancelable: true }))`);
+    await sleep(250);
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyG", bubbles: true, cancelable: true }))`);
+    await sleep(1600);
+    const guestTilesAfter2 = await count(guest);
+    if (guestTilesBefore2 - guestTilesAfter2 >= 3) {
+      guest.log(`OK: host grenade broke the guest floor (${guestTilesBefore2} -> ${guestTilesAfter2})`);
+    } else {
+      failures++;
+      guest.log(`FAIL: host grenade did not break the guest floor (${guestTilesBefore2} -> ${guestTilesAfter2})`);
+    }
+
     // Round-trip 2: guest holds W (movement input must reach the host and
     // the guest's own prediction must respond — the follow camera is the
     // only observable: it stays locked on the robot, so the snapshots keep

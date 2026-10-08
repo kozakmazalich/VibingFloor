@@ -11,6 +11,9 @@ import {
   SPEAR_COOLDOWN,
   GRENADE_COOLDOWN,
   GRENADE_THROW_DISTANCE,
+  GRENADE_RADIUS,
+  JUMP_FORCE,
+  GRAVITY,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -656,7 +659,7 @@ export class Game {
     // Tile state deltas: code 1 = warning, 2 = falling/dead
     if (snap.tiles && snap.tiles.length) {
       for (const d of snap.tiles) {
-        const tile = this.island.tileById[d[0]];
+        const tile = this.island.tileById.get(d[0]);
         if (!tile) continue;
         if (d[1] === 1) {
           tile.startWarning();
@@ -746,6 +749,9 @@ export class Game {
           tz: f.tz,
           ft: f.ft,
           color: f.c || 0x00e5ff,
+          // The opponent's blast center is authoritative — collapse the
+          // same tiles locally so the destruction is visible instantly.
+          onBoom: (ex, ez) => this.island.destroyTilesAt(ex, ez, GRENADE_RADIUS),
         });
         break;
       case "boom":
@@ -838,6 +844,22 @@ export class Game {
     const now = performance.now();
     const dirX = -Math.sin(p.facingAngle);
     const dirZ = -Math.cos(p.facingAngle);
+
+    // Predicted aerial physics: the hop starts instantly instead of waiting
+    // for the host round-trip. netTick keeps the local Y while airborne.
+    if (!p.isGrounded) {
+      p.vy -= GRAVITY * dt;
+      p.pos.y += p.vy * dt;
+      const s = this.island.getSurfaceAt(p.pos.x, p.pos.z);
+      if (s && p.pos.y <= s.y && p.vy <= 0) {
+        p.pos.y = s.y;
+        p.vy = 0;
+        p.isGrounded = true;
+        p.predictingHop = false;
+        audio.playLand();
+      }
+    }
+
     if (keys["Space"] && p.pushCooldown <= 0) {
       p.pushCooldown = PUSH_COOLDOWN;
       p.playPushWaveVisual();
@@ -845,6 +867,9 @@ export class Game {
     }
     if (keys["KeyJ"] && p.jumpCooldown <= 0 && p.isGrounded) {
       p.jumpCooldown = JUMP_COOLDOWN;
+      p.isGrounded = false;
+      p.predictingHop = true;
+      p.vy = JUMP_FORCE;
       p.triggerJumpVisual(this.fx);
       this.guestPredicted.jump = now;
     }
@@ -879,6 +904,10 @@ export class Game {
         tz,
         ft: 0.65,
         color: p.teamColor,
+        // Collapse the floor LOCALLY at detonation for an instant visual —
+        // the host destroys the same tiles authoritatively a moment later
+        // and the idempotent deltas keep both sides consistent.
+        onBoom: (ex, ez) => this.island.destroyTilesAt(ex, ez, GRENADE_RADIUS),
       });
       this.guestPredicted.grenade = now;
     }
@@ -948,7 +977,7 @@ export class Game {
       this.island.update(dt); // tiles animate (shrink is host-authoritative), props move
       this.fx.update(dt);
       this.applyGuestPrediction(dt);
-      this.p1.netTick(dt, this.guestMoving);
+      this.p1.netTick(dt, this.guestMoving, this.island);
       this.p2.netTick(dt);
 
       // Tick the local cooldown display between snapshots (values themselves
