@@ -17,7 +17,7 @@
 
   // 2. 3D title + animated OO
   const title = document.querySelector(".title-3d");
-  const oo = document.querySelector(".title-oo");
+  const oo = document.querySelector(".t3d-oo");
   if (!title || !oo) {
     bad("3D title markup");
   } else {

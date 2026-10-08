@@ -1470,36 +1470,59 @@ body {
 }
 
 /* ===== 3D MENU TITLE + FALLING "OO" LOGO ===== */
-/* The "OO" in FLOOR trembles like a warning tile, tumbles away like a
-   dropped floor tile, then rises back into place — looping. */
+/* Every word paints its own iridescent gradient that "flows" through the
+   letters, with a stacked dark extrusion underneath for a block-letter 3D
+   look. The "OO" additionally trembles like a warning tile, tumbles away
+   like a dropped floor tile, then rises back — looping. */
 .title-3d {
-  transform: perspective(700px) rotateX(9deg);
-  filter: drop-shadow(0 2px 0 rgba(0, 229, 255, 0.35))
-          drop-shadow(0 4px 0 rgba(255, 45, 149, 0.28))
-          drop-shadow(0 12px 22px rgba(0, 0, 0, 0.55))
-          drop-shadow(0 0 26px rgba(0, 229, 255, 0.22));
+  position: relative;
+  background: none; /* words paint their own gradients */
+  transform: perspective(650px) rotateX(12deg);
+  transform-origin: 50% 100%;
   animation: titleFloat 5s ease-in-out infinite;
 }
 
 @keyframes titleFloat {
   0%, 100% {
-    transform: perspective(700px) rotateX(9deg) translateY(0);
+    transform: perspective(650px) rotateX(12deg) translateY(0);
   }
   50% {
-    transform: perspective(700px) rotateX(9deg) translateY(-5px);
+    transform: perspective(650px) rotateX(12deg) translateY(-6px);
   }
 }
 
-.title-oo {
-  display: inline-block;
-  transform-origin: 50% 80%;
-  /* Own gradient so the letters stay visible while tumbling out of the
-     parent's background-clip:text mask */
-  background: linear-gradient(180deg, #ffe3f1 0%, #ff8ec6 55%, #ff2d95 100%);
+.t3d-word,
+.t3d-oo {
+  background-size: 220% 100%;
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: ooTileFall 4.8s ease-in-out infinite;
+  /* Extruded depth: four solid dark steps + a soft contact shadow */
+  filter: drop-shadow(0 1px 0 rgba(3, 16, 24, 0.95))
+          drop-shadow(0 2px 0 rgba(3, 16, 24, 0.9))
+          drop-shadow(0 3px 0 rgba(2, 10, 16, 0.85))
+          drop-shadow(0 4px 0 rgba(2, 10, 16, 0.8))
+          drop-shadow(0 7px 10px rgba(0, 0, 0, 0.6));
+  animation: wordFlow 3.6s ease-in-out infinite alternate;
+}
+
+.t3d-a { background-image: linear-gradient(100deg, #00e5ff 0%, #66f3ff 30%, #ffffff 55%, #ffa6d0 82%, #ff4ba0 100%); }
+.t3d-b { background-image: linear-gradient(100deg, #ffc9e2 0%, #ffffff 40%, #ff9ecb 78%, #ff4ba0 100%); }
+.t3d-c { background-image: linear-gradient(100deg, #ff9ecb 0%, #ff5fb0 45%, #ff2d95 100%); }
+
+@keyframes wordFlow {
+  from { background-position: 0% 50%; }
+  to { background-position: 100% 50%; }
+}
+
+.t3d-oo {
+  display: inline-block;
+  transform-origin: 50% 80%;
+  background-image: linear-gradient(100deg, #ffb3d4 0%, #ff6fb8 55%, #ff2d95 100%);
+  /* Tile-fall transform + the same gradient flow on top */
+  animation:
+    ooTileFall 4.8s ease-in-out infinite,
+    wordFlow 3.6s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 
@@ -1526,7 +1549,8 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .title-3d,
-  .title-oo {
+  .t3d-oo,
+  .t3d-word {
     animation: none;
   }
 }
