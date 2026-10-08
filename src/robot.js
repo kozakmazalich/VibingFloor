@@ -262,6 +262,7 @@ export class Robot {
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
     this.facingAngle = this.isPlayer ? -Math.PI / 4 : (3 * Math.PI) / 4;
+    this.netPose = null; // drop stale snapshot target (online guest: fresh ones arrive ~33ms later)
 
     this.jumpCooldown = 0;
     this.pushCooldown = 0;
@@ -925,8 +926,10 @@ export class Robot {
   }
 
   // Smoothly drive the visual state toward the host's snapshot (online guest
-  // does not simulate physics — it renders with interpolation).
-  netTick(dt) {
+  // does not simulate authoritative physics — it renders with interpolation).
+  // inputActive = the guest is steering right now: correction is gentler so
+  // local prediction is not pulled back by snapshots that are one RTT old.
+  netTick(dt, inputActive = false) {
     const pose = this.netPose;
     if (!pose) {
       // Never received a snapshot yet — keep the spawn pose
@@ -945,16 +948,19 @@ export class Robot {
     }
 
     // Exponential smoothing toward the latest snapshot (≈1 snapshot of lag,
-    // robust to jitter)
+    // robust to jitter). While steering, correct drift only slowly.
     this._netTarget.set(pose.x, pose.y, pose.z);
-    const k = 1 - Math.exp(-dt * 14);
+    const k = 1 - Math.exp(-dt * (inputActive ? 1.8 : 14));
     this.pos.lerp(this._netTarget, k);
 
-    // Shortest-arc facing interpolation
-    let df = pose.f - this.facingAngle;
-    while (df > Math.PI) df -= Math.PI * 2;
-    while (df < -Math.PI) df += Math.PI * 2;
-    this.facingAngle += df * k;
+    // Shortest-arc facing interpolation (skip while steering: the local
+    // prediction owns the facing, the snapshot is one RTT behind)
+    if (!inputActive) {
+      let df = pose.f - this.facingAngle;
+      while (df > Math.PI) df -= Math.PI * 2;
+      while (df < -Math.PI) df += Math.PI * 2;
+      this.facingAngle += df * k;
+    }
 
     // Walk bob from the host-reported velocity
     const speed = Math.hypot(pose.vx || 0, pose.vz || 0);

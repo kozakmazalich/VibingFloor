@@ -3,6 +3,9 @@ import {
   ROBOT_RADIUS,
   BASE_KNOCKBACK,
   COLORS,
+  P1_ACCEL,
+  P1_MAX_SPEED,
+  P1_DAMPING,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -46,6 +49,7 @@ export class Game {
     this.lastInputSig = "";
     this.inputSentAt = 0;
     this.netRoundOverShown = false;
+    this.guestMoving = false; // guest is steering right now (prediction active)
 
     // FX & Projectiles Manager
     this.fx = new FXManager(this.scene);
@@ -193,6 +197,9 @@ export class Game {
     this.state = "playing";
     this.island.remoteAuthoritative = role === "guest";
     this.island.isPaused = false;
+    if (role === "guest") {
+      this.mirrorGuestSpawns();
+    }
     this.sentTileStates.clear();
     this.sentFx.clear();
     this.lastJumpSent = { p1: 0, p2: 0 };
@@ -209,6 +216,19 @@ export class Game {
         online: role,
       });
     }
+  }
+
+  // The host spawns its p2 (our robot) at the map's p2 spawn. Mirror that on
+  // the guest so our robot starts exactly where the host expects it —
+  // otherwise the first snapshots drag it across the whole island.
+  mirrorGuestSpawns() {
+    const mapDef = MAPS[this.currentMapIndex];
+    const s1 = this.island.getWorldPos(mapDef.p1Spawn[0], mapDef.p1Spawn[1]);
+    const s2 = this.island.getWorldPos(mapDef.p2Spawn[0], mapDef.p2Spawn[1]);
+    this.p1.startX = s2.x;
+    this.p1.startZ = s2.z;
+    this.p2.startX = s1.x;
+    this.p2.startZ = s1.z;
   }
 
   togglePause() {
@@ -740,6 +760,39 @@ export class Game {
     }
   }
 
+  // Guest: move OUR robot locally from the same input we send the host,
+  // using identical physics constants. The authoritative snapshots only
+  // correct drift (see Robot.netTick) — no network round-trip before the
+  // robot reacts to the joystick.
+  applyGuestPrediction(dt) {
+    const keys = this.keys;
+    const fwd =
+      (keys["KeyW"] || keys["ArrowUp"] ? 1 : 0) -
+      (keys["KeyS"] || keys["ArrowDown"] ? 1 : 0);
+    const right =
+      (keys["KeyD"] || keys["ArrowRight"] ? 1 : 0) -
+      (keys["KeyA"] || keys["ArrowLeft"] ? 1 : 0);
+
+    this.guestMoving = fwd !== 0 || right !== 0;
+    const p = this.p1;
+    if (p.state !== "alive" || !this.guestMoving) return;
+
+    const v = p.cameraRelativeMove(this.camera, fwd, right);
+    p.vel.x += v.x * P1_ACCEL * dt;
+    p.vel.y += v.z * P1_ACCEL * dt;
+    p.facingAngle = Math.atan2(-v.x, -v.z);
+
+    const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
+    p.vel.multiplyScalar(dampingFactor);
+    const speed = p.vel.length();
+    if (speed > P1_MAX_SPEED) {
+      p.vel.multiplyScalar(P1_MAX_SPEED / speed);
+    }
+
+    p.pos.x += p.vel.x * dt;
+    p.pos.z += p.vel.y * dt;
+  }
+
   // Guest: serialize the same input the keyboard/touch already produce and
   // send it on change (plus a heartbeat) — not every frame.
   sendGuestInput() {
@@ -797,11 +850,14 @@ export class Game {
       return;
     }
 
-    // ONLINE GUEST: thin client — no physics, render the host's snapshots.
+    // ONLINE GUEST: thin client — no authoritative physics, but with LOCAL
+    // prediction for our own robot so the joystick responds instantly (the
+    // host's snapshots gently correct drift instead of driving the motion).
     if (this.mode === "online" && this.netRole === "guest") {
       this.island.update(dt); // tiles animate (shrink is host-authoritative), props move
       this.fx.update(dt);
-      this.p1.netTick(dt);
+      this.applyGuestPrediction(dt);
+      this.p1.netTick(dt, this.guestMoving);
       this.p2.netTick(dt);
 
       // Tick the local cooldown display between snapshots (values themselves
