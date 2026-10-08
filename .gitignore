@@ -1,0 +1,12 @@
+node_modules/
+www/
+.vercel/
+.DS_Store
+
+# Android / Capacitor build outputs
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/app/src/main/assets/public/

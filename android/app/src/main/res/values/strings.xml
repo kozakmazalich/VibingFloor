@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Vibing Floor</string>
+    <string name="title_activity_main">Vibing Floor</string>
+    <string name="package_name">com.robotfall.arena</string>
+    <string name="custom_url_scheme">com.robotfall.arena</string>
+</resources>

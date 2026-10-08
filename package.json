@@ -1,0 +1,16 @@
+{
+  "name": "robot-fall",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vibing Floor — 3D Don't-Fall battle royale. Solana Mobile CLOCK IN hackathon demo.",
+  "scripts": {
+    "web:copy": "node scripts/copy-web.mjs",
+    "sync": "npm run web:copy && cap sync android",
+    "apk:debug": "npm run sync && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9"
+  }
+}

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>Vibing Floor - 3D Cyber Battle Royale</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Orbitron:wght@700;800;900&family=Rajdhani:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+
+    <!-- ES Module Import Map for Three.js + PeerJS (no build step, pure CDN) -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.168.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.168.0/examples/jsm/",
+          "peerjs": "https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/bundler.mjs",
+          "@msgpack/msgpack": "https://cdn.jsdelivr.net/npm/@msgpack/msgpack@2.8.0/+esm",
+          "peerjs-js-binarypack": "https://cdn.jsdelivr.net/npm/peerjs-js-binarypack@2.1.0/+esm",
+          "webrtc-adapter": "https://cdn.jsdelivr.net/npm/webrtc-adapter@9.0.0/+esm"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <!-- Three.js Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- 1. START / MAIN MENU SCREEN -->
+    <div id="start-menu" class="menu-screen">
+      <div class="menu-card start-card">
+        <div class="menu-header">
+          <div class="neon-badge cyan">
+            <span class="live-dot"></span>CYBER ARENA 3D // V2.0
+          </div>
+          <h1 class="menu-title title-3d">VIBING FL<span class="title-oo">OO</span>R</h1>
+          <p class="menu-tagline">3D BATTLE ROYALE ON A SHRINKING PLATFORM</p>
+        </div>
+
+        <!-- 3D Robot Fighter Selector for Player 1 -->
+        <div class="fighter-select-panel">
+          <div class="select-label">SELECT PLAYER 1 3D MODEL:</div>
+          <div class="fighter-tabs">
+            <button id="btn-char-jpg" class="char-tab-btn active" title="Play with Crimson Miner">
+              <img src="assets/robot1_portrait.png" alt="Crimson Miner" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">CRIMSON MINER</span>
+                <span class="tab-sub">HEAVY BRAWLER</span>
+              </div>
+              <span class="tab-status-badge">EQUIPPED</span>
+            </button>
+
+            <button id="btn-char-moss" class="char-tab-btn" title="Play with Moss Viber">
+              <img src="assets/robot3_portrait.png" alt="Moss Viber" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">MOSS VIBER</span>
+                <span class="tab-sub">JUNGLE STALKER</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+
+            <button id="btn-char-mecha" class="char-tab-btn" title="Play with Volt Viber">
+              <img src="assets/robot2_portrait.png" alt="Volt Viber" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">VOLT VIBER</span>
+                <span class="tab-sub">SPEED FIGHTER</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+
+            <button id="btn-char-phantom" class="char-tab-btn" title="Play with Phantom Viber">
+              <img src="assets/robot4_portrait.png" alt="Phantom Viber" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">PHANTOM VIBER</span>
+                <span class="tab-sub">PHASE GHOST</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Arena Selector -->
+        <div class="map-select-panel">
+          <div class="select-label">SELECT ARENA:</div>
+          <div class="map-tabs">
+            <button class="map-tab-btn active" title="Solid 10x10 cyber platform">
+              <span class="map-tab-info">
+                <span class="tab-name">CYBER ARENA</span>
+                <span class="tab-sub">10x10 · BALANCED</span>
+              </span>
+              <span class="tab-status-badge">ACTIVE</span>
+            </button>
+            <button class="map-tab-btn" title="4 floating islets connected by stone bridges">
+              <span class="map-tab-info">
+                <span class="tab-name">ISLAND ARCHIPELAGO</span>
+                <span class="tab-sub">12x12 · TACTICAL</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button class="map-tab-btn" title="Two fortified towers joined by narrow bridges">
+              <span class="map-tab-info">
+                <span class="tab-name">TWIN CITADELS</span>
+                <span class="tab-sub">12x12 · ADVANCED</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button class="map-tab-btn" title="Hollow perimeter ring with a central spire">
+              <span class="map-tab-info">
+                <span class="tab-name">HONEYCOMB CHASM</span>
+                <span class="tab-sub">11x11 · HARDCORE</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- CPU Difficulty Selector -->
+        <div class="diff-select-panel">
+          <div class="select-label">CPU DIFFICULTY:</div>
+          <div class="diff-tabs">
+            <button class="diff-tab-btn" title="Relaxed CPU opponent">
+              <span class="map-tab-info">
+                <span class="tab-name">EASY</span>
+                <span class="tab-sub">RELAXED CPU</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button class="diff-tab-btn active" title="Balanced CPU opponent">
+              <span class="map-tab-info">
+                <span class="tab-name">NORMAL</span>
+                <span class="tab-sub">BALANCED CPU</span>
+              </span>
+              <span class="tab-status-badge">ACTIVE</span>
+            </button>
+            <button class="diff-tab-btn" title="Aggressive CPU opponent">
+              <span class="map-tab-info">
+                <span class="tab-name">HARD</span>
+                <span class="tab-sub">AGGRESSIVE CPU</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Versus Showcase -->
+        <div class="vs-showcase">
+          <div class="combatant-card p1-card">
+            <div class="avatar-frame cyan" id="menu-p1-avatar-frame">
+              <img id="menu-p1-avatar" src="assets/robot1_portrait.png" alt="Player 1" class="showcase-avatar" />
+            </div>
+            <span id="menu-p1-name" class="combatant-name cyan">CRIMSON MINER</span>
+            <span class="combatant-role">PLAYER CONTROLLED</span>
+          </div>
+
+          <div class="vs-emblem">VS</div>
+
+          <div class="combatant-card p2-card">
+            <div class="avatar-frame magenta">
+              <img src="assets/robot2_portrait.png" alt="Volt Viber" class="showcase-avatar" />
+            </div>
+            <span class="combatant-name magenta">VOLT VIBER</span>
+            <span class="combatant-role">AI GLADIATOR 3D</span>
+          </div>
+        </div>
+
+        <!-- Menu Action Buttons -->
+        <div class="menu-actions">
+          <button id="btn-menu-play" class="cyber-btn cyber-btn-primary btn-pulse">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">INITIALIZE BATTLE</span>
+            <span class="key-tag">SPACE</span>
+          </button>
+          <button id="btn-menu-online" class="cyber-btn cyber-btn-online">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">⛓</span>
+            <span class="btn-text">ONLINE 1V1</span>
+            <span class="key-tag">P2P</span>
+          </button>
+          <button id="btn-wallet-connect" class="cyber-btn cyber-btn-wallet" title="Connect a Solana Mobile Wallet Adapter wallet (Seed Vault)">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">◈</span>
+            <span id="wallet-btn-text" class="btn-text">CONNECT WALLET</span>
+          </button>
+          <button id="btn-menu-sound" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span id="menu-sound-icon" class="btn-icon">🔊</span>
+            <span id="menu-sound-text" class="btn-text">AUDIO SYNTH: ACTIVE</span>
+          </button>
+        </div>
+
+        <!-- Controls Guide Panel -->
+        <div class="menu-controls-guide">
+          <div class="guide-title">// NEURAL CONTROL SCHEME</div>
+          <div class="guide-grid">
+            <div class="guide-item">
+              <span class="key-badge">WASD</span>
+              <span class="guide-desc">Move & Aim 3D</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">SPACE</span>
+              <span class="guide-desc">Force Push (Wave)</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">J</span>
+              <span class="guide-desc">Jet Jump (Leap)</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">E</span>
+              <span class="guide-desc">Cyber Spear (Aim Fly)</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">G</span>
+              <span class="guide-desc">Floor Grenade Blast</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">P / ESC</span>
+              <span class="guide-desc">Pause Simulation</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">R</span>
+              <span class="guide-desc">Reset Arena</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 1.5 ONLINE 1V1 PANEL (PeerJS / WebRTC) -->
+    <div id="online-menu" class="menu-screen hidden">
+      <div class="menu-card online-card">
+        <div class="neon-badge cyan">
+          <span class="live-dot"></span>PEER-TO-PEER // WEBRTC
+        </div>
+        <h2 class="menu-title" style="font-size: 32px">ONLINE 1V1</h2>
+        <p class="menu-tagline">HOST A ROOM OR JOIN A FRIEND BY CODE</p>
+
+        <div class="online-panel">
+          <button id="btn-online-host" class="cyber-btn cyber-btn-primary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">⛓</span>
+            <span class="btn-text">HOST GAME</span>
+          </button>
+
+          <div id="online-code-display" class="room-code hidden">
+            ROOM CODE: <span id="online-code" class="room-code-value tabular">------</span>
+          </div>
+
+          <div class="online-divider">— OR —</div>
+
+          <div class="online-join-row">
+            <input
+              id="online-code-input"
+              class="online-input"
+              maxlength="8"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="ENTER ROOM CODE"
+            />
+            <button id="btn-online-join" class="cyber-btn cyber-btn-secondary">
+              <span class="btn-corner tl"></span>
+              <span class="btn-corner tr"></span>
+              <span class="btn-corner bl"></span>
+              <span class="btn-corner br"></span>
+              <span class="btn-text">JOIN GAME</span>
+            </button>
+          </div>
+
+          <div id="online-status" class="online-status">PEER NETWORK IDLE</div>
+        </div>
+
+        <button id="btn-online-back" class="cyber-btn cyber-btn-secondary">
+          <span class="btn-corner tl"></span>
+          <span class="btn-corner tr"></span>
+          <span class="btn-corner bl"></span>
+          <span class="btn-corner br"></span>
+          <span class="btn-icon">←</span>
+          <span class="btn-text">BACK TO MENU</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. PAUSE SCREEN (P or Esc) -->
+    <div id="pause-menu" class="menu-screen hidden">
+      <div class="menu-card pause-card">
+        <div class="neon-badge warning">
+          <span class="live-dot warning"></span>SYSTEM PAUSED
+        </div>
+        <h2 class="menu-title" style="font-size: 32px">HALTED</h2>
+        <p class="menu-tagline">ARENA CLOCK FROZEN</p>
+
+        <div class="menu-actions" style="margin-top: 14px">
+          <button id="btn-pause-resume" class="cyber-btn cyber-btn-primary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">RESUME BATTLE</span>
+            <span class="key-tag">P / ESC</span>
+          </button>
+          <button id="btn-pause-restart" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">🔄</span>
+            <span class="btn-text">RESTART ROUND</span>
+            <span class="key-tag">R</span>
+          </button>
+          <button id="btn-pause-sound" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span id="pause-sound-icon" class="btn-icon">🔊</span>
+            <span id="pause-sound-text" class="btn-text">AUDIO SYNTH: ACTIVE</span>
+          </button>
+          <button id="btn-pause-menu" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">🏠</span>
+            <span class="btn-text">RETURN TO MAIN MENU</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. WIN / GAME OVER SCREEN -->
+    <div id="win-overlay" class="menu-screen hidden">
+      <div class="menu-card win-card">
+        <div class="avatar-frame large" id="win-avatar-frame">
+          <img id="win-avatar" src="assets/robot1_portrait.png" alt="Winner" class="win-avatar" />
+        </div>
+        <h2 id="win-title" class="win-title">ROBOT 1 WINS!</h2>
+        <p id="win-subtitle" class="win-subtitle">
+          Player knocked the CPU into the void!
+        </p>
+
+        <!-- Match Score Pill -->
+        <div id="win-score" class="score-pill">
+          MATCH SCORE: <span class="tabular">0 - 0</span>
+        </div>
+
+        <div class="menu-actions" style="margin-top: 14px">
+          <button id="btn-win-restart" class="cyber-btn cyber-btn-primary btn-pulse">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">🔄</span>
+            <span class="btn-text">PLAY AGAIN</span>
+            <span class="key-tag">R</span>
+          </button>
+          <button id="btn-win-menu" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">🏠</span>
+            <span class="btn-text">MAIN MENU</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. IN-GAME HUD OVERLAY -->
+    <div id="in-game-hud" class="ui-overlay hidden">
+      <!-- Top Bar: Title & Scoreboard & Quick Actions -->
+      <header class="top-bar">
+        <div class="brand-section">
+          <h1 class="title">
+            Vibing Floor
+            <span class="title-badge">3D ARENA</span>
+          </h1>
+        </div>
+
+        <div class="scoreboard">
+          <div class="team p1-team">
+            <img id="hud-p1-avatar" src="assets/robot1_portrait.png" alt="Player 1" class="team-avatar" />
+            <div class="team-info">
+              <span id="hud-p1-name" class="team-name">Player 1</span>
+              <span id="score-p1" class="team-score">0</span>
+            </div>
+          </div>
+
+          <span class="score-divider">VS</span>
+
+          <div class="team p2-team">
+            <div class="team-info" style="text-align: right">
+              <span id="hud-p2-name" class="team-name">CPU Robot</span>
+              <span id="score-p2" class="team-score">0</span>
+            </div>
+            <img src="assets/robot2_portrait.png" alt="Player 2" class="team-avatar" />
+          </div>
+        </div>
+
+        <div class="quick-actions">
+          <span id="hud-wallet" class="wallet-chip hidden" title="Connected wallet">◈ 7xK9…Ab3</span>
+          <button id="btn-hud-pause" class="icon-btn" title="Pause Game (P)">
+            ⏸ Pause [P]
+          </button>
+          <button id="btn-sound" class="icon-btn" title="Toggle Sound">
+            🔊 Sound
+          </button>
+          <button id="btn-reset-cam" class="icon-btn" title="Reset Camera View">
+            🎥 Reset Cam
+          </button>
+          <button id="btn-hud-restart" class="icon-btn" title="Restart Round (R)">
+            🔄 Restart (R)
+          </button>
+        </div>
+      </header>
+
+      <!-- Island Shrink Tracker & Weapons Arsenal -->
+      <div class="island-status">
+        <div class="status-row">
+          <span>Arena</span>
+          <span id="arena-name" class="status-value">CYBER ARENA</span>
+        </div>
+        <div class="status-row">
+          <span>Active Tiles</span>
+          <span id="tile-count" class="status-value tabular">100/100</span>
+        </div>
+        <div class="status-row">
+          <span>Next Drop</span>
+          <span id="fall-timer" class="status-value tabular">2.2s</span>
+        </div>
+        <div class="progress-track">
+          <div id="fall-progress-bar" class="progress-fill"></div>
+        </div>
+
+        <!-- Ability 1: Push (SPACE) -->
+        <div class="ability-block">
+          <div class="status-row">
+            <span class="ability-label"><span class="key-badge mini">SPACE</span> PUSH</span>
+            <span id="push-status-text" class="status-value ready tabular">READY</span>
+          </div>
+          <div class="progress-track ability-track">
+            <div id="push-progress-bar" class="progress-fill push-fill ready"></div>
+          </div>
+        </div>
+
+        <!-- Ability 2: Spear Thrust (E) -->
+        <div class="ability-block">
+          <div class="status-row">
+            <span class="ability-label"><span class="key-badge mini">E</span> SPEAR</span>
+            <span id="spear-status-text" class="status-value ready tabular">READY</span>
+          </div>
+          <div class="progress-track ability-track">
+            <div id="spear-progress-bar" class="progress-fill spear-fill ready"></div>
+          </div>
+        </div>
+
+        <!-- Ability 3: Cyber Grenade (G) -->
+        <div class="ability-block">
+          <div class="status-row">
+            <span class="ability-label"><span class="key-badge mini">G</span> GRENADE</span>
+            <span id="grenade-status-text" class="status-value ready tabular">READY</span>
+          </div>
+          <div class="progress-track ability-track">
+            <div id="grenade-progress-bar" class="progress-fill grenade-fill ready"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Bar: Controls hint -->
+      <footer class="bottom-bar">
+        <div class="controls-hint">
+          <div class="hint-pill">
+            <span class="key-badge">W</span>
+            <span class="key-badge">A</span>
+            <span class="key-badge">S</span>
+            <span class="key-badge">D</span>
+            <span>Move</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">SPACE</span>
+            <span>Push</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">J</span>
+            <span>Jump</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">E</span>
+            <span>Spear (Flies where looking)</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">G</span>
+            <span>Grenade (Blows up floor)</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">P</span>
+            <span>Pause</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">R</span>
+            <span>Restart</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span>Drag to orbit</span>
+          </div>
+        </div>
+      </footer>
+
+      <!-- Touch Controls (mobile only, driven by src/touch.js) -->
+      <div id="touch-ui" class="touch-ui">
+        <div id="touch-joystick" class="touch-joystick" aria-label="Move joystick">
+          <div class="joy-base"></div>
+          <div id="joy-knob" class="joy-knob"></div>
+        </div>
+
+        <div class="touch-actions">
+          <div class="touch-utility">
+            <button class="touch-btn touch-btn-small" id="touch-pause" aria-label="Pause">
+              <span class="touch-icon">⏸</span><span class="touch-label">PAUSE</span>
+            </button>
+            <button class="touch-btn touch-btn-small" id="touch-restart" aria-label="Restart">
+              <span class="touch-icon">🔄</span><span class="touch-label">RESTART</span>
+            </button>
+          </div>
+          <div class="touch-grid">
+            <button class="touch-btn touch-btn-big cyan" id="touch-push" aria-label="Push">
+              <span class="touch-main">PUSH</span><span class="touch-label">SPACE</span>
+            </button>
+            <button class="touch-btn touch-btn-big cyan" id="touch-jump" aria-label="Jump">
+              <span class="touch-main">JUMP</span><span class="touch-label">J</span>
+            </button>
+            <button class="touch-btn touch-btn-big magenta" id="touch-spear" aria-label="Spear">
+              <span class="touch-main">SPEAR</span><span class="touch-label">E</span>
+            </button>
+            <button class="touch-btn touch-btn-big warning" id="touch-grenade" aria-label="Grenade">
+              <span class="touch-main">GRENADE</span><span class="touch-label">G</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Game Entry Script -->
+    <script type="module" src="src/main.js"></script>
+
+    <!-- Toast notifications (wallet / sign status) -->
+    <div id="toast" class="toast" role="status"></div>
+  </body>
+</html>

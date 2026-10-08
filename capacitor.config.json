@@ -1,0 +1,8 @@
+{
+  "appId": "com.robotfall.arena",
+  "appName": "Vibing Floor",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}
