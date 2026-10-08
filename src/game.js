@@ -14,6 +14,7 @@ import {
   GRENADE_RADIUS,
   JUMP_FORCE,
   GRAVITY,
+  STEP_UP_MAX,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -837,8 +838,32 @@ export class Game {
         p.vel.multiplyScalar(P1_MAX_SPEED / speed);
       }
 
-      p.pos.x += p.vel.x * dt;
-      p.pos.z += p.vel.y * dt;
+      // Per-axis ledge/wall blocking — same rules as the host, so the
+      // predicted robot cannot clip through raised tiers of blocks.
+      const tryX = p.pos.x + p.vel.x * dt;
+      const sx = this.island.getSurfaceAt(tryX, p.pos.z);
+      if (sx && p.blockedBySurface(sx.y)) {
+        p.vel.x = 0;
+      } else {
+        p.pos.x = tryX;
+      }
+
+      const tryZ = p.pos.z + p.vel.y * dt;
+      const sz = this.island.getSurfaceAt(p.pos.x, tryZ);
+      if (sz && p.blockedBySurface(sz.y)) {
+        p.vel.y = 0;
+      } else {
+        p.pos.z = tryZ;
+      }
+    }
+
+    // Step snap: walk up/down small height steps instantly like the host
+    // (prevents feet clipping into level-1 platforms while steering).
+    if (p.isGrounded) {
+      const s = this.island.getSurfaceAt(p.pos.x, p.pos.z);
+      if (s && Math.abs(s.y - p.pos.y) <= STEP_UP_MAX) {
+        p.pos.y = s.y;
+      }
     }
 
     // Abilities: instant local feel (the host echoes are deduped above)
@@ -978,7 +1003,7 @@ export class Game {
       this.island.update(dt); // tiles animate (shrink is host-authoritative), props move
       this.fx.update(dt);
       this.applyGuestPrediction(dt);
-      this.p1.netTick(dt, this.guestMoving);
+      this.p1.netTick(dt, this.guestMoving, this.island);
       this.p2.netTick(dt);
 
       // Tick the local cooldown display between snapshots (values themselves

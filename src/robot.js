@@ -940,7 +940,7 @@ export class Robot {
   // does not simulate authoritative physics — it renders with interpolation).
   // inputActive = the guest is steering right now: correction is gentler so
   // local prediction is not pulled back by snapshots that are one RTT old.
-  netTick(dt, inputActive = false) {
+  netTick(dt, inputActive = false, island = null) {
     const pose = this.netPose;
     if (!pose) {
       // Never received a snapshot yet — keep the spawn pose
@@ -962,9 +962,13 @@ export class Robot {
     // robust to jitter). While steering, correct drift only slowly.
     this._netTarget.set(pose.x, pose.y, pose.z);
     const k = 1 - Math.exp(-dt * (inputActive ? 1.8 : 14));
-    // The host's robot is airborne (g = grounded flag in the pose): its hop
-    // is one RTT behind ours — keep the local Y instead of pulling us down.
-    const hostAirborne = pose.st === "alive" && pose.g === 0;
+    const surf = island ? island.getSurfaceAt(this.pos.x, this.pos.z) : null;
+    const surfY = surf ? surf.y : 0;
+    // The host is genuinely mid-HOP (not just off a ledge or standing on a
+    // platform): above the local surface with its grounded flag false. Only
+    // then keep the local Y; drops and platform walking follow the host.
+    const hostAirborne =
+      pose.st === "alive" && pose.g === 0 && pose.y > surfY + 0.2;
     if ((!this.isGrounded && this.state === "alive") || hostAirborne) {
       // Predicted hop in flight: keep the local Y, only correct X/Z gently.
       this.pos.x += (pose.x - this.pos.x) * k;
