@@ -15,7 +15,19 @@
  * game still boots even if the CDN is unreachable.
  */
 
-const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+// STUN + the free PeerJS cloud TURN relays. Mobile carriers put phones
+// behind carrier-grade NAT where STUN alone cannot punch through — TURN is
+// what makes the connection work in practice. Same credentials as PeerJS's
+// own default config.
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:global.stun.twilio.com:3478" },
+  {
+    urls: ["turn:eu-0.turn.peerjs.com:3478", "turn:us-0.turn.peerjs.com:3478"],
+    username: "peerjs",
+    credential: "peerjsp",
+  },
+];
 
 // Unambiguous room-code alphabet (no 0/O, 1/I/L)
 const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";

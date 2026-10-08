@@ -543,6 +543,10 @@ const game = new Game(scene, camera, {
   },
 });
 
+// Wire the network into the game — all online sends (snapshots, input,
+// restart requests) go through game.net.
+game.net = net;
+
 // ------------------------------------------------------------------
 // Follow camera: the orbit pivot glides after the player so the robot
 // stays in frame while the island scrolls under it. The camera position
