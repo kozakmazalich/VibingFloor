@@ -154,8 +154,8 @@ export function setupTouchControls() {
     });
   };
 
-  bindHoldButton("touch-push", "Space");
-  bindHoldButton("touch-jump", "KeyJ");
+  bindHoldButton("touch-push", "KeyJ");
+  bindHoldButton("touch-jump", "Space");
   bindHoldButton("touch-spear", "KeyE");
   bindHoldButton("touch-grenade", "KeyG");
   bindTapButton("touch-pause", "KeyP");

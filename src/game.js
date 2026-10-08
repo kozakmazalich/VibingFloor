@@ -533,6 +533,7 @@ export class Game {
       vx: round2(r.vel.x),
       vz: round2(r.vel.y),
       st: r.state,
+      g: r.isGrounded ? 1 : 0, // grounded flag (guest keeps local Y while the host is airborne)
       cd: [
         round2(r.pushCooldown),
         round2(r.jumpCooldown),
@@ -860,12 +861,12 @@ export class Game {
       }
     }
 
-    if (keys["Space"] && p.pushCooldown <= 0) {
+    if (keys["KeyJ"] && p.pushCooldown <= 0) {
       p.pushCooldown = PUSH_COOLDOWN;
       p.playPushWaveVisual();
       this.guestPredicted.push = now;
     }
-    if (keys["KeyJ"] && p.jumpCooldown <= 0 && p.isGrounded) {
+    if (keys["Space"] && p.jumpCooldown <= 0 && p.isGrounded) {
       p.jumpCooldown = JUMP_COOLDOWN;
       p.isGrounded = false;
       p.predictingHop = true;
@@ -938,8 +939,8 @@ export class Game {
       t: "input",
       mx,
       mz,
-      jump: !!keys["KeyJ"],
-      push: !!keys["Space"],
+      jump: !!keys["Space"],
+      push: !!keys["KeyJ"],
       spear: !!keys["KeyE"],
       grenade: !!keys["KeyG"],
     };
@@ -977,7 +978,7 @@ export class Game {
       this.island.update(dt); // tiles animate (shrink is host-authoritative), props move
       this.fx.update(dt);
       this.applyGuestPrediction(dt);
-      this.p1.netTick(dt, this.guestMoving, this.island);
+      this.p1.netTick(dt, this.guestMoving);
       this.p2.netTick(dt);
 
       // Tick the local cooldown display between snapshots (values themselves

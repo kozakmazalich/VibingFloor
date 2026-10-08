@@ -513,13 +513,13 @@ export class Robot {
   }
 
   updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake) {
-    // 1. SPACE = Force Push (knockback wave)
-    if (keys["Space"] && this.pushCooldown <= 0) {
+    // 1. J = Force Push (knockback wave)
+    if (keys["KeyJ"] && this.pushCooldown <= 0) {
       this.triggerPush(opponent, fxManager);
     }
 
-    // 2. J = Jet Jump
-    if (keys["KeyJ"] && this.jumpCooldown <= 0 && this.isGrounded) {
+    // 2. SPACE = Jet Jump
+    if (keys["Space"] && this.jumpCooldown <= 0 && this.isGrounded) {
       this.triggerJump(fxManager);
     }
 
@@ -940,7 +940,7 @@ export class Robot {
   // does not simulate authoritative physics — it renders with interpolation).
   // inputActive = the guest is steering right now: correction is gentler so
   // local prediction is not pulled back by snapshots that are one RTT old.
-  netTick(dt, inputActive = false, island = null) {
+  netTick(dt, inputActive = false) {
     const pose = this.netPose;
     if (!pose) {
       // Never received a snapshot yet — keep the spawn pose
@@ -962,10 +962,9 @@ export class Robot {
     // robust to jitter). While steering, correct drift only slowly.
     this._netTarget.set(pose.x, pose.y, pose.z);
     const k = 1 - Math.exp(-dt * (inputActive ? 1.8 : 14));
-    const surf = island ? island.getSurfaceAt(this.pos.x, this.pos.z) : null;
-    const surfY = surf ? surf.y : 0;
-    // The host's robot is still mid-air (its hop is one RTT behind ours)
-    const hostAirborne = pose.st === "alive" && pose.y > surfY + 0.2;
+    // The host's robot is airborne (g = grounded flag in the pose): its hop
+    // is one RTT behind ours — keep the local Y instead of pulling us down.
+    const hostAirborne = pose.st === "alive" && pose.g === 0;
     if ((!this.isGrounded && this.state === "alive") || hostAirborne) {
       // Predicted hop in flight: keep the local Y, only correct X/Z gently.
       this.pos.x += (pose.x - this.pos.x) * k;
