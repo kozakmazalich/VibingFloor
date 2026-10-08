@@ -132,7 +132,15 @@ export class Game {
   }
 
   setupControls() {
+    // Never hijack keystrokes while the player types (e.g. the room-code
+    // input) — otherwise letters like E/G/J/P/R never reach the field.
+    const isTyping = (e) => {
+      const t = e.target;
+      return !!t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+    };
+
     window.addEventListener("keydown", (e) => {
+      if (isTyping(e)) return;
       this.keys[e.code] = true;
       audio.ensureContext();
 
@@ -167,6 +175,7 @@ export class Game {
     });
 
     window.addEventListener("keyup", (e) => {
+      if (isTyping(e)) return;
       this.keys[e.code] = false;
       if (e.code === "Space") {
         e.preventDefault();

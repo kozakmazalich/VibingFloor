@@ -123,6 +123,18 @@ class Session {
     return r.result.value;
   }
 
+  // Type into a focused element via REAL keyboard events (exercises the
+  // game's global key handlers, like a real on-screen keyboard does).
+  async typeInto(selector, text) {
+    await this.eval(`document.querySelector(${JSON.stringify(selector)}).focus()`);
+    for (const ch of text) {
+      const code = /[A-Z]/.test(ch) ? "Key" + ch : "Digit" + ch;
+      await this.send("Input.dispatchKeyEvent", { type: "keyDown", key: ch.toLowerCase(), code, text: ch.toLowerCase() });
+      await this.send("Input.dispatchKeyEvent", { type: "keyUp", key: ch.toLowerCase(), code });
+      await sleep(40);
+    }
+  }
+
   async waitFor(expr, label, timeout = 25000) {
     const t0 = Date.now();
     for (;;) {
@@ -169,11 +181,19 @@ async function runScenario(label, hostMobile, guestMobile) {
   try {
     await host.connect();
     await guest.connect();
-    await sleep(2500); // boot both pages
+    await sleep(4000); // boot both pages (CDN modules can be slow)
 
-    // HOST: open the online panel and start hosting
-    await host.eval(`document.getElementById("btn-menu-online").click()`);
-    await sleep(400);
+    // HOST: open the online panel and start hosting (click-until-open — the
+    // page may still be finishing module load)
+    let hostPanelOpen = false;
+    for (let i = 0; i < 20 && !hostPanelOpen; i++) {
+      await host.eval(`document.getElementById("btn-menu-online").click()`);
+      hostPanelOpen = await host.eval(
+        `!document.getElementById("online-menu").classList.contains("hidden")`
+      );
+      if (!hostPanelOpen) await sleep(300);
+    }
+    if (!hostPanelOpen) throw new Error("online panel did not open on the host");
     await host.eval(`document.getElementById("btn-online-host").click()`);
     await host.waitFor(
       `(() => { const el = document.getElementById("online-code"); return el && el.textContent.length === 6 && el.textContent.indexOf("-") === -1; })()`,
@@ -182,12 +202,33 @@ async function runScenario(label, hostMobile, guestMobile) {
     const code = await host.eval(`document.getElementById("online-code").textContent`);
     console.log("room code: " + code);
 
-    // GUEST: join by the room code (like a phone player would)
-    await guest.eval(`document.getElementById("btn-menu-online").click()`);
-    await sleep(400);
-    await guest.eval(
-      `(() => { const i = document.getElementById("online-code-input"); i.value = ${JSON.stringify(code)}; return i.value; })()`
-    );
+    // GUEST: type the room code with REAL key events (like a phone keyboard).
+    // Click-until-open: the page may still be finishing module load.
+    let panelOpen = false;
+    for (let i = 0; i < 20 && !panelOpen; i++) {
+      await guest.eval(`document.getElementById("btn-menu-online").click()`);
+      panelOpen = await guest.eval(
+        `!document.getElementById("online-menu").classList.contains("hidden")`
+      );
+      if (!panelOpen) await sleep(300);
+    }
+    if (!panelOpen) {
+      failures++;
+      guest.log("FAIL: online panel did not open");
+      throw new Error("online panel did not open on the guest");
+    }
+    let typed = "";
+    for (let attempt = 0; attempt < 3 && typed.toUpperCase() !== code; attempt++) {
+      await guest.typeInto("#online-code-input", code);
+      typed = await guest.eval(`document.getElementById("online-code-input").value`);
+      if (typed.toUpperCase() !== code) await sleep(400);
+    }
+    if (String(typed).toUpperCase() === code) {
+      guest.log(`OK: typed all ${typed.length} characters of the room code`);
+    } else {
+      failures++;
+      guest.log(`FAIL: only ${typed.length} chars landed ("${typed}" instead of "${code}")`);
+    }
     await guest.eval(`document.getElementById("btn-online-join").click()`);
 
     await host.waitFor(
