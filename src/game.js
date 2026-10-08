@@ -6,6 +6,11 @@ import {
   P1_ACCEL,
   P1_MAX_SPEED,
   P1_DAMPING,
+  PUSH_COOLDOWN,
+  JUMP_COOLDOWN,
+  SPEAR_COOLDOWN,
+  GRENADE_COOLDOWN,
+  GRENADE_THROW_DISTANCE,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -50,6 +55,7 @@ export class Game {
     this.inputSentAt = 0;
     this.netRoundOverShown = false;
     this.guestMoving = false; // guest is steering right now (prediction active)
+    this.guestPredicted = {}; // kind -> timestamp of locally predicted abilities
 
     // FX & Projectiles Manager
     this.fx = new FXManager(this.scene);
@@ -533,11 +539,13 @@ export class Game {
       const id = p.id;
       const key = "n:" + id;
       seen.add(key);
+      const who = p.owner === 1 ? "p1" : "p2";
       if (!this.sentFx.has(key)) {
-        this.sentFx.set(key, { kind: "nade", id, tx: p.targetX, ty: p.targetY, tz: p.targetZ });
+        this.sentFx.set(key, { kind: "nade", id, tx: p.targetX, ty: p.targetY, tz: p.targetZ, who });
         out.push({
           k: "nade",
           id,
+          who,
           x: round2(p.startX),
           y: round2(p.startY),
           z: round2(p.startZ),
@@ -554,11 +562,13 @@ export class Game {
       const id = s.id;
       const key = "s:" + id;
       seen.add(key);
+      const who = s.owner === 1 ? "p1" : "p2";
       if (!this.sentFx.has(key)) {
         this.sentFx.set(key, { kind: "spear", id });
         out.push({
           k: "spear",
           id,
+          who,
           x: round2(s.group.position.x),
           y: round2(s.group.position.y),
           z: round2(s.group.position.z),
@@ -574,7 +584,7 @@ export class Game {
       if (seen.has(key)) continue;
       this.sentFx.delete(key);
       if (info.kind === "nade") {
-        out.push({ k: "boom", id: info.id, x: round2(info.tx), y: round2(info.ty), z: round2(info.tz) });
+        out.push({ k: "boom", id: info.id, who: info.who, x: round2(info.tx), y: round2(info.ty), z: round2(info.tz) });
       } else {
         out.push({ k: "spearDone", id: info.id });
       }
@@ -709,10 +719,14 @@ export class Game {
     }
   }
 
-  // Guest: render a visual-only fx event (gameplay stays host-authoritative)
+  // Guest: render a visual-only fx event (gameplay stays host-authoritative).
+  // Our own robot's actions were already predicted locally — skip the host's
+  // echo so they don't double up.
   applyNetFx(f) {
+    const mine = f.who === "p2"; // host's p2 = our robot
     switch (f.k) {
       case "nade":
+        if (mine && this.consumeGuestPrediction("grenade", 1500)) break;
         this.fx.spawnNetGrenade({
           id: f.id,
           x: f.x,
@@ -726,10 +740,12 @@ export class Game {
         });
         break;
       case "boom":
+        if (mine && this.consumeGuestPrediction("grenade", 1500)) break;
         this.fx.detonateNetGrenade(f.id);
         this.handleScreenShake(0.42);
         break;
       case "spear":
+        if (mine && this.consumeGuestPrediction("spear", 1200)) break;
         this.fx.spawnFlyingSpear(
           f.x,
           f.y,
@@ -749,21 +765,36 @@ export class Game {
         break;
       case "jump": {
         const r = f.who === "p1" ? this.p2 : this.p1;
+        if (mine && this.consumeGuestPrediction("jump", 1200)) break;
         r.triggerJumpVisual(this.fx);
         break;
       }
       case "push": {
         const r = f.who === "p1" ? this.p2 : this.p1;
+        if (mine && this.consumeGuestPrediction("push", 1200)) break;
         r.playPushWaveVisual();
         break;
       }
     }
   }
 
+  // True if the guest predicted this kind of action recently (and consume it
+  // so a single host echo is suppressed at most once).
+  consumeGuestPrediction(kind, windowMs) {
+    const t = this.guestPredicted[kind];
+    if (t && performance.now() - t < windowMs) {
+      this.guestPredicted[kind] = 0;
+      return true;
+    }
+    return false;
+  }
+
   // Guest: move OUR robot locally from the same input we send the host,
   // using identical physics constants. The authoritative snapshots only
   // correct drift (see Robot.netTick) — no network round-trip before the
-  // robot reacts to the joystick.
+  // robot reacts to the joystick. Abilities get the same treatment: the
+  // visual fires instantly (the host still applies the authoritative
+  // knockback / tile damage via snapshots).
   applyGuestPrediction(dt) {
     const keys = this.keys;
     const fwd =
@@ -775,22 +806,73 @@ export class Game {
 
     this.guestMoving = fwd !== 0 || right !== 0;
     const p = this.p1;
-    if (p.state !== "alive" || !this.guestMoving) return;
+    if (p.state !== "alive") return;
 
-    const v = p.cameraRelativeMove(this.camera, fwd, right);
-    p.vel.x += v.x * P1_ACCEL * dt;
-    p.vel.y += v.z * P1_ACCEL * dt;
-    p.facingAngle = Math.atan2(-v.x, -v.z);
+    if (this.guestMoving) {
+      const v = p.cameraRelativeMove(this.camera, fwd, right);
+      p.vel.x += v.x * P1_ACCEL * dt;
+      p.vel.y += v.z * P1_ACCEL * dt;
+      p.facingAngle = Math.atan2(-v.x, -v.z);
 
-    const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
-    p.vel.multiplyScalar(dampingFactor);
-    const speed = p.vel.length();
-    if (speed > P1_MAX_SPEED) {
-      p.vel.multiplyScalar(P1_MAX_SPEED / speed);
+      const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
+      p.vel.multiplyScalar(dampingFactor);
+      const speed = p.vel.length();
+      if (speed > P1_MAX_SPEED) {
+        p.vel.multiplyScalar(P1_MAX_SPEED / speed);
+      }
+
+      p.pos.x += p.vel.x * dt;
+      p.pos.z += p.vel.y * dt;
     }
 
-    p.pos.x += p.vel.x * dt;
-    p.pos.z += p.vel.y * dt;
+    // Abilities: instant local feel (the host echoes are deduped above)
+    const now = performance.now();
+    const dirX = -Math.sin(p.facingAngle);
+    const dirZ = -Math.cos(p.facingAngle);
+    if (keys["Space"] && p.pushCooldown <= 0) {
+      p.pushCooldown = PUSH_COOLDOWN;
+      p.playPushWaveVisual();
+      this.guestPredicted.push = now;
+    }
+    if (keys["KeyJ"] && p.jumpCooldown <= 0 && p.isGrounded) {
+      p.jumpCooldown = JUMP_COOLDOWN;
+      p.triggerJumpVisual(this.fx);
+      this.guestPredicted.jump = now;
+    }
+    if (keys["KeyE"] && p.spearCooldown <= 0) {
+      p.spearCooldown = SPEAR_COOLDOWN;
+      audio.playSpearThrust();
+      this.fx.spawnFlyingSpear(
+        p.pos.x + dirX * 0.4,
+        p.pos.y + 0.55,
+        p.pos.z + dirZ * 0.4,
+        dirX,
+        dirZ,
+        7.0,
+        24.0,
+        null,
+        null,
+        p.teamColor
+      );
+      this.guestPredicted.spear = now;
+    }
+    if (keys["KeyG"] && p.grenadeCooldown <= 0) {
+      p.grenadeCooldown = GRENADE_COOLDOWN;
+      audio.playGrenadeThrow();
+      const tx = p.pos.x + dirX * GRENADE_THROW_DISTANCE;
+      const tz = p.pos.z + dirZ * GRENADE_THROW_DISTANCE;
+      this.fx.spawnNetGrenade({
+        x: p.pos.x,
+        y: p.pos.y + 0.75,
+        z: p.pos.z,
+        tx,
+        ty: p.pos.y + 0.02,
+        tz,
+        ft: 0.65,
+        color: p.teamColor,
+      });
+      this.guestPredicted.grenade = now;
+    }
   }
 
   // Guest: serialize the same input the keyboard/touch already produce and

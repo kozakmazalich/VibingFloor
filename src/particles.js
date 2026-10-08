@@ -186,7 +186,7 @@ export class FXManager {
   }
 
   // Launch a flying cyber spear in the facing direction
-  spawnFlyingSpear(startX, startY, startZ, dirX, dirZ, maxDist = 6.0, speed = 22.0, targetRobot, onHit, colorHex = 0x00f0ff, id = null) {
+  spawnFlyingSpear(startX, startY, startZ, dirX, dirZ, maxDist = 6.0, speed = 22.0, targetRobot, onHit, colorHex = 0x00f0ff, id = null, owner = null) {
     const spearGroup = new THREE.Group();
 
     // 1. Sleek metallic cyber shaft
@@ -231,6 +231,7 @@ export class FXManager {
 
     this.spears.push({
       id: id !== null ? id : this.nextId(),
+      owner,
       group: spearGroup,
       dirX,
       dirZ,

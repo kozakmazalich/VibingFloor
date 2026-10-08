@@ -426,7 +426,9 @@ export class Robot {
           hitTarget.applyImpulse(hitDirX * SPEAR_IMPULSE, hitDirZ * SPEAR_IMPULSE);
           if (onScreenShake) onScreenShake(0.35);
         },
-        this.teamColor
+        this.teamColor,
+        null, // fx id (auto-assigned)
+        this.id // owner robot id (online fx routing)
       );
     }
 
@@ -469,6 +471,7 @@ export class Robot {
         geo: nadeGeo,
         mat: nadeMat,
         indicatorMat: nadeMat,
+        owner: this.id, // robot that threw it (online fx routing)
         startX: this.pos.x,
         startY: this.pos.y + 0.75,
         startZ: this.pos.z,

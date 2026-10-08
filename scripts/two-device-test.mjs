@@ -216,17 +216,33 @@ async function runScenario(label, hostMobile, guestMobile) {
       host.log(`FAIL: arenas differ (${arenaA} vs ${arenaB})`);
     }
 
-    // Round-trip 1: guest holds PUSH -> host p2 cooldown -> snapshot -> guest HUD
+    // Round-trip 1: REAL touch button (pointer events) — the guest HUD must
+    // react INSTANTLY (local prediction), and the authoritative cooldown must
+    // round-trip through the host afterwards.
+    const firePointer = (sel) =>
+      guest.eval(
+        `(() => { const el = document.querySelector(${JSON.stringify(sel)}); const r = el.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2;
+        const ev = (t) => el.dispatchEvent(new PointerEvent(t, { bubbles: true, cancelable: true, pointerId: 3, isPrimary: true, clientX: x, clientY: y }));
+        ev("pointerdown"); window.__hold = { el, x, y }; return true; })()`
+      );
+    const releasePointer = () =>
+      guest.eval(
+        `(() => { const h = window.__hold; if (!h) return false; h.el.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, cancelable: true, pointerId: 3, isPrimary: true, clientX: h.x, clientY: h.y })); window.__hold = null; return true; })()`
+      );
+
     const pushBefore = await guest.eval(`document.getElementById("push-status-text").textContent`);
-    await guest.eval(
-      `window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", bubbles: true, cancelable: true }))`
-    );
-    await sleep(500);
+    await firePointer("#touch-push");
+    await sleep(80);
+    const pushInstant = await guest.eval(`document.getElementById("push-status-text").textContent`);
+    await sleep(400);
     const pushDuring = await guest.eval(`document.getElementById("push-status-text").textContent`);
-    await guest.eval(
-      `window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", bubbles: true, cancelable: true }))`
-    );
-    await sleep(1500);
+    await releasePointer();
+    if (pushInstant !== pushBefore) {
+      guest.log(`OK: PUSH button reacts instantly ("${pushBefore}" -> "${pushInstant}")`);
+    } else {
+      failures++;
+      guest.log(`FAIL: PUSH button did not react instantly (stayed "${pushBefore}")`);
+    }
     if (pushDuring !== pushBefore) {
       guest.log(`OK: push cooldown round-tripped through the host ("${pushBefore}" -> "${pushDuring}")`);
     } else {
@@ -246,6 +262,32 @@ async function runScenario(label, hostMobile, guestMobile) {
     else {
       failures++;
       guest.log("FAIL: push cooldown stuck");
+    }
+
+    // Round-trip 2: SPEAR button — instant + round-trip the same way
+    const spearBefore = await guest.eval(`document.getElementById("spear-status-text").textContent`);
+    await firePointer("#touch-spear");
+    await sleep(80);
+    const spearInstant = await guest.eval(`document.getElementById("spear-status-text").textContent`);
+    await releasePointer();
+    if (spearInstant !== spearBefore) {
+      guest.log(`OK: SPEAR button reacts instantly ("${spearBefore}" -> "${spearInstant}")`);
+    } else {
+      failures++;
+      guest.log(`FAIL: SPEAR button did not react instantly (stayed "${spearBefore}")`);
+    }
+    let spearRecovered = false;
+    for (let i = 0; i < 25; i++) {
+      await sleep(200);
+      if ((await guest.eval(`document.getElementById("spear-status-text").textContent`)) === "READY") {
+        spearRecovered = true;
+        break;
+      }
+    }
+    if (spearRecovered) guest.log("OK: spear cooldown recovered to READY");
+    else {
+      failures++;
+      guest.log("FAIL: spear cooldown stuck");
     }
 
     // Round-trip 2: guest holds W (movement input must reach the host and
