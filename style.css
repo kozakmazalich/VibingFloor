@@ -1568,6 +1568,38 @@ body {
   display: none;
 }
 
+/* Ability/cooldown panel (PUSH / SPEAR / GRENADE): 20% smaller and docked
+   to the RIGHT edge instead of the left on phones. */
+.touch-device .island-status {
+  left: auto;
+  right: 12px;
+  width: 140px; /* 175px * 0.8 */
+  padding: 8px 10px;
+  border-radius: 12px;
+}
+.touch-device .island-status .status-row {
+  font-size: 9.5px;
+}
+.touch-device .island-status .ability-label {
+  font-size: 8px;
+}
+.touch-device .island-status .key-badge.mini {
+  font-size: 7.5px;
+  padding: 1px 4px;
+}
+.touch-device .island-status .progress-track {
+  height: 3px;
+}
+
+/* Landscape phones have little height: squeeze the docked panel further so
+   it never collides with the touch action buttons. */
+@media (max-height: 500px) {
+  .touch-device .island-status {
+    transform: scale(0.7);
+    transform-origin: top right;
+  }
+}
+
 @media (max-width: 560px) {
   .menu-card {
     padding: 16px 14px;

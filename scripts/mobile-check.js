@@ -52,6 +52,24 @@
   const noOverflow2 = document.documentElement.scrollWidth <= vw + 1;
   noOverflow2 ? ok("no horizontal overflow (game)") : bad("horizontal overflow (game): " + document.documentElement.scrollWidth);
 
+  // 4b. Ability/cooldown panel: docked right + ~20% smaller on phones
+  const panel = document.querySelector(".island-status");
+  if (panel) {
+    const r = panel.getBoundingClientRect();
+    const onRight = r.left >= vw / 2;
+    onRight ? ok(`cooldown panel on the right (left=${Math.round(r.left)})`) : bad(`cooldown panel still left (left=${Math.round(r.left)})`);
+    const wOk = vh > 500 ? (r.width >= 125 && r.width <= 155) : (r.width >= 85 && r.width <= 120);
+    wOk ? ok(`cooldown panel compact (w=${Math.round(r.width)})`) : bad(`cooldown panel width ${Math.round(r.width)}`);
+    const touchRight = document.querySelector(".touch-actions") ? document.querySelector(".touch-actions").getBoundingClientRect() : null;
+    if (touchRight && r.bottom > touchRight.top) {
+      bad("cooldown panel overlaps touch action buttons");
+    } else {
+      ok("no overlap with touch action buttons");
+    }
+  } else {
+    bad("island-status panel missing");
+  }
+
   // 5. Joystick: pointer down + move -> knob tracks + movement keys pressed
   const joy = document.getElementById("touch-joystick");
   const knob = document.getElementById("joy-knob");
