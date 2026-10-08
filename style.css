@@ -1568,11 +1568,22 @@ body {
   display: none;
 }
 
+/* Score moves to the LEFT side; the cooldown panel tucks into the very
+   top-right corner so the arena stays as visible as possible. */
+.touch-device .top-bar {
+  justify-content: flex-start;
+}
+.touch-device .scoreboard {
+  margin-left: 0;
+  margin-right: 0;
+}
+
 /* Ability/cooldown panel (PUSH / SPEAR / GRENADE): 20% smaller and docked
    to the RIGHT edge instead of the left on phones. */
 .touch-device .island-status {
   left: auto;
   right: 12px;
+  top: 8px;
   width: 140px; /* 175px * 0.8 */
   padding: 8px 10px;
   border-radius: 12px;
@@ -1692,7 +1703,12 @@ body {
   }
 
   /* Cooldown panel: tuck it higher, right under the one-row top bar */
-  .touch-device .island-status {
-    top: 60px;
+  .touch-device .top-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .touch-device .team-name {
+    max-width: 40px;
   }
 }

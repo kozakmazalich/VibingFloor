@@ -61,15 +61,18 @@
     const wOk = vh > 500 ? (r.width >= 125 && r.width <= 155) : (r.width >= 85 && r.width <= 120);
     wOk ? ok(`cooldown panel compact (w=${Math.round(r.width)})`) : bad(`cooldown panel width ${Math.round(r.width)}`);
 
-    // Single-row top bar + no overlap with the scoreboard
+    // Compact top area: scoreboard on the LEFT, panel in the top-right corner
     const bar = document.querySelector(".top-bar").getBoundingClientRect();
     const board = document.querySelector(".scoreboard").getBoundingClientRect();
-    const oneRow = bar.height <= 62;
-    oneRow ? ok(`top bar single row (h=${Math.round(bar.height)})`) : bad(`top bar wrapped (h=${Math.round(bar.height)})`);
-    const noCollide = board.bottom <= r.top + 1;
-    noCollide ? ok("scoreboard and panel do not overlap") : bad(`scoreboard (bottom=${Math.round(board.bottom)}) overlaps panel (top=${Math.round(r.top)})`);
-    const raised = vh <= 500 ? true : r.top <= 64;
-    raised ? ok(`panel raised (top=${Math.round(r.top)})`) : bad(`panel too low (top=${Math.round(r.top)})`);
+    const portrait = vh > 500;
+    const barOk = portrait ? bar.height <= 110 : bar.height <= 62;
+    barOk ? ok(`top bar compact (h=${Math.round(bar.height)})`) : bad(`top bar too tall (h=${Math.round(bar.height)})`);
+    const boardLeft = board.left < vw / 2;
+    boardLeft ? ok(`scoreboard on the left (left=${Math.round(board.left)})`) : bad(`scoreboard not left (left=${Math.round(board.left)})`);
+    const noCollideH = board.right <= r.left + 1;
+    noCollideH ? ok("scoreboard and panel do not overlap") : bad(`scoreboard (right=${Math.round(board.right)}) overlaps panel (left=${Math.round(r.left)})`);
+    const raised = r.top <= 12;
+    raised ? ok(`panel in top corner (top=${Math.round(r.top)})`) : bad(`panel too low (top=${Math.round(r.top)})`);
 
     const touchRight = document.querySelector(".touch-actions") ? document.querySelector(".touch-actions").getBoundingClientRect() : null;
     if (touchRight && r.bottom > touchRight.top) {
