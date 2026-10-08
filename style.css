@@ -1477,17 +1477,17 @@ body {
 .title-3d {
   position: relative;
   background: none; /* words paint their own gradients */
-  transform: perspective(650px) rotateX(12deg);
+  transform: perspective(650px) rotateX(15deg) rotateY(-8deg);
   transform-origin: 50% 100%;
   animation: titleFloat 5s ease-in-out infinite;
 }
 
 @keyframes titleFloat {
   0%, 100% {
-    transform: perspective(650px) rotateX(12deg) translateY(0);
+    transform: perspective(650px) rotateX(15deg) rotateY(-8deg) translateY(0);
   }
   50% {
-    transform: perspective(650px) rotateX(12deg) translateY(-6px);
+    transform: perspective(650px) rotateX(15deg) rotateY(-3deg) translateY(-6px);
   }
 }
 
@@ -1497,12 +1497,12 @@ body {
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  /* Extruded depth: four solid dark steps + a soft contact shadow */
+  /* Extruded depth: dark steps + a neon cyan under-edge + contact shadow */
   filter: drop-shadow(0 1px 0 rgba(3, 16, 24, 0.95))
           drop-shadow(0 2px 0 rgba(3, 16, 24, 0.9))
           drop-shadow(0 3px 0 rgba(2, 10, 16, 0.85))
-          drop-shadow(0 4px 0 rgba(2, 10, 16, 0.8))
-          drop-shadow(0 7px 10px rgba(0, 0, 0, 0.6));
+          drop-shadow(0 4px 0 rgba(0, 229, 255, 0.55))
+          drop-shadow(0 6px 12px rgba(0, 0, 0, 0.65));
   animation: wordFlow 3.6s ease-in-out infinite alternate;
 }
 
@@ -1521,9 +1521,14 @@ body {
   background-image: linear-gradient(100deg, #ffb3d4 0%, #ff6fb8 55%, #ff2d95 100%);
   /* Tile-fall transform + the same gradient flow on top */
   animation:
-    ooTileFall 4.8s ease-in-out infinite,
+    ooTileFall 5.6s ease-in-out infinite,
     wordFlow 3.6s ease-in-out infinite alternate;
   will-change: transform, opacity;
+}
+
+/* Second O lags behind the first, so the letters drop one after another */
+.t3d-o2 {
+  animation-delay: 0.7s, 0.35s;
 }
 
 @keyframes ooTileFall {

@@ -9,7 +9,7 @@
   out.push("h1 has filter: " + (getComputedStyle(h1).filter && getComputedStyle(h1).filter !== "none" ? "yes (bad)" : "no (good)"));
   out.push("h1 transform: " + getComputedStyle(h1).transform.slice(0, 40));
 
-  for (const sel of [".t3d-a", ".t3d-b", ".t3d-oo", ".t3d-c"]) {
+  for (const sel of [".t3d-a", ".t3d-b", ".t3d-o1", ".t3d-o2", ".t3d-c"]) {
     const el = document.querySelector(sel);
     if (!el) { out.push(`FAIL: ${sel} missing`); continue; }
     const cs = getComputedStyle(el);
@@ -17,11 +17,17 @@
     const clipOk = cs.webkitBackgroundClip === "text" || cs.backgroundClip === "text";
     const fillT = cs.webkitTextFillColor === "rgba(0, 0, 0, 0)";
     const anim = cs.animationName;
+    const delay = cs.animationDelay;
     const extrude = (cs.filter.match(/drop-shadow/g) || []).length;
     out.push(
-      `${sel}: grad=${hasGrad ? "y" : "N"} clip=${clipOk ? "y" : "N"} fillT=${fillT ? "y" : "N"} anim="${anim}" dropshadows=${extrude}`
+      `${sel}: grad=${hasGrad ? "y" : "N"} clip=${clipOk ? "y" : "N"} fillT=${fillT ? "y" : "N"} anim="${anim}" delay="${delay}" dropshadows=${extrude}`
     );
   }
+
+  // Sequential fall: the second O must lag the first
+  const d1 = getComputedStyle(document.querySelector(".t3d-o1")).animationDelay;
+  const d2 = getComputedStyle(document.querySelector(".t3d-o2")).animationDelay;
+  out.push("O2 delayed after O1: " + (parseFloat(d2) > parseFloat(d1) ? "yes" : "NO"));
 
   const card = document.querySelector(".start-card");
   const titleRect = h1.getBoundingClientRect();
