@@ -60,6 +60,17 @@
     onRight ? ok(`cooldown panel on the right (left=${Math.round(r.left)})`) : bad(`cooldown panel still left (left=${Math.round(r.left)})`);
     const wOk = vh > 500 ? (r.width >= 125 && r.width <= 155) : (r.width >= 85 && r.width <= 120);
     wOk ? ok(`cooldown panel compact (w=${Math.round(r.width)})`) : bad(`cooldown panel width ${Math.round(r.width)}`);
+
+    // Single-row top bar + no overlap with the scoreboard
+    const bar = document.querySelector(".top-bar").getBoundingClientRect();
+    const board = document.querySelector(".scoreboard").getBoundingClientRect();
+    const oneRow = bar.height <= 62;
+    oneRow ? ok(`top bar single row (h=${Math.round(bar.height)})`) : bad(`top bar wrapped (h=${Math.round(bar.height)})`);
+    const noCollide = board.bottom <= r.top + 1;
+    noCollide ? ok("scoreboard and panel do not overlap") : bad(`scoreboard (bottom=${Math.round(board.bottom)}) overlaps panel (top=${Math.round(r.top)})`);
+    const raised = vh <= 500 ? true : r.top <= 64;
+    raised ? ok(`panel raised (top=${Math.round(r.top)})`) : bad(`panel too low (top=${Math.round(r.top)})`);
+
     const touchRight = document.querySelector(".touch-actions") ? document.querySelector(".touch-actions").getBoundingClientRect() : null;
     if (touchRight && r.bottom > touchRight.top) {
       bad("cooldown panel overlaps touch action buttons");
