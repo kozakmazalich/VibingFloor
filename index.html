@@ -235,6 +235,10 @@
               <span class="guide-desc">Floor Grenade Blast</span>
             </div>
             <div class="guide-item">
+              <span class="key-badge">SHIFT</span>
+              <span class="guide-desc">Neon Dash (Burst)</span>
+            </div>
+            <div class="guide-item">
               <span class="key-badge">P / ESC</span>
               <span class="guide-desc">Pause Simulation</span>
             </div>
@@ -489,6 +493,17 @@
             <div id="grenade-progress-bar" class="progress-fill grenade-fill ready"></div>
           </div>
         </div>
+
+        <!-- Ability 4: Neon Dash (SHIFT) -->
+        <div class="ability-block">
+          <div class="status-row">
+            <span class="ability-label"><span class="key-badge mini">SHIFT</span> DASH</span>
+            <span id="dash-status-text" class="status-value ready tabular">READY</span>
+          </div>
+          <div class="progress-track ability-track">
+            <div id="dash-progress-bar" class="progress-fill dash-fill ready"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom Bar: Controls hint -->
@@ -520,6 +535,11 @@
           <div class="hint-pill">
             <span class="key-badge">G</span>
             <span>Grenade (Blows up floor)</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">SHIFT</span>
+            <span>Dash</span>
           </div>
           <span class="hint-sep">•</span>
           <div class="hint-pill">
@@ -566,6 +586,9 @@
             </button>
             <button class="touch-btn touch-btn-big warning" id="touch-grenade" aria-label="Grenade">
               <span class="touch-main">GRENADE</span><span class="touch-label">G</span>
+            </button>
+            <button class="touch-btn touch-btn-big violet touch-btn-dash" id="touch-dash" aria-label="Dash">
+              <span class="touch-main">DASH</span><span class="touch-label">SHIFT</span>
             </button>
           </div>
         </div>

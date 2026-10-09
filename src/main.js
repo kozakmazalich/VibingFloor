@@ -83,6 +83,8 @@ const spearProgressBarEl = document.getElementById("spear-progress-bar");
 const spearStatusTextEl = document.getElementById("spear-status-text");
 const grenadeProgressBarEl = document.getElementById("grenade-progress-bar");
 const grenadeStatusTextEl = document.getElementById("grenade-status-text");
+const dashProgressBarEl = document.getElementById("dash-progress-bar");
+const dashStatusTextEl = document.getElementById("dash-status-text");
 
 const btnHudPauseEl = document.getElementById("btn-hud-pause");
 const btnSoundEl = document.getElementById("btn-sound");
@@ -479,6 +481,21 @@ const game = new Game(scene, camera, {
           grenadeStatusTextEl.textContent = `${g.remaining.toFixed(1)}s`;
           grenadeStatusTextEl.className = "status-value charging tabular";
           grenadeProgressBarEl.classList.remove("ready");
+        }
+      }
+
+      // 4. Neon Dash (SHIFT)
+      const d = status.abilities.dash;
+      if (d) {
+        dashProgressBarEl.style.width = `${Math.round(d.progress * 100)}%`;
+        if (d.ready) {
+          dashStatusTextEl.textContent = "READY";
+          dashStatusTextEl.className = "status-value ready tabular";
+          dashProgressBarEl.classList.add("ready");
+        } else {
+          dashStatusTextEl.textContent = `${d.remaining.toFixed(1)}s`;
+          dashStatusTextEl.className = "status-value charging tabular";
+          dashProgressBarEl.classList.remove("ready");
         }
       }
     }

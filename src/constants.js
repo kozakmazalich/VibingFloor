@@ -86,6 +86,14 @@ export const JUMP_FORCE = 10.5; // Upward velocity on jump
 export const JUMP_COOLDOWN = 0.75; // Seconds between jumps
 export const JUMP_FORWARD_BOOST = 1.2; // Bonus forward leap speed if moving (kept low for precise platform landings)
 
+// Dash Ability (SHIFT): short burst along the move/facing direction
+export const DASH_COOLDOWN = 1.5; // Seconds between dashes
+export const DASH_DURATION = 0.18; // Burst length in seconds
+export const DASH_SPEED_MULT = 2.8; // Burst speed as a multiple of normal max speed
+export const DASH_RECOVERY = 0.14; // Smooth speed bleed after the burst ends
+export const DASH_TRAIL_INTERVAL = 0.04; // Afterimage spawn cadence (seconds)
+export const DASH_TRAIL_LIFE = 0.25; // Afterimage fade duration (seconds)
+
 // Weapon 1: Spear Thrust (E)
 export const SPEAR_COOLDOWN = 1.8; // Seconds
 export const SPEAR_REACH = 3.2; // Long melee reach (~3 tiles)

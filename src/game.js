@@ -10,6 +10,10 @@ import {
   JUMP_COOLDOWN,
   SPEAR_COOLDOWN,
   GRENADE_COOLDOWN,
+  DASH_COOLDOWN,
+  DASH_DURATION,
+  DASH_SPEED_MULT,
+  DASH_RECOVERY,
   GRENADE_THROW_DISTANCE,
   GRENADE_RADIUS,
   JUMP_FORCE,
@@ -43,7 +47,7 @@ export class Game {
     this.mode = "cpu"; // "cpu" | "online"
     this.netRole = null; // "host" | "guest" | null
     this.net = null; // Net instance (wired by main.js)
-    this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false };
+    this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false, dash: false };
 
     // Host: snapshot / fx bookkeeping
     this.snapSeq = 0;
@@ -166,7 +170,13 @@ export class Game {
       }
 
       // Prevent browser default on game keys
-      if (e.code === "KeyE" || e.code === "KeyG" || e.code === "KeyJ") {
+      if (
+        e.code === "KeyE" ||
+        e.code === "KeyG" ||
+        e.code === "KeyJ" ||
+        e.code === "ShiftLeft" ||
+        e.code === "ShiftRight"
+      ) {
         e.preventDefault();
       }
 
@@ -223,9 +233,10 @@ export class Game {
     this.sentFx.clear();
     this.lastJumpSent = { p1: 0, p2: 0 };
     this.lastPushSent = { p1: 0, p2: 0 };
+    this.lastDashSent = { p1: 0, p2: 0 };
     this.lastWinner = null;
     this.netRoundOverShown = false;
-    this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false };
+    this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false, dash: false };
     this.restartRoundLocal(false);
 
     if (this.ui.onGameStart) {
@@ -487,6 +498,7 @@ export class Game {
             push: !!msg.push,
             spear: !!msg.spear,
             grenade: !!msg.grenade,
+            dash: !!msg.dash,
           };
           break;
         case "restart":
@@ -540,6 +552,7 @@ export class Game {
         round2(r.jumpCooldown),
         round2(r.spearCooldown),
         round2(r.grenadeCooldown),
+        round2(r.dashCooldown),
       ],
     };
   }
@@ -620,6 +633,14 @@ export class Game {
     if (this.p2.fxPushCount > this.lastPushSent.p2) {
       this.lastPushSent.p2 = this.p2.fxPushCount;
       out.push({ k: "push", who: "p2" });
+    }
+    if (this.p1.fxDashCount > this.lastDashSent.p1) {
+      this.lastDashSent.p1 = this.p1.fxDashCount;
+      out.push({ k: "dash", who: "p1" });
+    }
+    if (this.p2.fxDashCount > this.lastDashSent.p2) {
+      this.lastDashSent.p2 = this.p2.fxDashCount;
+      out.push({ k: "dash", who: "p2" });
     }
 
     return out;
@@ -792,6 +813,12 @@ export class Game {
         r.playPushWaveVisual();
         break;
       }
+      case "dash": {
+        const r = f.who === "p1" ? this.p2 : this.p1;
+        if (mine && this.consumeGuestPrediction("dash", 1500)) break;
+        r.playDashVisual();
+        break;
+      }
     }
   }
 
@@ -814,6 +841,7 @@ export class Game {
   // knockback / tile damage via snapshots).
   applyGuestPrediction(dt) {
     const keys = this.keys;
+    const now = performance.now();
     const fwd =
       (keys["KeyW"] || keys["ArrowUp"] ? 1 : 0) -
       (keys["KeyS"] || keys["ArrowDown"] ? 1 : 0);
@@ -825,17 +853,49 @@ export class Game {
     const p = this.p1;
     if (p.state !== "alive") return;
 
-    if (this.guestMoving) {
-      const v = p.cameraRelativeMove(this.camera, fwd, right);
-      p.vel.x += v.x * P1_ACCEL * dt;
-      p.vel.y += v.z * P1_ACCEL * dt;
-      p.facingAngle = Math.atan2(-v.x, -v.z);
+    // Dash prediction: instant burst feel + afterimages (the host applies the
+    // authoritative burst; the echo fx event is deduped below)
+    const shiftDown = !!(keys["ShiftLeft"] || keys["ShiftRight"]);
+    if (shiftDown && !p.dashHeld && p.dashCooldown <= 0) {
+      let dirX;
+      let dirZ;
+      if (fwd !== 0 || right !== 0) {
+        const v = p.cameraRelativeMove(this.camera, fwd, right);
+        dirX = v.x;
+        dirZ = v.z;
+      } else {
+        dirX = -Math.sin(p.facingAngle);
+        dirZ = -Math.cos(p.facingAngle);
+      }
+      if (p.triggerDash(dirX, dirZ)) {
+        this.guestPredicted.dash = now;
+      }
+    }
+    p.dashHeld = shiftDown;
 
-      const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
-      p.vel.multiplyScalar(dampingFactor);
-      const speed = p.vel.length();
-      if (speed > P1_MAX_SPEED) {
-        p.vel.multiplyScalar(P1_MAX_SPEED / speed);
+    if (p.dashTimer > 0) this.guestMoving = true; // burst counts as steering
+
+    if (this.guestMoving) {
+      if (p.dashTimer > 0) {
+        // Burst: override velocity along the dash direction
+        p.dashTimer -= dt;
+        if (p.dashTimer <= 0) p.dashRecovery = DASH_RECOVERY;
+        const burst = P1_MAX_SPEED * DASH_SPEED_MULT;
+        p.vel.set(p.dashDir.x * burst, p.dashDir.y * burst);
+        p.facingAngle = Math.atan2(-p.dashDir.x, -p.dashDir.y);
+      } else {
+        const v = p.cameraRelativeMove(this.camera, fwd, right);
+        p.vel.x += v.x * P1_ACCEL * dt;
+        p.vel.y += v.z * P1_ACCEL * dt;
+        p.facingAngle = Math.atan2(-v.x, -v.z);
+
+        if (p.dashRecovery > 0) p.dashRecovery -= dt;
+        const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
+        p.vel.multiplyScalar(dampingFactor);
+        const speed = p.vel.length();
+        if (speed > P1_MAX_SPEED && p.dashTimer <= 0 && p.dashRecovery <= 0) {
+          p.vel.multiplyScalar(P1_MAX_SPEED / speed);
+        }
       }
 
       // Per-axis ledge/wall blocking — same rules as the host, so the
@@ -867,7 +927,6 @@ export class Game {
     }
 
     // Abilities: instant local feel (the host echoes are deduped above)
-    const now = performance.now();
     const dirX = -Math.sin(p.facingAngle);
     const dirZ = -Math.cos(p.facingAngle);
 
@@ -968,8 +1027,9 @@ export class Game {
       push: !!keys["KeyJ"],
       spear: !!keys["KeyE"],
       grenade: !!keys["KeyG"],
+      dash: !!(keys["ShiftLeft"] || keys["ShiftRight"]),
     };
-    const sig = `${msg.mx},${msg.mz},${msg.jump ? 1 : 0}${msg.push ? 1 : 0}${msg.spear ? 1 : 0}${msg.grenade ? 1 : 0}`;
+    const sig = `${msg.mx},${msg.mz},${msg.jump ? 1 : 0}${msg.push ? 1 : 0}${msg.spear ? 1 : 0}${msg.grenade ? 1 : 0}${msg.dash ? 1 : 0}`;
     const now = performance.now();
     if (sig !== this.lastInputSig || now - this.inputSentAt > 500) {
       this.lastInputSig = sig;
@@ -1008,7 +1068,7 @@ export class Game {
 
       // Tick the local cooldown display between snapshots (values themselves
       // arrive in every snapshot from the host)
-      for (const cd of ["pushCooldown", "jumpCooldown", "spearCooldown", "grenadeCooldown"]) {
+      for (const cd of ["pushCooldown", "jumpCooldown", "spearCooldown", "grenadeCooldown", "dashCooldown"]) {
         this.p1[cd] = Math.max(0, this.p1[cd] - dt);
       }
 

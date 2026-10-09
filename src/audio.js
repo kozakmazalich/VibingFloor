@@ -462,6 +462,59 @@ class SoundSystem {
     osc.start(t);
     osc.stop(t + 0.15);
   }
+
+  // Dash burst whoosh (SHIFT): fast descending pitch sweep + noise zip
+  playDash() {
+    if (this.muted) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+
+    // Fast pitch sweep down
+    const osc = this.ctx.createOscillator();
+    const oscGain = this.ctx.createGain();
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(720, t);
+    osc.frequency.exponentialRampToValueAtTime(180, t + 0.12);
+
+    oscGain.gain.setValueAtTime(0.22, t);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    osc.connect(oscGain);
+    oscGain.connect(this.ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.15);
+
+    // Short noise zip for the whoosh texture
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.14);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = Math.random() * 2 - 1;
+    }
+
+    const whiteNoise = this.ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(2400, t);
+    filter.frequency.exponentialRampToValueAtTime(500, t + 0.12);
+    filter.Q.setValueAtTime(1.6, t);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.18, t);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+    whiteNoise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.ctx.destination);
+
+    whiteNoise.start(t);
+    whiteNoise.stop(t + 0.15);
+  }
 }
 
 export const audio = new SoundSystem();

@@ -103,6 +103,20 @@
   fire(joy, "pointerup", cx + 40, cy - 45);
   await sleep(120);
 
+  // 5b. DASH touch button -> dash cooldown reacts (fresh round = p1 alive)
+  const restartBtn = document.getElementById("touch-restart");
+  fire(restartBtn, "pointerdown", 0, 0);
+  await sleep(500);
+  const dashStatus = document.getElementById("dash-status-text");
+  const dBefore = dashStatus.textContent;
+  const dashBtn = document.getElementById("touch-dash");
+  fire(dashBtn, "pointerdown", 0, 0);
+  await sleep(200);
+  fire(dashBtn, "pointerup", 0, 0);
+  await sleep(120);
+  const dAfter = dashStatus.textContent;
+  dBefore !== dAfter ? ok(`DASH button triggers the ability ("${dBefore}" -> "${dAfter}")`) : bad("DASH button did not trigger the ability");
+
   // 6. PUSH touch button -> cooldown HUD reacts (READY -> charging)
   const pushStatus = document.getElementById("push-status-text");
   const before = pushStatus.textContent;

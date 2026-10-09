@@ -12,6 +12,12 @@ import {
   JUMP_FORCE,
   JUMP_COOLDOWN,
   JUMP_FORWARD_BOOST,
+  DASH_COOLDOWN,
+  DASH_DURATION,
+  DASH_SPEED_MULT,
+  DASH_RECOVERY,
+  DASH_TRAIL_INTERVAL,
+  DASH_TRAIL_LIFE,
   SPEAR_COOLDOWN,
   SPEAR_IMPULSE,
   GRENADE_COOLDOWN,
@@ -82,6 +88,17 @@ export class Robot {
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
 
+    // Dash ability (SHIFT): burst + afterimage trail
+    this.dashCooldown = 0;
+    this.dashTimer = 0; // remaining burst time (>0 = dashing)
+    this.dashRecovery = 0; // smooth speed bleed after the burst
+    this.dashDir = new THREE.Vector2(0, 0); // normalized burst direction
+    this.dashHeld = false; // fresh-press detection (keyboard)
+    this.remoteDashHeld = false; // fresh-press detection (online guest input)
+    this.dashGhostTimer = 0; // while >0, spawn afterimages at fixed cadence
+    this.dashTrailAccum = 0;
+    this.ghosts = []; // { mesh, mat, life, maxLife }
+
     // Animation variables
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
@@ -96,6 +113,7 @@ export class Robot {
     // Online multiplayer
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
     this.fxPushCount = 0; // incremented on each push (host broadcasts as fx event)
+    this.fxDashCount = 0; // incremented on each dash (host broadcasts as fx event)
     this.netPose = null; // latest authoritative pose from the host (guest only)
     this.predictingHop = false; // guest predicted a jump locally (mid-flight)
     this._netTarget = new THREE.Vector3();
@@ -273,6 +291,16 @@ export class Robot {
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
 
+    this.dashCooldown = 0;
+    this.dashTimer = 0;
+    this.dashRecovery = 0;
+    this.dashDir.set(0, 0);
+    this.dashHeld = false;
+    this.remoteDashHeld = false;
+    this.dashGhostTimer = 0;
+    this.dashTrailAccum = 0;
+    this.clearDashGhosts();
+
     if (this.waveMesh) this.waveMesh.visible = false;
 
     this.group.position.copy(this.pos);
@@ -398,6 +426,103 @@ export class Robot {
     }
     this.pushWaveTimer = 0.28;
     audio.playPushWhoosh();
+  }
+
+  // --- ABILITY: NEON DASH (SHIFT) ---
+  // Short speed burst along (dirX, dirZ) (normalized). Fires the afterimage
+  // trail + sound; cooldown and burst timing live on the Robot.
+  triggerDash(dirX, dirZ) {
+    if (this.state !== "alive" || this.dashCooldown > 0) return false;
+
+    const len = Math.hypot(dirX, dirZ);
+    if (len < 0.001) return false;
+
+    this.dashCooldown = DASH_COOLDOWN;
+    this.dashTimer = DASH_DURATION;
+    this.dashDir.set(dirX / len, dirZ / len);
+    this.fxDashCount++;
+
+    this.playDashVisual();
+
+    return true;
+  }
+
+  // Visual + audio only (online guest rendering the opponent's dash fx event)
+  playDashVisual() {
+    if (this.state !== "alive") return;
+    this.dashGhostTimer = DASH_DURATION;
+    this.dashTrailAccum = 0;
+    this.spawnDashGhost();
+    audio.playDash();
+  }
+
+  // Cheap afterimage: a flat translucent team-colored silhouette of the robot
+  // that fades out over DASH_TRAIL_LIFE. Geometry is shared (clone), one
+  // material per ghost — no bloom, no post-processing.
+  spawnDashGhost() {
+    if (!this.modelGroup) return;
+    const ghost = this.modelGroup.clone(true); // deep clone, shares geometry
+    const ghostMat = new THREE.MeshBasicMaterial({
+      color: this.teamColor,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false,
+    });
+    ghost.traverse((child) => {
+      if (child.isMesh) {
+        child.material = ghostMat;
+        child.castShadow = false;
+        child.receiveShadow = false;
+      } else if (child.isLineSegments) {
+        child.visible = false; // clean silhouette, no outlines in the trail
+      }
+    });
+    // Replicate the model group's transform inside the scene (group pos + bob)
+    ghost.position.set(
+      this.group.position.x + this.modelGroup.position.x,
+      this.group.position.y + this.modelGroup.position.y,
+      this.group.position.z + this.modelGroup.position.z
+    );
+    ghost.rotation.y = this.modelGroup.rotation.y;
+    ghost.scale.copy(this.modelGroup.scale);
+    this.scene.add(ghost);
+    this.ghosts.push({ mesh: ghost, mat: ghostMat, life: DASH_TRAIL_LIFE, maxLife: DASH_TRAIL_LIFE });
+  }
+
+  // Spawn afterimages while a dash burst is active and fade existing ones out.
+  updateDashVisuals(dt) {
+    if (this.dashGhostTimer > 0) {
+      this.dashGhostTimer -= dt;
+      this.dashTrailAccum += dt;
+      while (this.dashTrailAccum >= DASH_TRAIL_INTERVAL) {
+        this.dashTrailAccum -= DASH_TRAIL_INTERVAL;
+        this.spawnDashGhost();
+      }
+      if (this.dashGhostTimer <= 0) this.dashTrailAccum = 0;
+    }
+
+    for (let i = this.ghosts.length - 1; i >= 0; i--) {
+      const g = this.ghosts[i];
+      g.life -= dt;
+      if (g.life <= 0) {
+        this.scene.remove(g.mesh);
+        g.mat.dispose();
+        this.ghosts.splice(i, 1);
+      } else {
+        g.mat.opacity = 0.35 * (g.life / g.maxLife);
+        g.mesh.scale.setScalar(1 + (1 - g.life / g.maxLife) * 0.35);
+      }
+    }
+  }
+
+  clearDashGhosts() {
+    for (const g of this.ghosts) {
+      this.scene.remove(g.mesh);
+      g.mat.dispose();
+    }
+    this.ghosts.length = 0;
+    this.dashGhostTimer = 0;
+    this.dashTrailAccum = 0;
   }
   // --- ABILITY 3: CYBER SPEAR (KEY E) — FLIES IN FACING DIRECTION ---
   triggerSpear(target, fxManager, onScreenShake) {
@@ -544,7 +669,36 @@ export class Robot {
       (keys["KeyD"] || keys["ArrowRight"] ? 1 : 0) -
       (keys["KeyA"] || keys["ArrowLeft"] ? 1 : 0);
 
-    if (inputForward !== 0 || inputRight !== 0) {
+    // 5. SHIFT = Neon Dash (fresh press only — holding never re-triggers)
+    const shiftDown = !!(keys["ShiftLeft"] || keys["ShiftRight"]);
+    if (shiftDown && !this.dashHeld && this.dashCooldown <= 0) {
+      let dirX;
+      let dirZ;
+      if (inputForward !== 0 || inputRight !== 0) {
+        // Dash along the current move input (camera-relative)
+        const v = this.cameraRelativeMove(camera, inputForward, inputRight);
+        dirX = v.x;
+        dirZ = v.z;
+      } else {
+        // Not moving: dash along the current facing (spear/grenade convention)
+        dirX = -Math.sin(this.facingAngle);
+        dirZ = -Math.cos(this.facingAngle);
+      }
+      this.triggerDash(dirX, dirZ);
+    }
+    this.dashHeld = shiftDown;
+
+    if (this.dashTimer > 0) {
+      // Burst: override velocity along the dash direction
+      this.dashTimer -= dt;
+      if (this.dashTimer <= 0) this.dashRecovery = DASH_RECOVERY;
+      const burst = P1_MAX_SPEED * DASH_SPEED_MULT;
+      this.vel.set(this.dashDir.x * burst, this.dashDir.y * burst);
+
+      this.facingAngle = Math.atan2(-this.dashDir.x, -this.dashDir.y);
+      this.groundGroup.rotation.y = this.facingAngle;
+      if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
+    } else if (inputForward !== 0 || inputRight !== 0) {
       const moveWorld = this.cameraRelativeMove(camera, inputForward, inputRight);
       this.vel.x += moveWorld.x * P1_ACCEL * dt;
       this.vel.y += moveWorld.z * P1_ACCEL * dt;
@@ -556,12 +710,19 @@ export class Robot {
       if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
     }
 
-    // Friction & speed clamp (knockback impulses slide freely while hitShakeTimer is active)
+    // Friction & speed clamp (knockback impulses slide freely while hitShakeTimer
+    // is active; the dash burst and its short recovery bleed above the cap too)
+    if (this.dashRecovery > 0) this.dashRecovery -= dt;
     const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
     this.vel.multiplyScalar(dampingFactor);
 
     const currentSpeed = this.vel.length();
-    if (currentSpeed > P1_MAX_SPEED && this.hitShakeTimer <= 0) {
+    if (
+      currentSpeed > P1_MAX_SPEED &&
+      this.hitShakeTimer <= 0 &&
+      this.dashTimer <= 0 &&
+      this.dashRecovery <= 0
+    ) {
       this.vel.multiplyScalar(P1_MAX_SPEED / currentSpeed);
     }
   }
@@ -874,7 +1035,7 @@ export class Robot {
   }
 
   // Drive this robot from a remote player's input (online host applies
-  // the guest's input to its p2). `input` = { mx, mz, jump, push, spear, grenade }
+  // the guest's input to its p2). `input` = { mx, mz, jump, push, spear, grenade, dash }
   // where (mx, mz) is the guest's camera-relative move vector in WORLD space
   // (already transformed on the guest side with its own camera).
   updateRemoteInput(input, dt, opponent, island, fxManager, onScreenShake) {
@@ -894,7 +1055,34 @@ export class Robot {
     const mx = input.mx || 0;
     const mz = input.mz || 0;
     const len = Math.hypot(mx, mz);
-    if (len > 0.001) {
+
+    // Remote dash: fresh press only (the guest sends dash on key-down and
+    // dash:false on key-up, so holding the key never re-triggers)
+    if (input.dash && this.dashCooldown <= 0 && !this.remoteDashHeld) {
+      let dirX;
+      let dirZ;
+      if (len > 0.001) {
+        dirX = mx / len;
+        dirZ = mz / len;
+      } else {
+        dirX = -Math.sin(this.facingAngle);
+        dirZ = -Math.cos(this.facingAngle);
+      }
+      this.triggerDash(dirX, dirZ);
+    }
+    this.remoteDashHeld = !!input.dash;
+
+    if (this.dashTimer > 0) {
+      // Burst: override velocity along the dash direction
+      this.dashTimer -= dt;
+      if (this.dashTimer <= 0) this.dashRecovery = DASH_RECOVERY;
+      const burst = P1_MAX_SPEED * DASH_SPEED_MULT;
+      this.vel.set(this.dashDir.x * burst, this.dashDir.y * burst);
+
+      this.facingAngle = Math.atan2(-this.dashDir.x, -this.dashDir.y);
+      this.groundGroup.rotation.y = this.facingAngle;
+      if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
+    } else if (len > 0.001) {
       const nx = mx / len;
       const nz = mz / len;
       this.vel.x += nx * P1_ACCEL * dt;
@@ -908,17 +1096,23 @@ export class Robot {
     }
 
     // Friction & speed clamp (identical to the local player path)
+    if (this.dashRecovery > 0) this.dashRecovery -= dt;
     const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
     this.vel.multiplyScalar(dampingFactor);
 
     const currentSpeed = this.vel.length();
-    if (currentSpeed > P1_MAX_SPEED && this.hitShakeTimer <= 0) {
+    if (
+      currentSpeed > P1_MAX_SPEED &&
+      this.hitShakeTimer <= 0 &&
+      this.dashTimer <= 0 &&
+      this.dashRecovery <= 0
+    ) {
       this.vel.multiplyScalar(P1_MAX_SPEED / currentSpeed);
     }
   }
 
   // Store the latest authoritative pose from the host (online guest only).
-  // pose = { x, y, z, f, vx, vz, st, cd: [push, jump, spear, grenade] }
+  // pose = { x, y, z, f, vx, vz, st, cd: [push, jump, spear, grenade, dash] }
   setNetPose(pose) {
     this.netPose = pose;
     if (pose.cd) {
@@ -926,6 +1120,7 @@ export class Robot {
       this.jumpCooldown = pose.cd[1] || 0;
       this.spearCooldown = pose.cd[2] || 0;
       this.grenadeCooldown = pose.cd[3] || 0;
+      this.dashCooldown = pose.cd[4] || 0;
     }
     // Don't stomp a locally predicted hop: while we are mid-air locally the
     // host's pose (one RTT behind) still reports the robot as grounded.
@@ -941,6 +1136,7 @@ export class Robot {
   // inputActive = the guest is steering right now: correction is gentler so
   // local prediction is not pulled back by snapshots that are one RTT old.
   netTick(dt, inputActive = false, island = null) {
+    this.updateDashVisuals(dt); // dash afterimages tick for both robots on the guest
     const pose = this.netPose;
     if (!pose) {
       // Never received a snapshot yet — keep the spawn pose
@@ -1034,6 +1230,12 @@ export class Robot {
     if (this.grenadeCooldown > 0) {
       this.grenadeCooldown = Math.max(0, this.grenadeCooldown - dt);
     }
+    if (this.dashCooldown > 0) {
+      this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    }
+
+    // Dash afterimage trail (visual only, cheap)
+    this.updateDashVisuals(dt);
 
     // Animate radial push shockwave
     if (this.pushWaveTimer > 0) {
@@ -1248,10 +1450,17 @@ export class Robot {
         max: GRENADE_COOLDOWN,
         progress: Math.min(1.0, Math.max(0, 1.0 - this.grenadeCooldown / GRENADE_COOLDOWN)),
       },
+      dash: {
+        ready: this.dashCooldown <= 0,
+        remaining: this.dashCooldown,
+        max: DASH_COOLDOWN,
+        progress: Math.min(1.0, Math.max(0, 1.0 - this.dashCooldown / DASH_COOLDOWN)),
+      },
     };
   }
 
   dispose() {
+    this.clearDashGhosts();
     this.scene.remove(this.group);
   }
 }

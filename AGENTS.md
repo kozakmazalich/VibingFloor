@@ -13,7 +13,7 @@ fight on a shrinking island. Reference game: Steam app 1298830 "Don't Fall".
 - index.html, style.css
 - src/main.js — bootstrap, render loop, camera, HUD
 - src/game.js — game logic, input (keys), rounds
-- src/robot.js — Robot class, GLB loading, J push / SPACE jump abilities
+- src/robot.js — Robot class, GLB loading, J push / SPACE jump / SHIFT dash abilities
 - src/island.js, src/tile.js — shrinking island
 - src/constants.js, src/audio.js
 
@@ -28,6 +28,7 @@ fight on a shrinking island. Reference game: Steam app 1298830 "Don't Fall".
 - 10x10 shrinking island: outer-rim tiles fall over time, shrink inward.
 - Player 1 (WASD / arrows) + a CPU AI.
 - J push: knockback + cooldown + wave effect.
+- SHIFT dash: speed burst + fading afterimage trail + 1.5s cooldown.
 - Falling / elimination / win overlay / restart (R).
 
 ## TODO — finish to a PRESENTABLE state
@@ -61,7 +62,7 @@ fight on a shrinking island. Reference game: Steam app 1298830 "Don't Fall".
 
 ## Quality bar
 - Reads as a polished indie game demo, not a prototype.
-- All controls shown on screen (move, J push, SPACE jump, E, G, R).
+- All controls shown on screen (move, J push, SPACE jump, SHIFT dash, E, G, R).
 - Target 60fps on an 8GB M1 MacBook Air (fanless): no heavy post-processing,
   modest poly/effect density.
 

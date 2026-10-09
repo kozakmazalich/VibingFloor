@@ -42,6 +42,26 @@
   for (const c of codes) keyup(c);
   await sleep(300);
 
+  // Dash (SHIFT): burst + cooldown HUD feedback
+  const dashStatus = document.getElementById("dash-status-text");
+  const dashBefore = dashStatus.textContent;
+  key("ShiftLeft");
+  await sleep(150);
+  const dashAfter = dashStatus.textContent;
+  dashAfter !== dashBefore ? ok(`dash triggers (status: "${dashBefore}" -> "${dashAfter}")`) : bad(`dash status unchanged ("${dashAfter}")`);
+  keyup("ShiftLeft");
+  let dashReady = false;
+  for (let i = 0; i < 15; i++) {
+    await sleep(200);
+    if (dashStatus.textContent === "READY") { dashReady = true; break; }
+  }
+  dashReady ? ok("dash cooldown recovers to READY") : bad("dash cooldown never recovered");
+
+  // Restart so the round is fresh (a dash + shrinking island can eliminate p1
+  // during the cooldown wait above; pause only toggles while playing)
+  key("KeyR");
+  await sleep(700);
+
   // Pause / resume
   key("KeyP");
   await sleep(300);

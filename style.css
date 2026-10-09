@@ -1113,6 +1113,22 @@ body {
   box-shadow: 0 0 24px rgba(255, 92, 26, 0.6);
 }
 
+.touch-btn.violet {
+  border-color: rgba(167, 139, 250, 0.7);
+  box-shadow: 0 0 14px rgba(167, 139, 250, 0.25), inset 0 0 12px rgba(167, 139, 250, 0.12);
+}
+
+.touch-btn.violet.pressed {
+  background: rgba(167, 139, 250, 0.25);
+  box-shadow: 0 0 24px rgba(167, 139, 250, 0.6);
+}
+
+/* Wide DASH button spanning the whole grid row (thumb-friendly target) */
+.touch-btn.touch-btn-dash {
+  grid-column: 1 / -1;
+  border-radius: 22px;
+}
+
 .touch-btn-small {
   width: 46px;
   height: 46px;
@@ -1297,6 +1313,16 @@ body {
 .grenade-fill.ready {
   background: #ff5c1a;
   box-shadow: 0 0 10px rgba(255, 92, 26, 0.8);
+}
+
+.dash-fill {
+  background: linear-gradient(90deg, #7c3aed, #a78bfa);
+  box-shadow: 0 0 6px rgba(167, 139, 250, 0.4);
+}
+
+.dash-fill.ready {
+  background: #a78bfa;
+  box-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
 }
 
 /* Bottom Hint & Controls */
@@ -1603,10 +1629,10 @@ body {
 }
 
 /* Landscape phones have little height: squeeze the docked panel further so
-   it never collides with the touch action buttons. */
+   it never collides with the touch action buttons (which gained a DASH row). */
 @media (max-height: 500px) {
   .touch-device .island-status {
-    transform: scale(0.7);
+    transform: scale(0.6);
     transform-origin: top right;
   }
 }

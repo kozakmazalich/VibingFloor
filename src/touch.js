@@ -158,6 +158,7 @@ export function setupTouchControls() {
   bindHoldButton("touch-jump", "Space");
   bindHoldButton("touch-spear", "KeyE");
   bindHoldButton("touch-grenade", "KeyG");
+  bindHoldButton("touch-dash", "ShiftLeft");
   bindTapButton("touch-pause", "KeyP");
   bindTapButton("touch-restart", "KeyR");
 
