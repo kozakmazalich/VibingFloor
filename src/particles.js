@@ -17,6 +17,7 @@ export class FXManager {
     // Active particle systems
     this.sparkBursts = [];
     this.shockwaves = [];
+    this.spikeShards = []; // CHOG VIBER push quills
 
     // Stable ids so online host/guest can reference the same FX
     this._seq = 0;
@@ -179,6 +180,39 @@ export class FXManager {
       this.spawnExplosionShockwave(p.targetX, p.targetY, p.targetZ, color, 2.6);
       this.spawnSparkBurst(p.targetX, p.targetY, p.targetZ, 36, 0xff5c1a, 1.8);
       return;
+    }
+  }
+
+  // CHOG VIBER: cone quills burst radially out of the pusher (visual only,
+  // the knockback itself is handled by Robot.triggerPush).
+  spawnSpikeBurst(x, y, z, count = 9, colorHex = 0xfdf7d3) {
+    for (let i = 0; i < count; i++) {
+      const geo = new THREE.ConeGeometry(0.09, 0.5, 6);
+      const mat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        transparent: true,
+        opacity: 1.0,
+        depthWrite: false,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(x, y, z);
+      this.scene.add(mesh);
+
+      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.7;
+      const speed = 4.5 + Math.random() * 3.5;
+      this.spikeShards.push({
+        mesh,
+        geo,
+        mat,
+        vx: Math.cos(angle) * speed,
+        vy: 3.2 + Math.random() * 3.2,
+        vz: Math.sin(angle) * speed,
+        spinX: (Math.random() - 0.5) * 14,
+        spinY: (Math.random() - 0.5) * 14,
+        spinZ: (Math.random() - 0.5) * 14,
+        duration: 0.7 + Math.random() * 0.35,
+        elapsed: 0,
+      });
     }
   }
 
@@ -400,6 +434,29 @@ export class FXManager {
         this.sparkBursts.splice(i, 1);
       }
     }
+
+    // 5. Update Spike Shards (CHOG push quills: fly out, spin, fall, fade)
+    for (let i = this.spikeShards.length - 1; i >= 0; i--) {
+      const s = this.spikeShards[i];
+      s.elapsed += dt;
+      const t = Math.min(1.0, s.elapsed / s.duration);
+
+      s.vy -= 16.0 * dt; // Gravity
+      s.mesh.position.x += s.vx * dt;
+      s.mesh.position.y += s.vy * dt;
+      s.mesh.position.z += s.vz * dt;
+      s.mesh.rotation.x += s.spinX * dt;
+      s.mesh.rotation.y += s.spinY * dt;
+      s.mesh.rotation.z += s.spinZ * dt;
+      s.mat.opacity = 1.0 - t;
+
+      if (t >= 1.0 || s.mesh.position.y < -2.0) {
+        this.scene.remove(s.mesh);
+        s.geo.dispose();
+        s.mat.dispose();
+        this.spikeShards.splice(i, 1);
+      }
+    }
   }
 
   clear() {
@@ -428,5 +485,12 @@ export class FXManager {
       b.mat.dispose();
     }
     this.sparkBursts = [];
+
+    for (const s of this.spikeShards) {
+      this.scene.remove(s.mesh);
+      s.geo.dispose();
+      s.mat.dispose();
+    }
+    this.spikeShards = [];
   }
 }

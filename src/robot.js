@@ -108,6 +108,7 @@ export class Robot {
 
     // 3D Model state
     this.has3DModel = false;
+    this.hasSpikes = false; // CHOG VIBER: push scatters quills
 
     // AI navigation variables
     this.aiWanderTimer = 0;
@@ -139,6 +140,7 @@ export class Robot {
     const v = buildViber(def);
     this.viber = v;
     this.modelGroup = new THREE.Group();
+    this.hasSpikes = !!(def.spikes && def.spikes.length);
 
     // Normalize height to ROBOT_SCALE and sit feet at y = 0
     const targetHeight = ROBOT_SCALE * 1.15;
@@ -384,6 +386,7 @@ export class Robot {
     this.fxPushCount++;
 
     this.playPushWaveVisual();
+    this.spawnSpikeBurst(fxManager); // CHOG: quills scatter with the push
 
     if (target && target.state === "alive") {
       const dx = target.pos.x - this.pos.x;
@@ -430,6 +433,12 @@ export class Robot {
     }
     this.pushWaveTimer = 0.28;
     audio.playPushWhoosh();
+  }
+
+  // CHOG VIBER: scatter a burst of quill cones on push (visual only)
+  spawnSpikeBurst(fxManager) {
+    if (!this.hasSpikes || !fxManager) return;
+    fxManager.spawnSpikeBurst(this.pos.x, this.pos.y + 1.05, this.pos.z, 9, 0xfdf7d3);
   }
 
   // --- ABILITY: NEON DASH (SHIFT) ---

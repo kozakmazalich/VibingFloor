@@ -138,26 +138,26 @@ export const CHARACTERS = [
     armExtrasR: [{ w: 0.50, h: 0.20, d: 0.54, x: 0, y: -0.60, z: 0, c: "accent" }],
     // Hedgehog spikes: cream cones along the back (pointing -Z) and on top
     // of the head (pointing up), in bodyPivot space. rx = -PI/2 turns the
-    // cone tip toward -Z (the model's back).
+    // cone tip toward -Z (the model's back). 3x scale for a big quill crest.
     spikes: [
       // Back of the body (fan of quills)
-      { x: -0.42, y: 1.18, z: -0.56, r: 0.18, h: 0.62, rx: -Math.PI / 2, c: "visor" },
-      { x: -0.21, y: 1.26, z: -0.56, r: 0.18, h: 0.66, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.00, y: 1.30, z: -0.56, r: 0.18, h: 0.70, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.21, y: 1.26, z: -0.56, r: 0.18, h: 0.66, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.42, y: 1.18, z: -0.56, r: 0.18, h: 0.62, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.42, y: 1.18, z: -0.56, r: 0.54, h: 1.86, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.21, y: 1.26, z: -0.56, r: 0.54, h: 1.98, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.00, y: 1.30, z: -0.56, r: 0.54, h: 2.10, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.21, y: 1.26, z: -0.56, r: 0.54, h: 1.98, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.42, y: 1.18, z: -0.56, r: 0.54, h: 1.86, rx: -Math.PI / 2, c: "visor" },
       // Back of the head
-      { x: -0.60, y: 2.45, z: -0.82, r: 0.16, h: 0.55, rx: -Math.PI / 2, c: "visor" },
-      { x: -0.30, y: 2.55, z: -0.86, r: 0.16, h: 0.60, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.00, y: 2.60, z: -0.88, r: 0.16, h: 0.62, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.30, y: 2.55, z: -0.86, r: 0.16, h: 0.60, rx: -Math.PI / 2, c: "visor" },
-      { x: 0.60, y: 2.45, z: -0.82, r: 0.16, h: 0.55, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.60, y: 2.45, z: -0.82, r: 0.48, h: 1.65, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.30, y: 2.55, z: -0.86, r: 0.48, h: 1.80, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.00, y: 2.60, z: -0.88, r: 0.48, h: 1.86, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.30, y: 2.55, z: -0.86, r: 0.48, h: 1.80, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.60, y: 2.45, z: -0.82, r: 0.48, h: 1.65, rx: -Math.PI / 2, c: "visor" },
       // Top of the head (mohawk row)
-      { x: -0.55, y: 2.95, z: -0.30, r: 0.17, h: 0.55, c: "visor" },
-      { x: -0.28, y: 3.05, z: -0.25, r: 0.17, h: 0.62, c: "visor" },
-      { x: 0.00, y: 3.10, z: -0.20, r: 0.17, h: 0.68, c: "visor" },
-      { x: 0.28, y: 3.05, z: -0.25, r: 0.17, h: 0.62, c: "visor" },
-      { x: 0.55, y: 2.95, z: -0.30, r: 0.17, h: 0.55, c: "visor" },
+      { x: -0.55, y: 2.95, z: -0.30, r: 0.51, h: 1.65, c: "visor" },
+      { x: -0.28, y: 3.05, z: -0.25, r: 0.51, h: 1.86, c: "visor" },
+      { x: 0.00, y: 3.10, z: -0.20, r: 0.51, h: 2.04, c: "visor" },
+      { x: 0.28, y: 3.05, z: -0.25, r: 0.51, h: 1.86, c: "visor" },
+      { x: 0.55, y: 2.95, z: -0.30, r: 0.51, h: 1.65, c: "visor" },
     ],
   },
 ];

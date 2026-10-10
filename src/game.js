@@ -811,6 +811,7 @@ export class Game {
         const r = f.who === "p1" ? this.p2 : this.p1;
         if (mine && this.consumeGuestPrediction("push", 1200)) break;
         r.playPushWaveVisual();
+        r.spawnSpikeBurst(this.fx); // CHOG: quills scatter on the opponent too
         break;
       }
       case "dash": {
@@ -948,6 +949,7 @@ export class Game {
     if (keys["KeyJ"] && p.pushCooldown <= 0) {
       p.pushCooldown = PUSH_COOLDOWN;
       p.playPushWaveVisual();
+      p.spawnSpikeBurst(this.fx); // CHOG: quills scatter instantly on the guest too
       this.guestPredicted.push = now;
     }
     if (keys["Space"] && p.jumpCooldown <= 0 && p.isGrounded) {
