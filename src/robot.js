@@ -113,6 +113,7 @@ export class Robot {
     // AI navigation variables
     this.aiWanderTimer = 0;
     this.aiWanderDir = new THREE.Vector2(0, 0);
+    this.aiDecisionTimer = 0; // EASY bots: time until the next combat decision
 
     // Online multiplayer
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
@@ -272,6 +273,8 @@ export class Robot {
       pushChance: d.pushChance,
       edgeSense: d.edgeSense,
       dodge: d.dodge,
+      attackGate: d.attackGate || 0, // >0: roll attacks once per window instead of every frame
+      mistakeChance: d.mistakeChance || 0,
     };
   }
 
@@ -286,6 +289,8 @@ export class Robot {
     this.isGrounded = true;
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
+    this.aiWanderTimer = 0;
+    this.aiDecisionTimer = 0;
     this.facingAngle = this.isPlayer ? -Math.PI / 4 : (3 * Math.PI) / 4;
     this.netPose = null; // drop stale snapshot target (online guest: fresh ones arrive ~33ms later)
     this.predictingHop = false;
@@ -858,41 +863,79 @@ export class Robot {
     // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
     if (opponent.state === "alive") {
       const angleToOpponent = Math.atan2(-toPlayer.x, -toPlayer.y);
+      const aimAt = (error) => {
+        this.facingAngle = angleToOpponent + error;
+        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
+        this.groundGroup.rotation.y = this.facingAngle;
+      };
 
-      // 1. Force Push (P): close combat (< PUSH_RADIUS)
-      if (
-        distToPlayer <= PUSH_RADIUS * 1.15 &&
-        this.pushCooldown <= 0 &&
-        Math.random() < this.ai.pushChance
-      ) {
-        this.facingAngle = angleToOpponent;
-        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
-        this.groundGroup.rotation.y = this.facingAngle;
-        this.triggerPush(opponent, fxManager);
-      }
-      // 2. Cyber Spear (E): straight line javelin thrust at mid-range (2.2 - 5.5 units)
-      else if (
-        distToPlayer >= 2.0 &&
-        distToPlayer <= 5.5 &&
-        this.spearCooldown <= 0 &&
-        Math.random() < this.ai.spearChance
-      ) {
-        this.facingAngle = angleToOpponent;
-        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
-        this.groundGroup.rotation.y = this.facingAngle;
-        this.triggerSpear(opponent, fxManager, onScreenShake);
-      }
-      // 3. Cyber Grenade (G): tactical floor explosion at medium-far distance (3.5 - 6.2 units)
-      else if (
-        distToPlayer >= 3.2 &&
-        distToPlayer <= 6.2 &&
-        this.grenadeCooldown <= 0 &&
-        Math.random() < this.ai.grenadeChance
-      ) {
-        this.facingAngle = angleToOpponent;
-        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
-        this.groundGroup.rotation.y = this.facingAngle;
-        this.triggerGrenade(opponent, island, fxManager, onScreenShake);
+      if (this.ai.attackGate > 0) {
+        // Timid bot (EASY): thinks slowly — rolls ONE attack per decision
+        // window and sometimes aims wide, so it whiffs often.
+        this.aiDecisionTimer -= dt;
+        if (this.aiDecisionTimer <= 0) {
+          this.aiDecisionTimer = this.ai.attackGate * (0.8 + Math.random() * 0.5);
+          const roll = Math.random();
+          let acc = 0;
+          const aimError =
+            Math.random() < this.ai.mistakeChance ? (Math.random() - 0.5) * 0.5 : 0;
+
+          if (
+            distToPlayer <= PUSH_RADIUS * 1.15 &&
+            this.pushCooldown <= 0 &&
+            roll < (acc += this.ai.pushChance)
+          ) {
+            aimAt(aimError);
+            this.triggerPush(opponent, fxManager);
+          } else if (
+            distToPlayer >= 2.0 &&
+            distToPlayer <= 5.5 &&
+            this.spearCooldown <= 0 &&
+            roll < (acc += this.ai.spearChance)
+          ) {
+            aimAt(aimError);
+            this.triggerSpear(opponent, fxManager, onScreenShake);
+          } else if (
+            distToPlayer >= 3.2 &&
+            distToPlayer <= 6.2 &&
+            this.grenadeCooldown <= 0 &&
+            roll < (acc += this.ai.grenadeChance)
+          ) {
+            aimAt(aimError);
+            this.triggerGrenade(opponent, island, fxManager, onScreenShake);
+          }
+        }
+      } else {
+        // Aggressive bots (NORMAL / HARD): per-frame rolls, unchanged
+        // 1. Force Push (P): close combat (< PUSH_RADIUS)
+        if (
+          distToPlayer <= PUSH_RADIUS * 1.15 &&
+          this.pushCooldown <= 0 &&
+          Math.random() < this.ai.pushChance
+        ) {
+          aimAt(0);
+          this.triggerPush(opponent, fxManager);
+        }
+        // 2. Cyber Spear (E): straight line javelin thrust at mid-range (2.2 - 5.5 units)
+        else if (
+          distToPlayer >= 2.0 &&
+          distToPlayer <= 5.5 &&
+          this.spearCooldown <= 0 &&
+          Math.random() < this.ai.spearChance
+        ) {
+          aimAt(0);
+          this.triggerSpear(opponent, fxManager, onScreenShake);
+        }
+        // 3. Cyber Grenade (G): tactical floor explosion at medium-far distance (3.5 - 6.2 units)
+        else if (
+          distToPlayer >= 3.2 &&
+          distToPlayer <= 6.2 &&
+          this.grenadeCooldown <= 0 &&
+          Math.random() < this.ai.grenadeChance
+        ) {
+          aimAt(0);
+          this.triggerGrenade(opponent, island, fxManager, onScreenShake);
+        }
       }
     }
 
@@ -948,12 +991,14 @@ export class Robot {
         aiDesired.set(-moveDirX, -moveDirZ);
       }
     } else if (opponent.state === "alive") {
-      // Hunt the player whenever the direct path is safe (or jumpable)
+      // Hunt the player whenever the direct path is safe (or jumpable).
+      // Timid bots (EASY) only hunt up close — beyond aggro they wander.
       const huntDir = toPlayer.clone().normalize();
       const safeDirect =
         island.hasGroundUnder(this.pos.x + huntDir.x * 1.6, this.pos.z + huntDir.y * 1.6) ||
         jumpableAhead(huntDir.x, huntDir.y);
-      if (safeDirect && distToPlayer > 1.0) {
+      const wantsHunt = this.ai.aggro >= 5 || distToPlayer <= this.ai.aggro;
+      if (safeDirect && distToPlayer > 1.0 && wantsHunt) {
         aiDesired.copy(huntDir);
         if (distToPlayer < 1.3) {
           aiDesired.multiplyScalar(1.4);

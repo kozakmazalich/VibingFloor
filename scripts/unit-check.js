@@ -119,5 +119,16 @@
     audio.toggleMute(); // leave silent for the remaining checks
   }
 
+  // 5. CPU difficulty presets: easy bot is deliberately timid
+  const { DIFFICULTIES } = await import("/src/constants.js");
+  const easy = DIFFICULTIES.easy;
+  const normal = DIFFICULTIES.normal;
+  easy.attackGate > 0 && easy.mistakeChance > 0 && easy.maxSpeed < normal.maxSpeed
+    ? ok(`easy bot is timid (speed ${easy.maxSpeed}, attackGate ${easy.attackGate}s, mistake ${easy.mistakeChance})`)
+    : bad("easy preset missing timid fields");
+  normal.attackGate === undefined && normal.maxSpeed === 5.0
+    ? ok("normal/hard keep the aggressive per-frame AI")
+    : bad("normal preset unexpectedly changed");
+
   return out.join("\n");
 })();

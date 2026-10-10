@@ -30,14 +30,16 @@ export const ROBOT_BODY_HEIGHT = 1.4; // Approx body height for slab overlap che
 export const DIFFICULTIES = {
   easy: {
     label: "EASY",
-    maxSpeed: 4.2,
-    accel: 26,
-    aggro: 4.5,
-    spearChance: 0.35,
-    grenadeChance: 0.2,
-    pushChance: 0.45,
-    edgeSense: 0.85,
+    maxSpeed: 3.4, // slower than the player (5.8)
+    accel: 22,
+    aggro: 3.0, // only hunts / leaps toward the player up close
+    spearChance: 0.18, // rolled ONCE per attack window, not per frame
+    grenadeChance: 0.08,
+    pushChance: 0.3,
+    edgeSense: 0.8,
     dodge: false,
+    attackGate: 1.8, // seconds between combat decisions (slow thinker)
+    mistakeChance: 0.4, // chance to aim wide when attacking
   },
   normal: {
     label: "NORMAL",
