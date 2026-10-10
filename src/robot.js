@@ -37,11 +37,13 @@ import { audio } from "./audio.js";
 import { buildViber, CHARACTERS } from "./vibers.js";
 
 // Selectable fighters: type key -> character index, name and menu avatar
+// pushMult scales the knockback of the J push (CHOG VIBER hits harder)
 export const CHAR_TYPES = {
   robot1_jpg: { idx: 0, name: "Crimson Miner", portrait: "assets/robot1_portrait.png" },
   moss: { idx: 1, name: "Moss Viber", portrait: "assets/robot3_portrait.png" },
   mecha: { idx: 2, name: "Volt Viber", portrait: "assets/robot2_portrait.png" },
   phantom: { idx: 3, name: "Phantom Viber", portrait: "assets/robot4_portrait.png" },
+  chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 1.8 },
 };
 
 export class Robot {
@@ -84,6 +86,7 @@ export class Robot {
     this.pushCooldown = 0;
     this.pushWaveTimer = 0;
     this.pushLungeTimer = 0;
+    this.pushMult = 1; // per-character push knockback scale (CHOG VIBER = 1.8)
 
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
@@ -242,6 +245,7 @@ export class Robot {
   switchCharacter(charType) {
     const meta = CHAR_TYPES[charType] || CHAR_TYPES.robot1_jpg;
     this.charIndex = meta.idx;
+    this.pushMult = meta.pushMult || 1;
     if (this.isPlayer) {
       this.name = meta.name;
       this.portraitPath = meta.portrait;
@@ -402,7 +406,7 @@ export class Robot {
         }
 
         const distBonus = 1.0 + (1.0 - dist / PUSH_RADIUS) * 0.35;
-        const impulse = PUSH_IMPULSE * distBonus;
+        const impulse = PUSH_IMPULSE * distBonus * (this.pushMult || 1);
 
         target.applyImpulse(dirX * impulse, dirZ * impulse);
 

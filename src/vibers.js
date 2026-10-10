@@ -18,6 +18,14 @@ function mkBox(w, h, d, mat, outline) {
   if (outline !== false) m.add(new THREE.LineSegments(edgeGeo(g), outlineMat));
   return m;
 }
+function mkCone(r, h, mat, outline) {
+  const g = new THREE.ConeGeometry(r, h, 8); // 8 segments: low poly, chunky look
+  const m = new THREE.Mesh(g, mat);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  if (outline !== false) m.add(new THREE.LineSegments(edgeGeo(g), outlineMat));
+  return m;
+}
 
 export const CHARACTERS = [
   {
@@ -105,6 +113,53 @@ export const CHARACTERS = [
     armExtrasL: [{ w: 0.50, h: 0.20, d: 0.54, x: 0, y: -0.28, z: 0, c: "accent" }],
     armExtrasR: [{ w: 0.50, h: 0.20, d: 0.54, x: 0, y: -0.28, z: 0, c: "accent" }],
   },
+  {
+    id: "chog", name: "CHOG VIBER",
+    colors: { head: 0x5c36b0, body: 0x5c36b0, arm: 0x5c36b0, foot: 0x686ffe, belt: 0x686ffe, dark: 0x2a1840, visor: 0xfdf7d3, eye: 0x14161a, accent: 0x686ffe, boot: 0x2a1840 },
+    headExtras: [
+      // Blue periwinkle top band
+      { w: 1.79, h: 0.30, d: 1.75, x: 0, y: 0.62, z: 0, c: "accent" },
+      // Cream face plate
+      { w: 1.40, h: 1.10, d: 0.16, x: 0, y: 0.02, z: 0.84, c: "visor" },
+      // Black hedgehog eyes
+      { w: 0.30, h: 0.30, d: 0.10, x: -0.44, y: 0.24, z: 0.94, c: "eye" },
+      { w: 0.30, h: 0.30, d: 0.10, x: 0.44, y: 0.24, z: 0.94, c: "eye" },
+      // Dark nose
+      { w: 0.24, h: 0.24, d: 0.12, x: 0, y: -0.10, z: 0.96, c: "dark" },
+      // Blue cheek tint patches
+      { w: 0.22, h: 0.22, d: 0.08, x: -0.74, y: -0.16, z: 0.88, c: "accent" },
+      { w: 0.22, h: 0.22, d: 0.08, x: 0.74, y: -0.16, z: 0.88, c: "accent" },
+    ],
+    bodyExtras: [
+      // Blue belly plate
+      { w: 0.90, h: 0.55, d: 0.08, x: 0, y: 0.00, z: 0.55, c: "accent" },
+    ],
+    armExtrasL: [{ w: 0.50, h: 0.20, d: 0.54, x: 0, y: -0.60, z: 0, c: "accent" }],
+    armExtrasR: [{ w: 0.50, h: 0.20, d: 0.54, x: 0, y: -0.60, z: 0, c: "accent" }],
+    // Hedgehog spikes: cream cones along the back (pointing -Z) and on top
+    // of the head (pointing up), in bodyPivot space. rx = -PI/2 turns the
+    // cone tip toward -Z (the model's back).
+    spikes: [
+      // Back of the body (fan of quills)
+      { x: -0.42, y: 1.18, z: -0.56, r: 0.18, h: 0.62, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.21, y: 1.26, z: -0.56, r: 0.18, h: 0.66, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.00, y: 1.30, z: -0.56, r: 0.18, h: 0.70, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.21, y: 1.26, z: -0.56, r: 0.18, h: 0.66, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.42, y: 1.18, z: -0.56, r: 0.18, h: 0.62, rx: -Math.PI / 2, c: "visor" },
+      // Back of the head
+      { x: -0.60, y: 2.45, z: -0.82, r: 0.16, h: 0.55, rx: -Math.PI / 2, c: "visor" },
+      { x: -0.30, y: 2.55, z: -0.86, r: 0.16, h: 0.60, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.00, y: 2.60, z: -0.88, r: 0.16, h: 0.62, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.30, y: 2.55, z: -0.86, r: 0.16, h: 0.60, rx: -Math.PI / 2, c: "visor" },
+      { x: 0.60, y: 2.45, z: -0.82, r: 0.16, h: 0.55, rx: -Math.PI / 2, c: "visor" },
+      // Top of the head (mohawk row)
+      { x: -0.55, y: 2.95, z: -0.30, r: 0.17, h: 0.55, c: "visor" },
+      { x: -0.28, y: 3.05, z: -0.25, r: 0.17, h: 0.62, c: "visor" },
+      { x: 0.00, y: 3.10, z: -0.20, r: 0.17, h: 0.68, c: "visor" },
+      { x: 0.28, y: 3.05, z: -0.25, r: 0.17, h: 0.62, c: "visor" },
+      { x: 0.55, y: 2.95, z: -0.30, r: 0.17, h: 0.55, c: "visor" },
+    ],
+  },
 ];
 
 export function buildViber(def) {
@@ -158,10 +213,25 @@ export function buildViber(def) {
       group.add(b);
     }
   }
+  // Hedgehog spikes: cone quills (CHOG VIBER). Entries may set on: "head" to
+  // attach to the head group (head-local coords) instead of the body pivot.
+  function addSpikes(list) {
+    if (!list || !list.length) return;
+    for (const p of list) {
+      const mat = (typeof p.c === "string") ? (matByName[p.c] || accentMat) : M(p.c);
+      const cone = mkCone(p.r, p.h, mat, p.outline !== false);
+      cone.position.set(p.x || 0, p.y || 0, p.z || 0);
+      if (p.rx) cone.rotation.x = p.rx;
+      if (p.ry) cone.rotation.y = p.ry;
+      if (p.rz) cone.rotation.z = p.rz;
+      (p.on === "head" ? head : bodyPivot).add(cone);
+    }
+  }
   addExtras(def.headExtras, head);
   addExtras(def.bodyExtras, bodyPivot);
   addExtras(def.armExtrasL, armL);
   addExtras(def.armExtrasR, armR);
+  addSpikes(def.spikes);
   root.scale.setScalar(0.8);
   return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat, eyeMat };
 }

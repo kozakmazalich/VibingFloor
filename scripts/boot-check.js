@@ -30,10 +30,27 @@
   await sleep(300);
   onlineMenu.classList.contains("hidden") ? ok("back returns to menu") : bad("back returns to menu");
 
+  // Fighter select: CHOG VIBER is selectable, shows its portrait + name
+  const chogBtn = document.getElementById("btn-char-chog");
+  if (!chogBtn) { bad("chog button present"); } else {
+    chogBtn.click();
+    await sleep(250);
+    const menuName = document.getElementById("menu-p1-name").textContent;
+    const menuAvatar = document.getElementById("menu-p1-avatar").src;
+    menuName.toUpperCase().includes("CHOG") ? ok(`chog selectable (menu name: ${menuName})`) : bad(`chog name missing (${menuName})`);
+    menuAvatar.includes("robot5_portrait") ? ok("chog portrait shown in menu") : bad(`chog portrait wrong (${menuAvatar})`);
+  }
+
   // Local vs-CPU match
   document.getElementById("btn-menu-play").click();
   await sleep(1200);
   !hud.classList.contains("hidden") ? ok("HUD visible in vs CPU") : bad("HUD visible in vs CPU");
+
+  // CHOG selected above: HUD name must follow
+  const hudName = document.getElementById("hud-p1-name").textContent;
+  const hudAvatar = document.getElementById("hud-p1-avatar").src;
+  hudName.toUpperCase().includes("CHOG") ? ok(`HUD shows chog name (${hudName})`) : bad(`HUD name wrong (${hudName})`);
+  hudAvatar.includes("robot5_portrait") ? ok("chog portrait shown in HUD") : bad(`HUD avatar wrong (${hudAvatar})`);
 
   // Exercise the full input surface (same codes the touch layer dispatches)
   const codes = ["KeyW", "Space", "KeyJ", "KeyE", "KeyG", "ArrowLeft", "KeyS"];
