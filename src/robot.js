@@ -832,7 +832,8 @@ export class Robot {
     };
 
     // AI JUMP DECISION: leap over gaps (following motion, or toward the opponent)
-    if (this.isGrounded && this.jumpCooldown <= 0) {
+    // (stunned bots can't jump: knockback carries them freely)
+    if (this.isGrounded && this.jumpCooldown <= 0 && this.hitShakeTimer <= 0) {
       let dirX = speed > 0.1 ? this.vel.x / speed : 0;
       let dirZ = speed > 0.1 ? this.vel.y / speed : 0;
       const towardOpponent = opponent.state === "alive" && distToPlayer > 2.0 && distToPlayer < this.ai.aggro;
@@ -861,7 +862,8 @@ export class Robot {
     }
 
     // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
-    if (opponent.state === "alive") {
+    // (no counter-attacks mid-knockback — stunned bots just slide)
+    if (opponent.state === "alive" && this.hitShakeTimer <= 0) {
       const angleToOpponent = Math.atan2(-toPlayer.x, -toPlayer.y);
       const aimAt = (error) => {
         this.facingAngle = angleToOpponent + error;
@@ -1063,7 +1065,7 @@ export class Robot {
       }
     }
 
-    if (aiDesired.lengthSq() > 0) {
+    if (aiDesired.lengthSq() > 0 && this.hitShakeTimer <= 0) {
       aiDesired.normalize();
       this.vel.x += aiDesired.x * this.ai.accel * dt;
       this.vel.y += aiDesired.y * this.ai.accel * dt;
@@ -1073,9 +1075,11 @@ export class Robot {
       if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
     }
 
-    // Emergency brake (AFTER acceleration): never walk into a missing neighboring
+    // Emergency brake (AFTER acceleration): never WALK into a missing neighboring
     // tile — gaps are crossed by jumping, not by walking off the edge.
-    if (this.isGrounded && underTile) {
+    // Knockback (hitShakeTimer > 0) is exempt: push/spear/grenade impulses
+    // must be able to carry the bot off the island — that's the core gameplay.
+    if (this.isGrounded && underTile && this.hitShakeTimer <= 0) {
       if (this.vel.x > 0 && !island.hasGroundUnder(tileBaseX + TILE_SPACING, this.pos.z)) this.vel.x = 0;
       if (this.vel.x < 0 && !island.hasGroundUnder(tileBaseX - TILE_SPACING, this.pos.z)) this.vel.x = 0;
       if (this.vel.y > 0 && !island.hasGroundUnder(this.pos.x, tileBaseZ + TILE_SPACING)) this.vel.y = 0;

@@ -130,5 +130,49 @@
     ? ok("normal/hard keep the aggressive per-frame AI")
     : bad("normal preset unexpectedly changed");
 
+  // 6. Knockback regression: push + spear must carry the bot off the edge
+  // (the AI used to brake at gaps and steer against the impulse, so bots
+  // could not be knocked out of the arena at all).
+  const { Island } = await import("/src/island.js");
+  const { MAPS } = await import("/src/maps.js");
+  const { Robot } = await import("/src/robot.js");
+
+  const island = new Island(scene, MAPS[0]);
+  // Rim setup on the 20x20 classic arena: p1 two tiles from the rim, p2 one
+  // tile from the rim — a knock in +X carries p2 over the edge into the void.
+  const p1s = island.getWorldPos(17, 10);
+  const p2s = island.getWorldPos(18, 10);
+  const a = new Robot(1, "T1", "assets/robot1_portrait.png", p1s.x, p1s.z, 0x00e5ff, true, scene);
+  const b = new Robot(2, "T2", "assets/robot2_portrait.png", p2s.x, p2s.z, 0xff2d95, false, scene);
+  b.setDifficulty("normal");
+  a.switchCharacter("chog"); // the spiked pusher
+  const fx2 = new FXManager(scene);
+
+  const pushed = a.triggerPush(b, fx2);
+  const impulse = b.vel.length();
+  for (let i = 0; i < 50; i++) {
+    fx2.update(1 / 60);
+    b.update(1 / 60, null, island, a, null, fx2);
+  }
+  pushed && impulse > 20 && b.state !== "alive"
+    ? ok(`push knocks the bot off the edge (state=${b.state}, impulse=${impulse.toFixed(1)})`)
+    : bad(`bot survived the edge push (state=${b.state}, impulse=${impulse.toFixed(1)})`);
+
+  // Spear round: reset, aim +X and let the spear fly into the bot
+  b.reset();
+  a.spearCooldown = 0;
+  a.facingAngle = -Math.PI / 2; // facing convention (-sin, -cos) -> (+X, 0)
+  const spearThrown = a.triggerSpear(b, fx2, null);
+  for (let i = 0; i < 40; i++) {
+    fx2.update(1 / 60);
+    b.update(1 / 60, null, island, a, null, fx2);
+  }
+  spearThrown && b.state !== "alive"
+    ? ok(`spear knocks the bot off the edge (state=${b.state})`)
+    : bad(`bot survived the spear (state=${b.state})`);
+
+  a.dispose();
+  b.dispose();
+
   return out.join("\n");
 })();
