@@ -81,5 +81,43 @@
     ? ok("clear() empties the scene")
     : bad(`scene children left: ${scene.children.length}`);
 
+  // 4. Music engine: starts, schedules steps, stops/restarts on mute
+  const { audio } = await import("/src/audio.js");
+  audio.init();
+  if (!audio.ctx) {
+    bad("AudioContext unavailable (headless?)");
+  } else {
+    audio.muted = false;
+    audio.startMusic();
+    audio.musicRunning && audio.musicBus
+      ? ok("music starts (bus created)")
+      : bad("music did not start");
+
+    // Scheduler must advance through the 2-bar pattern without errors
+    let steps = 0;
+    let okTick = true;
+    try {
+      audio._musicTick();
+      audio.musicNextTime += 10;
+      audio._musicTick();
+      steps = audio.musicStep;
+    } catch (e) {
+      okTick = false;
+    }
+    okTick && steps >= 0
+      ? ok(`music scheduler ticks without errors (step ${steps})`)
+      : bad("music tick threw");
+
+    audio.toggleMute(); // -> muted
+    audio.muted === true && !audio.musicRunning && !audio.musicBus
+      ? ok("mute stops the music")
+      : bad("mute did not stop the music");
+    audio.toggleMute(); // -> unmuted
+    audio.musicRunning
+      ? ok("unmute restarts the music")
+      : bad("unmute did not restart the music");
+    audio.toggleMute(); // leave silent for the remaining checks
+  }
+
   return out.join("\n");
 })();

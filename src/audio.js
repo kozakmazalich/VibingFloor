@@ -8,6 +8,15 @@ class SoundSystem {
     this.ctx = null;
     this.muted = false;
     this.initialized = false;
+
+    // Background music state (electro-techno loop)
+    this.musicRunning = false;
+    this.musicTimer = null;
+    this.musicStep = 0;
+    this.musicNextTime = 0;
+    this.musicBus = null;
+    this.musicBassGain = null;
+    this._noiseBuf = null;
   }
 
   init() {
@@ -28,10 +37,17 @@ class SoundSystem {
     if (this.ctx && this.ctx.state === "suspended") {
       this.ctx.resume().catch(() => {});
     }
+    // First user gesture unlocks audio: fire up the arena beat
+    if (this.ctx && !this.muted) this.startMusic();
   }
 
   toggleMute() {
     this.muted = !this.muted;
+    if (this.muted) {
+      this.stopMusic();
+    } else {
+      this.startMusic();
+    }
     return this.muted;
   }
 
@@ -515,6 +531,182 @@ class SoundSystem {
     whiteNoise.start(t);
     whiteNoise.stop(t + 0.15);
   }
+
+  // =====================================================================
+  // BACKGROUND MUSIC — electro-techno arena loop (A minor, 128 BPM).
+  // Fully synthesized: four-on-the-floor kick, offbeat hats, claps,
+  // rolling bassline with sidechain-style duck, echo arpeggio lead.
+  // Scheduled with a 25ms lookahead interval — cheap on a fanless M1.
+  // =====================================================================
+
+  startMusic() {
+    if (this.musicRunning) return;
+    if (!this.ctx) this.init(); // do NOT call ensureContext here (it calls us back)
+    if (!this.ctx || this.muted) return;
+
+    this.musicRunning = true;
+    this.musicStep = 0;
+    this.musicNextTime = this.ctx.currentTime + 0.1;
+
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = 0.4;
+    this.musicBus.connect(this.ctx.destination);
+
+    // Bassline sits on its own gain so the kick can duck it (techno pump)
+    this.musicBassGain = this.ctx.createGain();
+    this.musicBassGain.gain.value = 1.0;
+    this.musicBassGain.connect(this.musicBus);
+
+    this.musicTimer = setInterval(() => this._musicTick(), 25);
+  }
+
+  stopMusic() {
+    if (!this.musicRunning) return;
+    this.musicRunning = false;
+    clearInterval(this.musicTimer);
+    this.musicTimer = null;
+    if (this.musicBus) {
+      try {
+        this.musicBus.disconnect();
+      } catch (e) {
+        /* already disconnected */
+      }
+      this.musicBus = null;
+    }
+    this.musicBassGain = null;
+  }
+
+  _musicTick() {
+    const STEP = 60 / 128 / 4; // 128 BPM 16th note
+    while (this.musicNextTime < this.ctx.currentTime + 0.12) {
+      this._musicStep(this.musicStep, this.musicNextTime);
+      this.musicStep = (this.musicStep + 1) % 32;
+      this.musicNextTime += STEP;
+    }
+  }
+
+  // One 16th-note slot of the 2-bar pattern
+  _musicStep(step, t) {
+    const ctx = this.ctx;
+    const bus = this.musicBus;
+    if (!ctx || !bus) return;
+
+    // Kick: four-on-the-floor
+    if (step % 4 === 0) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(42, t + 0.2);
+      g.gain.setValueAtTime(0.9, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+      o.connect(g);
+      g.connect(bus);
+      o.start(t);
+      o.stop(t + 0.26);
+
+      // Sidechain-style duck: pump the bassline with the kick
+      const bg = this.musicBassGain && this.musicBassGain.gain;
+      if (bg) {
+        bg.setValueAtTime(0.35, t);
+        bg.linearRampToValueAtTime(1.0, t + 0.18);
+      }
+    }
+
+    // Clap on beats 2 and 4
+    if (step % 8 === 4) {
+      this._musicNoise(t, 0.09, "bandpass", 1800, 0.32, 1.2);
+    }
+
+    // Hats: offbeat 8ths (open hat at the end of each bar)
+    if (step % 4 === 2) {
+      const open = step % 16 === 14;
+      this._musicNoise(t, open ? 0.12 : 0.035, "highpass", 7000, open ? 0.16 : 0.11, 1);
+    }
+
+    // Rolling bassline (A minor techno)
+    const note = MUSIC_BASS[step];
+    if (note) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const f = ctx.createBiquadFilter();
+      o.type = "sawtooth";
+      o.frequency.value = note;
+      f.type = "lowpass";
+      f.frequency.value = 520;
+      const strong = step % 4 === 0;
+      g.gain.setValueAtTime(strong ? 0.3 : 0.2, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+      o.connect(f);
+      f.connect(g);
+      g.connect(this.musicBassGain);
+      o.start(t);
+      o.stop(t + 0.14);
+    }
+
+    // Arpeggio lead on 8ths with a dotted-8th echo
+    if (step % 2 === 0) {
+      const freq = MUSIC_LEAD[step / 2];
+      this._musicPluck(freq, t, 0.075);
+      this._musicPluck(freq, t + 3 * (60 / 128 / 4), 0.03);
+    }
+  }
+
+  // Short filtered noise hit (hats / clap)
+  _musicNoise(t, dur, type, freq, gainVal, q) {
+    const ctx = this.ctx;
+    if (!this._noiseBuf) {
+      const len = Math.floor(ctx.sampleRate * 0.5);
+      this._noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = this._noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = this._noiseBuf;
+    const f = ctx.createBiquadFilter();
+    f.type = type;
+    f.frequency.value = freq;
+    f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(gainVal, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    src.connect(f);
+    f.connect(g);
+    g.connect(this.musicBus);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  // Short square pluck for the lead arp
+  _musicPluck(freq, t, gainVal) {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    const f = ctx.createBiquadFilter();
+    const g = ctx.createGain();
+    o.type = "square";
+    o.frequency.value = freq;
+    f.type = "lowpass";
+    f.frequency.value = 2600;
+    g.gain.setValueAtTime(gainVal, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    o.connect(f);
+    f.connect(g);
+    g.connect(this.musicBus);
+    o.start(t);
+    o.stop(t + 0.16);
+  }
 }
+
+// 2-bar A minor rolling bassline (Hz), one entry per 16th note
+const MUSIC_BASS = [
+  55, 0, 55, 110, 0, 55, 0, 0, 65.41, 0, 55, 0, 110, 0, 49, 0,
+  55, 0, 55, 110, 0, 55, 0, 0, 82.41, 0, 73.42, 0, 49, 0, 110, 0,
+];
+
+// Arpeggio lead melody (Hz), one entry per 8th note
+const MUSIC_LEAD = [
+  440, 523.25, 659.25, 880, 783.99, 659.25, 587.33, 523.25,
+  440, 523.25, 659.25, 880, 1046.5, 880, 783.99, 659.25,
+];
 
 export const audio = new SoundSystem();
