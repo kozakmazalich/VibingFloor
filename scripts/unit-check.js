@@ -34,25 +34,50 @@
     ? ok("CHAR_TYPES.chog.pushMult = 1.8")
     : bad("pushMult missing/wrong");
 
-  // 3. Spike burst FX lifecycle
+  // 3. Spike burst FX lifecycle + symmetry requirements
   const scene = new THREE.Scene();
   const fx = new FXManager(scene);
-  fx.spawnSpikeBurst(0, 1, 0, 9, 0xfdf7d3);
-  const spawned = fx.spikeShards.length;
-  spawned === 9 ? ok("spike burst spawned 9 shards") : bad(`expected 9 shards, got ${spawned}`);
+  fx.spawnSpikeBurst(0, 1, 0, 8, 0xfdf7d3);
+  const burst = fx.spikeBursts[0];
+  burst && burst.spikes.length === 8
+    ? ok("spike burst spawned 8 spikes")
+    : bad(`expected 8 spikes, got ${burst ? burst.spikes.length : 0}`);
 
-  const xBefore = fx.spikeShards[0].mesh.position.x;
+  // Even 360° spread: direction of spike i must be (cos a, sin a), a = i/8*2PI
+  const expectedAngle = (i) => (i / 8) * Math.PI * 2;
+  let evenSpread = true;
+  for (let i = 0; i < 8; i++) {
+    const s = burst.spikes[i];
+    const dx = Math.cos(expectedAngle(i));
+    const dz = Math.sin(expectedAngle(i));
+    if (Math.abs(s.dx - dx) > 1e-9 || Math.abs(s.dz - dz) > 1e-9) evenSpread = false;
+  }
+  evenSpread ? ok("spikes evenly spaced around 360° (45° intervals)") : bad("spike directions are not even");
+
+  // Black outline cone quills
+  const hasOutline = burst.spikes.every(
+    (s) => s.mesh.children.length === 1 && s.mesh.children[0].isLineSegments
+  );
+  hasOutline ? ok("every spike has a black outline (LineSegments)") : bad("spikes missing outlines");
+
+  // Identical speed + travel distance: after one tick every spike moved the same
   fx.update(0.016);
-  const moved = Math.abs(fx.spikeShards[0].mesh.position.x - xBefore) > 0.001;
-  moved ? ok("shards move with velocity") : bad("shards did not move");
+  const traveled = burst.spikes.map((s) => Math.round(s.traveled * 1000));
+  new Set(traveled).size === 1
+    ? ok(`identical travel after one tick (${(traveled[0] / 1000).toFixed(3)} units)`)
+    : bad(`spike travel differs: ${traveled.join(", ")}`);
 
-  for (let i = 0; i < 160; i++) fx.update(0.016);
-  fx.spikeShards.length === 0
-    ? ok("shards expire and are removed from the scene")
-    : bad(`${fx.spikeShards.length} shards still alive after 2.5s`);
+  // Fade to zero + cleanup over ~0.4s
+  fx.update(0.2);
+  const midOpacity = burst.mat.opacity;
+  for (let i = 0; i < 20; i++) fx.update(0.02);
+  const expired = fx.spikeBursts.length === 0;
+  expired
+    ? ok(`ring faded (mid opacity ${midOpacity.toFixed(2)}) and was removed`)
+    : bad("burst still alive after 0.6s");
 
   fx.clear();
-  fx.spikeShards.length === 0 && scene.children.length === 0
+  fx.spikeBursts.length === 0 && scene.children.length === 0
     ? ok("clear() empties the scene")
     : bad(`scene children left: ${scene.children.length}`);
 

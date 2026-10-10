@@ -17,7 +17,7 @@ export class FXManager {
     // Active particle systems
     this.sparkBursts = [];
     this.shockwaves = [];
-    this.spikeShards = []; // CHOG VIBER push quills
+    this.spikeBursts = []; // CHOG VIBER push quill rings
 
     // Stable ids so online host/guest can reference the same FX
     this._seq = 0;
@@ -183,36 +183,51 @@ export class FXManager {
     }
   }
 
-  // CHOG VIBER: cone quills burst radially out of the pusher (visual only,
-  // the knockback itself is handled by Robot.triggerPush).
-  spawnSpikeBurst(x, y, z, count = 9, colorHex = 0xfdf7d3) {
+  // CHOG VIBER: a ring of cone quills bursts out of the pusher (visual only,
+  // the knockback itself is handled by Robot.triggerPush). Even 360° spread —
+  // spike i flies at angle (i / count) * 2PI with IDENTICAL speed, travel
+  // distance and fade time, so the pattern is perfectly symmetric.
+  // Geometry + materials are shared across the whole burst (fanless M1).
+  spawnSpikeBurst(x, y, z, count = 8, colorHex = 0xfdf7d3) {
+    const SPEED = 6.0; // units/sec — same for every spike
+    const DURATION = 0.4; // fade-to-zero time — same for every spike
+    const DIST = SPEED * DURATION; // travel distance — same for every spike
+
+    const coneGeo = new THREE.ConeGeometry(0.1, 0.55, 8);
+    coneGeo.rotateX(Math.PI / 2); // bake tip toward +Z so lookAt() aims the quill
+    const edgeGeo = new THREE.EdgesGeometry(coneGeo);
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: false,
+    });
+    const outlineMat = new THREE.LineBasicMaterial({ color: 0x14161a });
+
+    const burst = {
+      spikes: [],
+      geo: coneGeo,
+      edgeGeo,
+      mat,
+      outlineMat,
+      speed: SPEED,
+      duration: DURATION,
+      dist: DIST,
+    };
+    this.spikeBursts.push(burst);
+
     for (let i = 0; i < count; i++) {
-      const geo = new THREE.ConeGeometry(0.09, 0.5, 6);
-      const mat = new THREE.MeshBasicMaterial({
-        color: colorHex,
-        transparent: true,
-        opacity: 1.0,
-        depthWrite: false,
-      });
-      const mesh = new THREE.Mesh(geo, mat);
+      const angle = (i / count) * Math.PI * 2; // even spread, no randomness
+      const dx = Math.cos(angle);
+      const dz = Math.sin(angle);
+
+      const mesh = new THREE.Mesh(coneGeo, mat);
+      mesh.add(new THREE.LineSegments(edgeGeo, outlineMat)); // black outline
       mesh.position.set(x, y, z);
+      mesh.lookAt(x + dx, y, z + dz); // quill tip points along its fixed direction
       this.scene.add(mesh);
 
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.7;
-      const speed = 4.5 + Math.random() * 3.5;
-      this.spikeShards.push({
-        mesh,
-        geo,
-        mat,
-        vx: Math.cos(angle) * speed,
-        vy: 3.2 + Math.random() * 3.2,
-        vz: Math.sin(angle) * speed,
-        spinX: (Math.random() - 0.5) * 14,
-        spinY: (Math.random() - 0.5) * 14,
-        spinZ: (Math.random() - 0.5) * 14,
-        duration: 0.7 + Math.random() * 0.35,
-        elapsed: 0,
-      });
+      burst.spikes.push({ mesh, dx, dz, traveled: 0, elapsed: 0 });
     }
   }
 
@@ -435,26 +450,34 @@ export class FXManager {
       }
     }
 
-    // 5. Update Spike Shards (CHOG push quills: fly out, spin, fall, fade)
-    for (let i = this.spikeShards.length - 1; i >= 0; i--) {
-      const s = this.spikeShards[i];
-      s.elapsed += dt;
-      const t = Math.min(1.0, s.elapsed / s.duration);
+    // 5. Update Spike Bursts (CHOG push quills: straight out, even ring, fade)
+    for (let i = this.spikeBursts.length - 1; i >= 0; i--) {
+      const b = this.spikeBursts[i];
+      for (let j = b.spikes.length - 1; j >= 0; j--) {
+        const s = b.spikes[j];
+        s.elapsed += dt;
+        const step = b.speed * dt; // identical for every spike in the burst
+        s.mesh.position.x += s.dx * step;
+        s.mesh.position.z += s.dz * step;
+        s.traveled += step;
 
-      s.vy -= 16.0 * dt; // Gravity
-      s.mesh.position.x += s.vx * dt;
-      s.mesh.position.y += s.vy * dt;
-      s.mesh.position.z += s.vz * dt;
-      s.mesh.rotation.x += s.spinX * dt;
-      s.mesh.rotation.y += s.spinY * dt;
-      s.mesh.rotation.z += s.spinZ * dt;
-      s.mat.opacity = 1.0 - t;
+        if (s.traveled >= b.dist || s.elapsed >= b.duration) {
+          this.scene.remove(s.mesh);
+          b.spikes.splice(j, 1);
+        }
+      }
 
-      if (t >= 1.0 || s.mesh.position.y < -2.0) {
-        this.scene.remove(s.mesh);
-        s.geo.dispose();
-        s.mat.dispose();
-        this.spikeShards.splice(i, 1);
+      // All spikes share one material: fade the whole ring together
+      const t = Math.min(1.0, (b.spikes[0] ? b.spikes[0].elapsed : 1) / b.duration);
+      b.mat.opacity = 1.0 - t;
+
+      if (b.spikes.length === 0) {
+        // Ring done: release the shared resources
+        b.geo.dispose();
+        b.edgeGeo.dispose();
+        b.mat.dispose();
+        b.outlineMat.dispose();
+        this.spikeBursts.splice(i, 1);
       }
     }
   }
@@ -486,11 +509,13 @@ export class FXManager {
     }
     this.sparkBursts = [];
 
-    for (const s of this.spikeShards) {
-      this.scene.remove(s.mesh);
-      s.geo.dispose();
-      s.mat.dispose();
+    for (const b of this.spikeBursts) {
+      for (const s of b.spikes) this.scene.remove(s.mesh);
+      b.geo.dispose();
+      b.edgeGeo.dispose();
+      b.mat.dispose();
+      b.outlineMat.dispose();
     }
-    this.spikeShards = [];
+    this.spikeBursts = [];
   }
 }

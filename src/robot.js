@@ -435,10 +435,10 @@ export class Robot {
     audio.playPushWhoosh();
   }
 
-  // CHOG VIBER: scatter a burst of quill cones on push (visual only)
+  // CHOG VIBER: scatter a symmetric ring of quill cones on push (visual only)
   spawnSpikeBurst(fxManager) {
     if (!this.hasSpikes || !fxManager) return;
-    fxManager.spawnSpikeBurst(this.pos.x, this.pos.y + 1.05, this.pos.z, 9, 0xfdf7d3);
+    fxManager.spawnSpikeBurst(this.pos.x, this.pos.y + 0.4, this.pos.z, 8, 0xfdf7d3);
   }
 
   // --- ABILITY: NEON DASH (SHIFT) ---
