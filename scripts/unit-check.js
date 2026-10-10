@@ -29,9 +29,9 @@
       : bad(`expected ${def.spikes.length} cones, got ${cones}`);
   }
 
-  // 2. Push multiplier (CHOG: 1.8 base, +40% buff = 2.52)
-  CHAR_TYPES.chog && CHAR_TYPES.chog.pushMult === 2.52
-    ? ok("CHAR_TYPES.chog.pushMult = 2.52")
+  // 2. Push multiplier (CHOG: 1.8 base → +40% → +50% again = 3.78)
+  CHAR_TYPES.chog && CHAR_TYPES.chog.pushMult === 3.78
+    ? ok("CHAR_TYPES.chog.pushMult = 3.78")
     : bad("pushMult missing/wrong");
 
   // 3. Spike burst FX lifecycle + symmetry requirements

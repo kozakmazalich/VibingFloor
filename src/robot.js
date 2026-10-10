@@ -43,7 +43,7 @@ export const CHAR_TYPES = {
   moss: { idx: 1, name: "Moss Viber", portrait: "assets/robot3_portrait.png" },
   mecha: { idx: 2, name: "Volt Viber", portrait: "assets/robot2_portrait.png" },
   phantom: { idx: 3, name: "Phantom Viber", portrait: "assets/robot4_portrait.png" },
-  chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 2.52 },
+  chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 3.78 },
 };
 
 export class Robot {
@@ -86,7 +86,7 @@ export class Robot {
     this.pushCooldown = 0;
     this.pushWaveTimer = 0;
     this.pushLungeTimer = 0;
-    this.pushMult = 1; // per-character push knockback scale (CHOG VIBER = 2.52)
+    this.pushMult = 1; // per-character push knockback scale (CHOG VIBER = 3.78)
 
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
