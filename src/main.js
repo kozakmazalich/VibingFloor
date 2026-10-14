@@ -562,6 +562,9 @@ const game = new Game(scene, camera, {
   },
 });
 
+// Debug/test hook: lets CDP check scripts inspect the running game.
+window.game = game;
+
 // Wire the network into the game — all online sends (snapshots, input,
 // restart requests) go through game.net.
 game.net = net;

@@ -100,7 +100,7 @@ export const DASH_TRAIL_LIFE = 0.25; // Afterimage fade duration (seconds)
 export const SPEAR_COOLDOWN = 1.8; // Seconds
 export const SPEAR_REACH = 3.2; // Long melee reach (~3 tiles)
 export const SPEAR_IMPULSE = 38.0; // Heavy knockback, sends opponent flying into the abyss!
-export const LASER_REACH_MULT = 1.35; // META's green laser: 35% further than the spear
+export const LASER_REACH_MULT = 1.5; // META's green laser: 50% further than the spear
 
 // Weapon 2: Grenade Throw (G)
 export const GRENADE_COOLDOWN = 4.2; // Seconds

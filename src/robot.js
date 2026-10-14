@@ -593,13 +593,31 @@ export class Robot {
     return true;
   }
 
-  // META VIBER: instant green laser. Hitscan resolved here; the beam visual
-  // is spawned via the FX manager and fades over ~0.25s.
+  // META VIBER: instant green laser. Like the spear, it snaps onto the
+  // opponent when they are inside reach, so the shot reliably connects.
   fireLaser(target, dirX, dirZ, fxManager, onScreenShake) {
     const reach = SPEAR_REACH * LASER_REACH_MULT;
-    const muzzleX = this.pos.x + dirX * 0.4;
+
+    // Auto-aim: if the enemy is alive and within reach, aim straight at them
+    // (the spear homes; the laser locks on) and face the target.
+    let aimX = dirX;
+    let aimZ = dirZ;
+    if (target && target.state === "alive") {
+      const dx = target.pos.x - this.pos.x;
+      const dz = target.pos.z - this.pos.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist <= reach && dist > 0.001) {
+        aimX = dx / dist;
+        aimZ = dz / dist;
+        this.facingAngle = Math.atan2(-aimX, -aimZ);
+        if (this.groundGroup) this.groundGroup.rotation.y = this.facingAngle;
+        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
+      }
+    }
+
+    const muzzleX = this.pos.x + aimX * 0.4;
     const muzzleY = this.pos.y + 1.05;
-    const muzzleZ = this.pos.z + dirZ * 0.4;
+    const muzzleZ = this.pos.z + aimZ * 0.4;
 
     this.fxLaserCount++;
     audio.playSpearThrust();
@@ -609,8 +627,8 @@ export class Robot {
         x: muzzleX,
         y: muzzleY,
         z: muzzleZ,
-        dirX,
-        dirZ,
+        dirX: aimX,
+        dirZ: aimZ,
         maxDist: reach,
         color: 0x39ff14,
       });
@@ -622,10 +640,10 @@ export class Robot {
         const dz = target.pos.z - this.pos.z;
         const dist = Math.hypot(dx, dz);
         if (dist <= reach + 0.3 && dist > 0.001) {
-          const align = (dx / dist) * dirX + (dz / dist) * dirZ;
+          const align = (dx / dist) * aimX + (dz / dist) * aimZ;
           if (align > 0.92) {
             audio.playSpearHit();
-            target.applyImpulse(dirX * SPEAR_IMPULSE, dirZ * SPEAR_IMPULSE);
+            target.applyImpulse(aimX * SPEAR_IMPULSE, aimZ * SPEAR_IMPULSE);
             fxManager.spawnSparkBurst(target.pos.x, 0.6, target.pos.z, 36, 0x39ff14, 1.8);
             if (onScreenShake) onScreenShake(0.35);
           }
