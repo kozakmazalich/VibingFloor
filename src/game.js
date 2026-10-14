@@ -11,6 +11,7 @@ import {
   SPEAR_COOLDOWN,
   SPEAR_REACH,
   LASER_REACH_MULT,
+  LASER_REACH,
   GRENADE_COOLDOWN,
   DASH_COOLDOWN,
   DASH_DURATION,
@@ -858,7 +859,7 @@ export class Game {
           z: f.z,
           dirX: f.dx,
           dirZ: f.dz,
-          maxDist: SPEAR_REACH * LASER_REACH_MULT,
+          maxDist: LASER_REACH,
           color: 0x39ff14,
         });
         break;
@@ -1014,7 +1015,7 @@ export class Game {
           z: p.pos.z + dirZ * 0.4,
           dirX,
           dirZ,
-          maxDist: SPEAR_REACH * LASER_REACH_MULT,
+          maxDist: LASER_REACH,
           color: 0x39ff14,
         });
         this.guestPredicted.laser = now;

@@ -22,6 +22,7 @@ import {
   SPEAR_IMPULSE,
   SPEAR_REACH,
   LASER_REACH_MULT,
+  LASER_REACH,
   GRENADE_COOLDOWN,
   GRENADE_RADIUS,
   GRENADE_THROW_DISTANCE,
@@ -596,7 +597,7 @@ export class Robot {
   // META VIBER: instant green laser. Like the spear, it snaps onto the
   // opponent when they are inside reach, so the shot reliably connects.
   fireLaser(target, dirX, dirZ, fxManager, onScreenShake) {
-    const reach = SPEAR_REACH * LASER_REACH_MULT;
+    const reach = LASER_REACH;
 
     // Auto-aim: if the enemy is alive and within reach, aim straight at them
     // (the spear homes; the laser locks on) and face the target.

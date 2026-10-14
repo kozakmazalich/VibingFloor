@@ -234,7 +234,7 @@
     : bad(`bot survived the spear (state=${b.state})`);
 
   // Laser round: META fires E — hitscan applies the impulse at 4.0 units
-  // (beyond SPEAR_REACH 3.2, inside the 4.8 laser reach), and misses at 5.6.
+  // (beyond SPEAR_REACH 3.2, inside the 10.5 laser reach), and misses at 11.2.
   a.switchCharacter("meta");
   b.reset();
   b.pos.x = p1s.x - 4.0; // 4.0 units from the shooter
@@ -248,7 +248,7 @@
     : bad(`laser did not hit (impulse ${laserImpulse.toFixed(1)})`);
 
   b.reset();
-  b.pos.x = p1s.x - 5.6; // beyond the 4.8 laser reach
+  b.pos.x = p1s.x - 11.2; // beyond the 10.5 laser reach
   a.spearCooldown = 0;
   a.triggerSpear(b, fx2, null);
   b.vel.length() < 1
