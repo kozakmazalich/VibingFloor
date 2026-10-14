@@ -9,6 +9,8 @@ import {
   PUSH_COOLDOWN,
   JUMP_COOLDOWN,
   SPEAR_COOLDOWN,
+  SPEAR_REACH,
+  LASER_REACH_MULT,
   GRENADE_COOLDOWN,
   DASH_COOLDOWN,
   DASH_DURATION,
@@ -56,6 +58,8 @@ export class Game {
     this.sentFx = new Map(); // fxId -> { kind, ... } awaiting removal broadcast
     this.lastJumpSent = { p1: 0, p2: 0 };
     this.lastPushSent = { p1: 0, p2: 0 };
+    this.lastDashSent = { p1: 0, p2: 0 };
+    this.lastLaserSent = { p1: 0, p2: 0 };
     this.lastWinner = null; // "host" | "guest" | "draw" | null
 
     // Guest: input serialization + round-over detection
@@ -234,6 +238,7 @@ export class Game {
     this.lastJumpSent = { p1: 0, p2: 0 };
     this.lastPushSent = { p1: 0, p2: 0 };
     this.lastDashSent = { p1: 0, p2: 0 };
+    this.lastLaserSent = { p1: 0, p2: 0 };
     this.lastWinner = null;
     this.netRoundOverShown = false;
     this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false, dash: false };
@@ -642,6 +647,30 @@ export class Game {
       this.lastDashSent.p2 = this.p2.fxDashCount;
       out.push({ k: "dash", who: "p2" });
     }
+    if (this.p1.fxLaserCount > this.lastLaserSent.p1) {
+      this.lastLaserSent.p1 = this.p1.fxLaserCount;
+      out.push({
+        k: "laser",
+        who: "p1",
+        x: round2(this.p1.pos.x),
+        y: round2(this.p1.pos.y + 1.05),
+        z: round2(this.p1.pos.z),
+        dx: round2(-Math.sin(this.p1.facingAngle)),
+        dz: round2(-Math.cos(this.p1.facingAngle)),
+      });
+    }
+    if (this.p2.fxLaserCount > this.lastLaserSent.p2) {
+      this.lastLaserSent.p2 = this.p2.fxLaserCount;
+      out.push({
+        k: "laser",
+        who: "p2",
+        x: round2(this.p2.pos.x),
+        y: round2(this.p2.pos.y + 1.05),
+        z: round2(this.p2.pos.z),
+        dx: round2(-Math.sin(this.p2.facingAngle)),
+        dz: round2(-Math.cos(this.p2.facingAngle)),
+      });
+    }
 
     return out;
   }
@@ -820,6 +849,20 @@ export class Game {
         r.playDashVisual();
         break;
       }
+      case "laser": {
+        const r = f.who === "p1" ? this.p2 : this.p1;
+        if (mine && this.consumeGuestPrediction("laser", 1500)) break;
+        this.fx.fireLaserBeam({
+          x: f.x,
+          y: f.y,
+          z: f.z,
+          dirX: f.dx,
+          dirZ: f.dz,
+          maxDist: SPEAR_REACH * LASER_REACH_MULT,
+          color: 0x39ff14,
+        });
+        break;
+      }
     }
   }
 
@@ -963,19 +1006,33 @@ export class Game {
     if (keys["KeyE"] && p.spearCooldown <= 0) {
       p.spearCooldown = SPEAR_COOLDOWN;
       audio.playSpearThrust();
-      this.fx.spawnFlyingSpear(
-        p.pos.x + dirX * 0.4,
-        p.pos.y + 0.55,
-        p.pos.z + dirZ * 0.4,
-        dirX,
-        dirZ,
-        7.0,
-        24.0,
-        null,
-        null,
-        p.teamColor
-      );
-      this.guestPredicted.spear = now;
+      if (p.hasLaser) {
+        // META: predict the laser beam locally (the host echoes are deduped)
+        this.fx.fireLaserBeam({
+          x: p.pos.x + dirX * 0.4,
+          y: p.pos.y + 1.05,
+          z: p.pos.z + dirZ * 0.4,
+          dirX,
+          dirZ,
+          maxDist: SPEAR_REACH * LASER_REACH_MULT,
+          color: 0x39ff14,
+        });
+        this.guestPredicted.laser = now;
+      } else {
+        this.fx.spawnFlyingSpear(
+          p.pos.x + dirX * 0.4,
+          p.pos.y + 0.55,
+          p.pos.z + dirZ * 0.4,
+          dirX,
+          dirZ,
+          7.0,
+          24.0,
+          null,
+          null,
+          p.teamColor
+        );
+        this.guestPredicted.spear = now;
+      }
     }
     if (keys["KeyG"] && p.grenadeCooldown <= 0) {
       p.grenadeCooldown = GRENADE_COOLDOWN;

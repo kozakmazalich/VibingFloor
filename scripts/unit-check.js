@@ -34,6 +34,9 @@
   CHAR_TYPES.meta && metaDef
     ? ok("META VIBER registered in CHARACTERS + CHAR_TYPES")
     : bad("meta character missing");
+  CHAR_TYPES.meta && CHAR_TYPES.meta.laser === true
+    ? ok("META VIBER carries the laser flag")
+    : bad("meta laser flag missing");
   if (metaDef) {
     const mv = buildViber(metaDef);
     let boxes = 0;
@@ -41,6 +44,22 @@
       if (o.geometry && o.geometry.type === "BoxGeometry") boxes++;
     });
     boxes > 20 ? ok(`meta model renders (${boxes} boxes)`) : bad(`meta model too sparse (${boxes} boxes)`);
+  }
+
+  // 1c. META palette: olive body, no blue/purple anywhere
+  if (metaDef) {
+    const toHex = (c) => ("000000" + c.toString(16)).slice(-6);
+    const hex = (c) => toHex(metaDef.colors[c]);
+    const badColors = [];
+    for (const key of Object.keys(metaDef.colors)) {
+      const v = metaDef.colors[key];
+      const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
+      if (b > r && b > g) badColors.push(`${key}=#${hex(key)}`);
+    }
+    hex("head") === "96a117" && hex("visor") === "c4d41c" && hex("dark") === "272125"
+      ? ok(`meta palette exact (head #${hex("head")}, accent #${hex("visor")}, dark #${hex("dark")})`)
+      : bad(`meta palette wrong (head #${hex("head")})`);
+    badColors.length === 0 ? ok("no blue/purple in the meta palette") : bad(`blue-ish colors: ${badColors.join(", ")}`);
   }
 
   // 2. Push multiplier (CHOG: 1.8 base → +40% → +50% again = 3.78)
@@ -94,6 +113,18 @@
   fx.spikeBursts.length === 0 && scene.children.length === 0
     ? ok("clear() empties the scene")
     : bad(`scene children left: ${scene.children.length}`);
+
+  // 3b. Green laser beam: spawns, fades and is cleaned up
+  fx.fireLaserBeam({ x: 0, y: 1, z: 0, dirX: 0, dirZ: -1, maxDist: 4.32, color: 0x39ff14 });
+  fx.laserBeams.length === 1
+    ? ok("laser beam spawned")
+    : bad(`expected 1 beam, got ${fx.laserBeams.length}`);
+  const beamColor = fx.laserBeams[0].parts[1].mat.color.getHex();
+  beamColor === 0x39ff14 ? ok("laser colour is #39ff14") : bad(`laser colour 0x${beamColor.toString(16)}`);
+  for (let i = 0; i < 20; i++) fx.update(0.02);
+  fx.laserBeams.length === 0 && scene.children.length === 0
+    ? ok("laser faded and was removed (~0.4s)")
+    : bad(`laser still alive: ${fx.laserBeams.length}`);
 
   // 4. Music engine: starts, schedules steps, stops/restarts on mute
   const { audio } = await import("/src/audio.js");
@@ -184,6 +215,28 @@
   spearThrown && b.state !== "alive"
     ? ok(`spear knocks the bot off the edge (state=${b.state})`)
     : bad(`bot survived the spear (state=${b.state})`);
+
+  // Laser round: META fires E — hitscan applies the impulse at 4.0 units
+  // (beyond SPEAR_REACH 3.2, inside the 4.32 laser reach), and misses at 5.0.
+  a.switchCharacter("meta");
+  b.reset();
+  b.pos.x = p1s.x - 4.0; // 4.0 units from the shooter
+  a.pos.set(p1s.x, 0, p1s.z);
+  a.spearCooldown = 0;
+  a.facingAngle = Math.PI / 2; // aim -X toward b
+  const laserFired = a.triggerSpear(b, fx2, null);
+  const laserImpulse = b.vel.length();
+  laserFired && laserImpulse >= 30
+    ? ok(`laser hits at 4.0 units (beyond spear reach) — impulse ${laserImpulse.toFixed(1)}`)
+    : bad(`laser did not hit (impulse ${laserImpulse.toFixed(1)})`);
+
+  b.reset();
+  b.pos.x = p1s.x - 5.0; // beyond the 4.32 laser reach
+  a.spearCooldown = 0;
+  a.triggerSpear(b, fx2, null);
+  b.vel.length() < 1
+    ? ok("laser misses beyond its reach")
+    : bad(`laser hit beyond reach (impulse ${b.vel.length().toFixed(1)})`);
 
   a.dispose();
   b.dispose();

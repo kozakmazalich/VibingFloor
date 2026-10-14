@@ -162,7 +162,7 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0xffffff, body: 0xffffff, arm: 0xffffff, foot: 0xffffff, belt: 0xffff00, dark: 0x0a0a0a, visor: 0x00ff00, eye: 0xffff00, accent: 0xffff00, boot: 0xff0000 },
+    colors: { head: 0x96a117, body: 0x96a117, arm: 0x96a117, foot: 0x646638, belt: 0xc4d41c, dark: 0x272125, visor: 0xc4d41c, eye: 0xc4d41c, accent: 0xc4d41c, boot: 0x272125 },
     headExtras: [
       // Green visor strip
       { w: 1.50, h: 0.34, d: 0.16, x: 0, y: 0.10, z: 0.86, c: "visor" },

@@ -20,6 +20,8 @@ import {
   DASH_TRAIL_LIFE,
   SPEAR_COOLDOWN,
   SPEAR_IMPULSE,
+  SPEAR_REACH,
+  LASER_REACH_MULT,
   GRENADE_COOLDOWN,
   GRENADE_RADIUS,
   GRENADE_THROW_DISTANCE,
@@ -44,7 +46,7 @@ export const CHAR_TYPES = {
   mecha: { idx: 2, name: "Volt Viber", portrait: "assets/robot2_portrait.png" },
   phantom: { idx: 3, name: "Phantom Viber", portrait: "assets/robot4_portrait.png" },
   chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 3.78 },
-  meta: { idx: 5, name: "Meta Viber", portrait: "assets/meta.jpg" },
+  meta: { idx: 5, name: "Meta Viber", portrait: "assets/meta.jpg", laser: true },
 };
 
 export class Robot {
@@ -91,6 +93,7 @@ export class Robot {
 
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
+    this.hasLaser = false; // META VIBER: E fires a green laser instead of a spear
 
     // Dash ability (SHIFT): burst + afterimage trail
     this.dashCooldown = 0;
@@ -120,6 +123,7 @@ export class Robot {
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
     this.fxPushCount = 0; // incremented on each push (host broadcasts as fx event)
     this.fxDashCount = 0; // incremented on each dash (host broadcasts as fx event)
+    this.fxLaserCount = 0; // incremented on each laser shot (host broadcasts as fx event)
     this.netPose = null; // latest authoritative pose from the host (guest only)
     this.predictingHop = false; // guest predicted a jump locally (mid-flight)
     this._netTarget = new THREE.Vector3();
@@ -250,6 +254,7 @@ export class Robot {
     const meta = CHAR_TYPES[charType] || CHAR_TYPES.robot1_jpg;
     this.charIndex = meta.idx;
     this.pushMult = meta.pushMult || 1;
+    this.hasLaser = !!meta.laser;
     if (this.isPlayer) {
       this.name = meta.name;
       this.portraitPath = meta.portrait;
@@ -544,6 +549,8 @@ export class Robot {
     this.dashTrailAccum = 0;
   }
   // --- ABILITY 3: CYBER SPEAR (KEY E) — FLIES IN FACING DIRECTION ---
+  // META VIBER (hasLaser) replaces the spear with an instant green laser
+  // hitscan: 35% further reach, same impulse/cooldown, #39ff14 beam.
   triggerSpear(target, fxManager, onScreenShake) {
     if (this.state !== "alive" || this.spearCooldown > 0) return false;
 
@@ -553,6 +560,11 @@ export class Robot {
     // Forward direction from facing angle
     const dirX = -Math.sin(this.facingAngle);
     const dirZ = -Math.cos(this.facingAngle);
+
+    if (this.hasLaser) {
+      this.fireLaser(target, dirX, dirZ, fxManager, onScreenShake);
+      return true;
+    }
 
     audio.playSpearThrust();
 
@@ -579,6 +591,47 @@ export class Robot {
     }
 
     return true;
+  }
+
+  // META VIBER: instant green laser. Hitscan resolved here; the beam visual
+  // is spawned via the FX manager and fades over ~0.25s.
+  fireLaser(target, dirX, dirZ, fxManager, onScreenShake) {
+    const reach = SPEAR_REACH * LASER_REACH_MULT;
+    const muzzleX = this.pos.x + dirX * 0.4;
+    const muzzleY = this.pos.y + 1.05;
+    const muzzleZ = this.pos.z + dirZ * 0.4;
+
+    this.fxLaserCount++;
+    audio.playSpearThrust();
+
+    if (fxManager) {
+      fxManager.fireLaserBeam({
+        x: muzzleX,
+        y: muzzleY,
+        z: muzzleZ,
+        dirX,
+        dirZ,
+        maxDist: reach,
+        color: 0x39ff14,
+      });
+      fxManager.spawnSparkBurst(muzzleX, muzzleY, muzzleZ, 10, 0x39ff14, 0.5);
+
+      // Hitscan: hit anything alive within reach and inside a narrow cone
+      if (target && target.state === "alive") {
+        const dx = target.pos.x - this.pos.x;
+        const dz = target.pos.z - this.pos.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist <= reach + 0.3 && dist > 0.001) {
+          const align = (dx / dist) * dirX + (dz / dist) * dirZ;
+          if (align > 0.92) {
+            audio.playSpearHit();
+            target.applyImpulse(dirX * SPEAR_IMPULSE, dirZ * SPEAR_IMPULSE);
+            fxManager.spawnSparkBurst(target.pos.x, 0.6, target.pos.z, 24, 0x39ff14, 1.4);
+            if (onScreenShake) onScreenShake(0.35);
+          }
+        }
+      }
+    }
   }
 
   // --- ABILITY 4: CYBER GRENADE (KEY G) — FLIES IN FACING DIRECTION & DESTROYS FLOOR ---

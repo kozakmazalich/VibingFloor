@@ -18,6 +18,7 @@ export class FXManager {
     this.sparkBursts = [];
     this.shockwaves = [];
     this.spikeBursts = []; // CHOG VIBER push quill rings
+    this.laserBeams = []; // META VIBER green laser shots
 
     // Stable ids so online host/guest can reference the same FX
     this._seq = 0;
@@ -235,6 +236,43 @@ export class FXManager {
   addProjectile(proj) {
     if (!proj.id) proj.id = this.nextId();
     this.projectiles.push(proj);
+  }
+
+  // META VIBER: instant green laser beam (visual only — the hitscan hit is
+  // resolved by Robot.fireLaser). Long thin glowing beam straight along the
+  // facing direction, fading out over ~0.25s.
+  fireLaserBeam({ x, y, z, dirX, dirZ, maxDist = 4.32, color = 0x39ff14 }) {
+    const angle = Math.atan2(-dirX, -dirZ);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    group.rotation.y = angle;
+
+    const mk = (w, opacity, blend) => {
+      const geo = new THREE.BoxGeometry(w, w, maxDist);
+      const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity,
+        depthWrite: false,
+        blending: blend || THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.z = -maxDist / 2; // beam extends forward from the muzzle
+      return { mesh, geo, mat, base: opacity };
+    };
+
+    const glow = mk(0.24, 0.3); // outer halo
+    const core = mk(0.07, 0.95, THREE.NormalBlending); // bright core
+
+    group.add(glow.mesh, core.mesh);
+    this.scene.add(group);
+
+    this.laserBeams.push({
+      group,
+      parts: [glow, core],
+      duration: 0.25,
+      elapsed: 0,
+    });
   }
 
   // Launch a flying cyber spear in the facing direction
@@ -480,6 +518,25 @@ export class FXManager {
         this.spikeBursts.splice(i, 1);
       }
     }
+
+    // 6. Update Laser Beams (META: quick fade, slight shrink)
+    for (let i = this.laserBeams.length - 1; i >= 0; i--) {
+      const b = this.laserBeams[i];
+      b.elapsed += dt;
+      const t = Math.min(1.0, b.elapsed / b.duration);
+      for (const p of b.parts) {
+        p.mat.opacity = p.base * (1.0 - t);
+      }
+      b.group.scale.z = 1.0 - t * 0.4; // retract slightly as it fades
+      if (t >= 1.0) {
+        this.scene.remove(b.group);
+        for (const p of b.parts) {
+          p.geo.dispose();
+          p.mat.dispose();
+        }
+        this.laserBeams.splice(i, 1);
+      }
+    }
   }
 
   clear() {
@@ -517,5 +574,14 @@ export class FXManager {
       b.outlineMat.dispose();
     }
     this.spikeBursts = [];
+
+    for (const b of this.laserBeams) {
+      this.scene.remove(b.group);
+      for (const p of b.parts) {
+        p.geo.dispose();
+        p.mat.dispose();
+      }
+    }
+    this.laserBeams = [];
   }
 }
