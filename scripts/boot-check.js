@@ -49,7 +49,7 @@
     const metaName = document.getElementById("menu-p1-name").textContent;
     const metaAvatar = document.getElementById("menu-p1-avatar").src;
     metaName.toUpperCase().includes("META") ? ok(`meta selectable (menu name: ${metaName})`) : bad(`meta name missing (${metaName})`);
-    metaAvatar.includes("robot6_portrait") ? ok("meta portrait shown in menu") : bad(`meta portrait wrong (${metaAvatar})`);
+    metaAvatar.includes("meta.jpg") ? ok("meta photo shown in menu") : bad(`meta portrait wrong (${metaAvatar})`);
     chogBtn.click();
     await sleep(200);
   }

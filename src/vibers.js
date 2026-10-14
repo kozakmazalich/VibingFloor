@@ -162,31 +162,44 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0x1e3cff, body: 0x14141c, arm: 0x1e1e28, foot: 0x0a0a0e, belt: 0xffe600, dark: 0x0a0a0e, visor: 0xf5f7ff, eye: 0xffe600, accent: 0xffe600, boot: 0x0a0a0e },
+    colors: { head: 0x0000ff, body: 0x0a0a0e, arm: 0x0000ff, foot: 0x0000ff, belt: 0xffff00, dark: 0x050507, visor: 0xffffff, eye: 0xffff00, accent: 0xffff00, boot: 0x050507 },
     headExtras: [
-      // Dark headband
-      { w: 1.79, h: 0.34, d: 1.75, x: 0, y: 0.30, z: 0, c: "dark" },
-      // Glowing white visor strip
-      { w: 1.46, h: 0.26, d: 0.16, x: 0, y: 0.10, z: 0.86, c: "visor" },
-      // Yellow eye dots
-      { w: 0.26, h: 0.34, d: 0.12, x: -0.52, y: -0.22, z: 0.94, c: "eye" },
-      { w: 0.26, h: 0.34, d: 0.12, x: 0.52, y: -0.22, z: 0.94, c: "eye" },
-      // Antennae with yellow glowing tips
-      { w: 0.16, h: 0.62, d: 0.16, x: -0.45, y: 1.34, z: -0.20, c: "head" },
-      { w: 0.16, h: 0.62, d: 0.16, x: 0.45, y: 1.34, z: -0.20, c: "head" },
-      { w: 0.24, h: 0.20, d: 0.24, x: -0.45, y: 1.74, z: -0.20, c: "eye" },
-      { w: 0.24, h: 0.20, d: 0.24, x: 0.45, y: 1.74, z: -0.20, c: "eye" },
+      // Yellow brow band across the top of the head
+      { w: 1.79, h: 0.16, d: 1.75, x: 0, y: 0.58, z: 0, c: "accent" },
+      // White faceplate
+      { w: 1.30, h: 0.95, d: 0.16, x: 0, y: -0.04, z: 0.84, c: "visor" },
+      // Yellow vertical eye bars
+      { w: 0.22, h: 0.42, d: 0.10, x: -0.42, y: 0.04, z: 0.94, c: "eye" },
+      { w: 0.22, h: 0.42, d: 0.10, x: 0.42, y: 0.04, z: 0.94, c: "eye" },
+      // White cheek panels
+      { w: 0.16, h: 0.55, d: 0.10, x: -0.78, y: -0.10, z: 0.88, c: "visor" },
+      { w: 0.16, h: 0.55, d: 0.10, x: 0.78, y: -0.10, z: 0.88, c: "visor" },
+      // Blue ear pods
+      { w: 0.26, h: 0.44, d: 0.34, x: -0.96, y: 0.10, z: -0.10, c: "head" },
+      { w: 0.26, h: 0.44, d: 0.34, x: 0.96, y: 0.10, z: -0.10, c: "head" },
+      // Yellow antenna tips
+      { w: 0.20, h: 0.34, d: 0.16, x: -0.60, y: 1.10, z: -0.30, c: "eye" },
+      { w: 0.20, h: 0.34, d: 0.16, x: 0.60, y: 1.10, z: -0.30, c: "eye" },
     ],
     bodyExtras: [
+      // Blue chest plate
+      { w: 0.84, h: 0.62, d: 0.10, x: 0, y: 0.05, z: 0.55, c: "head" },
       // Yellow reactor core
-      { w: 0.50, h: 0.50, d: 0.12, x: 0, y: 0.00, z: 0.55, c: "accent" },
-      { w: 0.30, h: 0.30, d: 0.10, x: 0, y: 0.00, z: 0.64, c: "eye" },
-      // Shoulder plates
+      { w: 0.40, h: 0.40, d: 0.10, x: 0, y: 0.05, z: 0.62, c: "accent" },
+      // White belly strip
+      { w: 0.92, h: 0.12, d: 0.06, x: 0, y: -0.28, z: 0.56, c: "visor" },
+      // Black shoulder pads
       { w: 0.26, h: 0.72, d: 1.14, x: -0.70, y: 0.34, z: 0, c: "dark" },
       { w: 0.26, h: 0.72, d: 1.14, x: 0.70, y: 0.34, z: 0, c: "dark" },
     ],
-    armExtrasL: [{ w: 0.50, h: 0.22, d: 0.54, x: 0, y: -0.88, z: 0, c: "accent" }],
-    armExtrasR: [{ w: 0.50, h: 0.22, d: 0.54, x: 0, y: -0.88, z: 0, c: "accent" }],
+    armExtrasL: [
+      { w: 0.50, h: 0.12, d: 0.54, x: 0, y: -0.50, z: 0, c: "visor" },
+      { w: 0.50, h: 0.22, d: 0.54, x: 0, y: -0.88, z: 0, c: "accent" },
+    ],
+    armExtrasR: [
+      { w: 0.50, h: 0.12, d: 0.54, x: 0, y: -0.50, z: 0, c: "visor" },
+      { w: 0.50, h: 0.22, d: 0.54, x: 0, y: -0.88, z: 0, c: "accent" },
+    ],
   },
 ];
 
