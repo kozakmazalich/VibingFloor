@@ -1,17 +1,16 @@
-# META VIBER portrait — blocky robot rendered with 3D-style shading
-# (orange head + cyan visor, gunmetal body, reactor core, antennae).
-# Same style family as the other robot portraits. Pure stdlib PNG encoder.
+# META VIBER portrait — blocky robot rendered with 3D-style shading,
+# matching the meta.jpg reference: BLUE head, near-black body, white visor,
+# yellow accents. Same style family as the other robot portraits.
 import zlib, struct
 
 W = H = 1080
 BG     = (235, 228, 212)
 BLACK  = (20, 22, 26)      # #14161a outline
-ORANGE = (255, 140, 26)    # #ff8c1a head
-CORE   = (255, 92, 26)     # #ff5c1a accent core
-GUN    = (35, 35, 46)      # #23232e body
-GUND   = (24, 24, 32)      # darker gunmetal shade
-CYAN   = (0, 229, 255)     # #00e5ff visor
-WHITE  = (232, 246, 255)   # #e8f6ff eye slits
+BLUE   = (30, 60, 255)     # #1e3cff head
+BLUED  = (20, 40, 180)     # darker blue shade
+BODY   = (20, 20, 28)      # #14141c near-black body
+WHITE  = (245, 247, 255)   # #f5f7ff visor
+YELLOW = (255, 230, 0)     # #ffe600 accents
 OUT = 9
 
 img = [[BG] * W for _ in range(H)]
@@ -67,61 +66,59 @@ def orect(x0, y0, x1, y1, c):
                 col = blend(col, shade(c, -0.48), (tx - 0.70) / 0.30)
             setpx(x, y, col)
 
-# --- Feet (dark boots) ---
-orect(390, 850, 484, 916, (17, 17, 24))
-orect(596, 850, 690, 916, (17, 17, 24))
+# --- Feet (black boots) ---
+orect(390, 850, 484, 916, (10, 10, 14))
+orect(596, 850, 690, 916, (10, 10, 14))
 
-# --- Body (gunmetal) ---
-orect(380, 570, 700, 858, GUN)
-rect = None
-# Side shading strips
+# --- Body (near-black) ---
+orect(380, 570, 700, 858, BODY)
 for x in range(380, 408):
     for y in range(570, 858):
-        setpx(x, y, GUND)
+        setpx(x, y, (12, 12, 16))
 for x in range(672, 700):
     for y in range(570, 858):
-        setpx(x, y, GUND)
+        setpx(x, y, (12, 12, 16))
 
 # --- Shoulder plates ---
-orect(336, 586, 388, 700, (12, 12, 18))
-orect(692, 586, 744, 700, (12, 12, 18))
+orect(336, 586, 388, 700, (10, 10, 14))
+orect(692, 586, 744, 700, (10, 10, 14))
 
-# --- Arms (gunmetal + orange gauntlets) ---
-orect(330, 580, 398, 742, GUN)
-orect(682, 580, 750, 742, GUN)
-orect(330, 690, 398, 750, CORE)
-orect(682, 690, 750, 750, CORE)
+# --- Arms (dark + yellow gauntlets) ---
+orect(330, 580, 398, 742, (30, 30, 40))
+orect(682, 580, 750, 742, (30, 30, 40))
+orect(330, 690, 398, 750, YELLOW)
+orect(682, 690, 750, 750, YELLOW)
 
-# --- Reactor core (orange ring + cyan center) ---
-orect(468, 636, 612, 780, CORE)
-orect(504, 668, 576, 744, CYAN)
+# --- Yellow reactor core + white center ---
+orect(468, 636, 612, 780, YELLOW)
+orect(504, 668, 576, 744, WHITE)
 orect(522, 688, 558, 724, (10, 10, 20))
 
-# --- Head (orange) ---
-orect(360, 368, 720, 590, ORANGE)
+# --- Head (blue) ---
+orect(360, 368, 720, 590, BLUE)
 for x in range(360, 390):
     for y in range(368, 590):
-        setpx(x, y, shade(ORANGE, -0.35))
+        setpx(x, y, BLUED)
 for x in range(690, 720):
     for y in range(368, 590):
-        setpx(x, y, shade(ORANGE, -0.35))
+        setpx(x, y, BLUED)
 
 # --- Dark headband ---
 orect(352, 402, 728, 428, (10, 10, 14))
 
-# --- Cyan visor strip ---
-orect(428, 442, 652, 478, CYAN)
-# --- White eye slits ---
-orect(452, 496, 492, 532, WHITE)
-orect(588, 496, 628, 532, WHITE)
+# --- White visor strip ---
+orect(428, 442, 652, 478, WHITE)
+# --- Yellow eye dots ---
+orect(452, 496, 492, 532, YELLOW)
+orect(588, 496, 628, 532, YELLOW)
 # --- Mouth vent (dark) ---
 orect(512, 548, 568, 560, (10, 10, 14))
 
-# --- Antennae ---
-orect(478, 286, 498, 372, ORANGE)
-orect(582, 286, 602, 372, ORANGE)
-orect(470, 258, 506, 292, CYAN)
-orect(574, 258, 610, 292, CYAN)
+# --- Antennae (blue shafts + yellow tips) ---
+orect(478, 286, 498, 372, BLUE)
+orect(582, 286, 602, 372, BLUE)
+orect(470, 258, 506, 292, YELLOW)
+orect(574, 258, 610, 292, YELLOW)
 
 # --- PNG encode ---
 raw = b''.join(b'\x00' + bytes(v for px in row for v in px) for row in img)

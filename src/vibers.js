@@ -162,23 +162,23 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0xff8c1a, body: 0x23232e, arm: 0x2a2a36, foot: 0x111118, belt: 0x3a2a14, dark: 0x0a0a0e, visor: 0xe8f6ff, eye: 0x00e5ff, accent: 0xff5c1a, boot: 0x0a0a0e },
+    colors: { head: 0x1e3cff, body: 0x14141c, arm: 0x1e1e28, foot: 0x0a0a0e, belt: 0xffe600, dark: 0x0a0a0e, visor: 0xf5f7ff, eye: 0xffe600, accent: 0xffe600, boot: 0x0a0a0e },
     headExtras: [
       // Dark headband
       { w: 1.79, h: 0.34, d: 1.75, x: 0, y: 0.30, z: 0, c: "dark" },
-      // Glowing cyan visor strip
-      { w: 1.46, h: 0.26, d: 0.16, x: 0, y: 0.10, z: 0.86, c: "eye" },
-      // White eye slits
-      { w: 0.24, h: 0.34, d: 0.12, x: -0.52, y: -0.22, z: 0.94, c: "visor" },
-      { w: 0.24, h: 0.34, d: 0.12, x: 0.52, y: -0.22, z: 0.94, c: "visor" },
-      // Antennae with glowing tips
-      { w: 0.16, h: 0.62, d: 0.16, x: -0.45, y: 1.34, z: -0.20, c: "accent" },
-      { w: 0.16, h: 0.62, d: 0.16, x: 0.45, y: 1.34, z: -0.20, c: "accent" },
+      // Glowing white visor strip
+      { w: 1.46, h: 0.26, d: 0.16, x: 0, y: 0.10, z: 0.86, c: "visor" },
+      // Yellow eye dots
+      { w: 0.26, h: 0.34, d: 0.12, x: -0.52, y: -0.22, z: 0.94, c: "eye" },
+      { w: 0.26, h: 0.34, d: 0.12, x: 0.52, y: -0.22, z: 0.94, c: "eye" },
+      // Antennae with yellow glowing tips
+      { w: 0.16, h: 0.62, d: 0.16, x: -0.45, y: 1.34, z: -0.20, c: "head" },
+      { w: 0.16, h: 0.62, d: 0.16, x: 0.45, y: 1.34, z: -0.20, c: "head" },
       { w: 0.24, h: 0.20, d: 0.24, x: -0.45, y: 1.74, z: -0.20, c: "eye" },
       { w: 0.24, h: 0.20, d: 0.24, x: 0.45, y: 1.74, z: -0.20, c: "eye" },
     ],
     bodyExtras: [
-      // Orange reactor core
+      // Yellow reactor core
       { w: 0.50, h: 0.50, d: 0.12, x: 0, y: 0.00, z: 0.55, c: "accent" },
       { w: 0.30, h: 0.30, d: 0.10, x: 0, y: 0.00, z: 0.64, c: "eye" },
       // Shoulder plates
