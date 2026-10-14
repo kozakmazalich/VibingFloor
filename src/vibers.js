@@ -162,39 +162,44 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0xc5d41d, body: 0x272125, arm: 0xc5d41d, foot: 0xc5d41d, belt: 0x96a117, dark: 0x272125, visor: 0xeaff3a, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
+    laser: true,
+    // Design spec from assets/meta/gemini-code-1791996909575.js:
+    // lime body, black overalls (bib + straps + waist + legs), dark ears with
+    // white inserts, big white square eyes with black pupils + nose block,
+    // crown highlight, olive chin shade, dark cuffs with bright lime hands.
+    colors: { head: 0xc5d41d, body: 0xc5d41d, arm: 0xc5d41d, foot: 0x272125, belt: 0x272125, dark: 0x96a117, visor: 0xeaff3a, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
     headExtras: [
-      // Bright lime brow band
-      { w: 1.79, h: 0.18, d: 1.75, x: 0, y: 0.55, z: 0, c: "accent" },
-      // BIG white eyes on the green face
-      { w: 0.34, h: 0.40, d: 0.12, x: -0.48, y: 0.12, z: 0.92, c: "eye" },
-      { w: 0.34, h: 0.40, d: 0.12, x: 0.48, y: 0.12, z: 0.92, c: "eye" },
-      // Bright lime cheek panels
-      { w: 0.16, h: 0.50, d: 0.10, x: -0.78, y: -0.05, z: 0.88, c: "visor" },
-      { w: 0.16, h: 0.50, d: 0.10, x: 0.78, y: -0.05, z: 0.88, c: "visor" },
-      // Dark mouth vent
-      { w: 0.40, h: 0.14, d: 0.08, x: 0, y: -0.40, z: 0.92, c: "dark" },
-      // Antenna shafts (green) with bright lime tips
-      { w: 0.16, h: 0.50, d: 0.16, x: -0.55, y: 1.25, z: -0.25, c: "head" },
-      { w: 0.16, h: 0.50, d: 0.16, x: 0.55, y: 1.25, z: -0.25, c: "head" },
-      { w: 0.22, h: 0.30, d: 0.22, x: -0.55, y: 1.62, z: -0.25, c: "accent" },
-      { w: 0.22, h: 0.30, d: 0.22, x: 0.55, y: 1.62, z: -0.25, c: "accent" },
+      // Ears on top of the head (near-black blocks with white inner inserts)
+      { w: 0.26, h: 0.22, d: 0.24, x: -0.24, y: 0.74, z: 0.00, c: "belt" },
+      { w: 0.11, h: 0.11, d: 0.07, x: -0.24, y: 0.70, z: 0.14, c: "eye" },
+      { w: 0.26, h: 0.22, d: 0.24, x: 0.24, y: 0.74, z: 0.00, c: "belt" },
+      { w: 0.11, h: 0.11, d: 0.07, x: 0.24, y: 0.70, z: 0.14, c: "eye" },
+      // Brighter lime crown band + olive depth shade under the chin
+      { w: 0.80, h: 0.06, d: 1.76, x: 0, y: 0.55, z: 0, c: "accent" },
+      { w: 0.80, h: 0.06, d: 1.76, x: 0, y: -0.52, z: 0, c: "dark" },
+      // Large square white eyes (sclera)
+      { w: 0.34, h: 0.36, d: 0.08, x: -0.20, y: 0.10, z: 0.86, c: "eye" },
+      { w: 0.34, h: 0.36, d: 0.08, x: 0.20, y: 0.10, z: 0.86, c: "eye" },
+      // Black cube pupils protruding from the centre of the eyes
+      { w: 0.12, h: 0.12, d: 0.06, x: -0.20, y: 0.10, z: 0.92, c: "belt" },
+      { w: 0.12, h: 0.12, d: 0.06, x: 0.20, y: 0.10, z: 0.92, c: "belt" },
+      // Center nose block wedged between the eyes
+      { w: 0.10, h: 0.15, d: 0.07, x: 0, y: -0.16, z: 0.90, c: "belt" },
     ],
     bodyExtras: [
-      // Green chest plate on the black jumpsuit
-      { w: 0.62, h: 0.52, d: 0.10, x: 0, y: 0.06, z: 0.55, c: "head" },
-      // Dark core center
-      { w: 0.30, h: 0.30, d: 0.08, x: 0, y: 0.06, z: 0.62, c: "dark" },
-      // Bright lime belly stripe on the suit
-      { w: 0.92, h: 0.12, d: 0.06, x: 0, y: -0.28, z: 0.56, c: "accent" },
-      // Jumpsuit shoulder straps (dark, over the green arms' base)
-      { w: 0.30, h: 0.20, d: 1.10, x: -0.72, y: 0.44, z: 0, c: "dark" },
-      { w: 0.30, h: 0.20, d: 1.10, x: 0.72, y: 0.44, z: 0, c: "dark" },
+      // Overalls bib on the front of the torso + shoulder straps
+      { w: 0.52, h: 0.44, d: 0.10, x: 0, y: 1.02, z: 0.54, c: "belt" },
+      { w: 0.12, h: 0.16, d: 1.08, x: -0.20, y: 1.46, z: 0, c: "belt" },
+      { w: 0.12, h: 0.16, d: 1.08, x: 0.20, y: 1.46, z: 0, c: "belt" },
+      // White chest button (slightly right of center on the bib)
+      { w: 0.10, h: 0.10, d: 0.06, x: 0.05, y: 1.14, z: 0.62, c: "eye" },
     ],
-    armExtrasL: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
-    armExtrasR: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
-    footExtrasL: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
-    footExtrasR: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
+    // Dark wrist cuffs; the bright lime hands are the foreL/foreR meshes
+    // (visor colour = 0xeaff3a).
+    armExtrasL: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "belt" }],
+    armExtrasR: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "belt" }],
+    // White trim around the left thigh (the +x leg, per the spec)
+    footExtrasR: [{ w: 0.26, h: 0.08, d: 0.56, x: 0, y: -0.15, z: 0, c: "eye" }],
   },
 ];
 

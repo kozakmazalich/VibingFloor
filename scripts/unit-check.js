@@ -46,7 +46,8 @@
     boxes > 20 ? ok(`meta model renders (${boxes} boxes)`) : bad(`meta model too sparse (${boxes} boxes)`);
   }
 
-  // 1c. META palette: green body, white eyes, black jumpsuit — no blue/purple
+  // 1c. META palette per assets/meta/ spec: lime body, white eyes, black
+  // overalls (belt/boot #272125), olive shade #96a117 — no blue/purple
   if (metaDef) {
     const toHex = (c) => ("000000" + c.toString(16)).slice(-6);
     const hex = (c) => toHex(metaDef.colors[c]);
@@ -56,9 +57,16 @@
       const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
       if (b > r * 1.25 && b > g * 1.25) badColors.push(`${key}=#${hex(key)}`);
     }
-    hex("head") === "c5d41d" && hex("eye") === "ffffff" && hex("body") === "272125" && hex("dark") === "272125"
-      ? ok(`meta palette exact (green #${hex("head")}, white eyes #${hex("eye")}, black suit #${hex("body")})`)
-      : bad(`meta palette wrong (head #${hex("head")}, eyes #${hex("eye")}, body #${hex("body")})`);
+    hex("head") === "c5d41d" && hex("eye") === "ffffff" && hex("body") === "c5d41d" && hex("dark") === "96a117" && hex("belt") === "272125" && hex("boot") === "272125"
+      ? ok(`meta palette exact (lime #${hex("head")}, white eyes #${hex("eye")}, black overalls #${hex("belt")}, olive shade #${hex("dark")})`)
+      : bad(`meta palette wrong (head #${hex("head")}, eyes #${hex("eye")}, body #${hex("body")}, dark #${hex("dark")})`);
+    const pupils = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.z > 0.85 && p.y > 0).length;
+    const nose = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.z > 0.85 && p.y < 0).length;
+    const whiteEyes = (metaDef.headExtras || []).filter((p) => p.c === "eye" && p.z > 0.8).length;
+    const ears = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.y > 0.6).length;
+    whiteEyes === 2 && pupils === 2 && nose === 1 && ears === 2
+      ? ok("white eyes + black pupils + nose + dark ears per the meta/ spec")
+      : bad(`face parts wrong (eyes ${whiteEyes}, pupils ${pupils}, nose ${nose}, ears ${ears})`);
     badColors.length === 0 ? ok("no blue/purple in the meta palette") : bad(`blue-ish colors: ${badColors.join(", ")}`);
   }
 
