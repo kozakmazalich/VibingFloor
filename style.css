@@ -391,6 +391,11 @@ body {
   box-shadow: 0 0 6px rgba(255, 45, 149, 0.6);
 }
 
+.map-tab-btn.active .tab-thumb {
+  border-color: #ff2d95;
+  box-shadow: 0 0 8px rgba(255, 45, 149, 0.5);
+}
+
 .map-tab-info {
   display: flex;
   flex-direction: column;
@@ -1641,8 +1646,8 @@ body {
     grid-template-columns: minmax(340px, 1.05fr) minmax(380px, 1fr);
     grid-template-areas:
       "header   fighters"
-      "showcase maps"
-      "actions  diffs"
+      "showcase fighters"
+      "actions  maps"
       "guide    diffs";
     column-gap: 28px;
     row-gap: 16px;
@@ -1650,12 +1655,36 @@ body {
     padding: 30px 36px;
   }
   .start-card .menu-header { grid-area: header; align-self: center; }
+  .start-card .fighter-select-panel,
+  .start-card .map-select-panel,
+  .start-card .diff-select-panel {
+    align-self: stretch; /* fill the full row height — no dead space below */
+  }
   .start-card .fighter-select-panel { grid-area: fighters; margin-top: 0; }
   .start-card .map-select-panel { grid-area: maps; margin-top: 0; }
   .start-card .diff-select-panel { grid-area: diffs; margin-top: 0; }
   .start-card .vs-showcase { grid-area: showcase; margin: 0; }
   .start-card .menu-actions { grid-area: actions; }
   .start-card .menu-controls-guide { grid-area: guide; margin-top: 0; }
+
+  /* Balance the right column: tab rows stretch to fill their panels so no
+     dead space is left under the selectors. */
+  .start-card .fighter-tabs {
+    flex: 1;
+    grid-auto-rows: 1fr;
+  }
+  .start-card .map-tabs {
+    flex: 1;
+    grid-auto-rows: 1fr;
+  }
+  .start-card .map-thumb {
+    width: 46px;
+    height: 46px;
+  }
+  .start-card .diff-tabs {
+    flex: 1;
+    align-content: center; /* single row: center instead of stretching */
+  }
 
   .start-card .menu-title {
     font-size: 54px;
