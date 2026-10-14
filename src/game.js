@@ -1048,7 +1048,7 @@ export class Game {
         ty: p.pos.y + 0.02,
         tz,
         ft: 0.65,
-        color: p.teamColor,
+        color: p.hasLaser ? 0x39ff14 : p.teamColor,
         // Collapse the floor LOCALLY at detonation for an instant visual —
         // the host destroys the same tiles authoritatively a moment later
         // and the idempotent deltas keep both sides consistent.

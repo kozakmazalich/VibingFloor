@@ -161,7 +161,7 @@ export class FXManager {
       onDetonate: (ex, ey, ez) => {
         audio.playExplosion();
         this.spawnExplosionShockwave(ex, ey, ez, color, 2.6);
-        this.spawnSparkBurst(ex, ey, ez, 36, 0xff5c1a, 1.8);
+        this.spawnSparkBurst(ex, ey, ez, 36, color === 0x39ff14 ? 0x39ff14 : 0xff5c1a, 1.8);
         if (onBoom) onBoom(ex, ez);
       },
     });
@@ -179,7 +179,7 @@ export class FXManager {
       this.projectiles.splice(i, 1);
       audio.playExplosion();
       this.spawnExplosionShockwave(p.targetX, p.targetY, p.targetZ, color, 2.6);
-      this.spawnSparkBurst(p.targetX, p.targetY, p.targetZ, 36, 0xff5c1a, 1.8);
+      this.spawnSparkBurst(p.targetX, p.targetY, p.targetZ, 36, color === 0x39ff14 ? 0x39ff14 : 0xff5c1a, 1.8);
       return;
     }
   }

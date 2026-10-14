@@ -648,6 +648,10 @@ export class Robot {
     this.grenadeCooldown = GRENADE_COOLDOWN;
     audio.playGrenadeThrow();
 
+    // META VIBER throws a green grenade matching his laser (#39ff14);
+    // everyone else keeps their team colour.
+    const nadeColor = this.hasLaser ? 0x39ff14 : this.teamColor;
+
     // STRICTLY facing direction (never snapping directly under opponent)
     const dirX = -Math.sin(this.facingAngle);
     const dirZ = -Math.cos(this.facingAngle);
@@ -665,7 +669,7 @@ export class Robot {
       color: 0x1e293b,
       metalness: 0.9,
       roughness: 0.2,
-      emissive: this.teamColor,
+      emissive: nadeColor,
       emissiveIntensity: 2.2,
     });
     const nadeMesh = new THREE.Mesh(nadeGeo, nadeMat);
@@ -691,8 +695,8 @@ export class Robot {
           audio.playExplosion();
           if (onScreenShake) onScreenShake(0.42);
 
-          fxManager.spawnExplosionShockwave(ex, ey, ez, this.teamColor, 2.6);
-          fxManager.spawnSparkBurst(ex, ey, ez, 36, COLORS.tileWarning, 1.8);
+          fxManager.spawnExplosionShockwave(ex, ey, ez, nadeColor, 2.6);
+          fxManager.spawnSparkBurst(ex, ey, ez, 36, this.hasLaser ? 0x39ff14 : COLORS.tileWarning, 1.8);
 
           // Destroy floor tiles immediately in shockwave radius
           island.destroyTilesAt(ex, ez, GRENADE_RADIUS);
