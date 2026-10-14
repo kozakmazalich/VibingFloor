@@ -240,17 +240,17 @@ export class FXManager {
 
   // META VIBER: instant green laser beam (visual only — the hitscan hit is
   // resolved by Robot.fireLaser). Long thin glowing beam straight along the
-  // facing direction, fading out over ~0.25s.
+  // facing direction, with a white-hot core; fades out over ~0.4s.
   fireLaserBeam({ x, y, z, dirX, dirZ, maxDist = 4.32, color = 0x39ff14 }) {
     const angle = Math.atan2(-dirX, -dirZ);
     const group = new THREE.Group();
     group.position.set(x, y, z);
     group.rotation.y = angle;
 
-    const mk = (w, opacity, blend) => {
+    const mk = (w, colorHex, opacity, blend) => {
       const geo = new THREE.BoxGeometry(w, w, maxDist);
       const mat = new THREE.MeshBasicMaterial({
-        color,
+        color: colorHex,
         transparent: true,
         opacity,
         depthWrite: false,
@@ -261,16 +261,17 @@ export class FXManager {
       return { mesh, geo, mat, base: opacity };
     };
 
-    const glow = mk(0.24, 0.3); // outer halo
-    const core = mk(0.07, 0.95, THREE.NormalBlending); // bright core
+    const glow = mk(0.30, color, 0.5); // wide outer halo
+    const beam = mk(0.09, color, 1.0); // vivid green body
+    const hot = mk(0.045, 0xffffff, 1.0, THREE.NormalBlending); // white-hot core
 
-    group.add(glow.mesh, core.mesh);
+    group.add(glow.mesh, beam.mesh, hot.mesh);
     this.scene.add(group);
 
     this.laserBeams.push({
       group,
-      parts: [glow, core],
-      duration: 0.25,
+      parts: [glow, beam, hot],
+      duration: 0.4, // a bit longer-lasting laser
       elapsed: 0,
     });
   }

@@ -265,6 +265,13 @@ async function runScenario(label, hostMobile, guestMobile) {
     await guest.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", bubbles: true, cancelable: true }))`);
     await sleep(300);
 
+    // Same for the host robot ([2,2] corner): walk it inward early so it is
+    // alive and facing the island when its own grenade round-trip runs.
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", bubbles: true, cancelable: true }))`);
+    await sleep(700);
+    await host.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyS", bubbles: true, cancelable: true }))`);
+    await sleep(300);
+
     // Round-trip 1: REAL touch button (pointer events) — the guest HUD must
     // react INSTANTLY (local prediction), and the authoritative cooldown must
     // round-trip through the host afterwards.
@@ -313,33 +320,9 @@ async function runScenario(label, hostMobile, guestMobile) {
       guest.log("FAIL: push cooldown stuck");
     }
 
-    // Round-trip 2: SPEAR button — instant + round-trip the same way
-    const spearBefore = await guest.eval(`document.getElementById("spear-status-text").textContent`);
-    await firePointer("#touch-spear");
-    await sleep(80);
-    const spearInstant = await guest.eval(`document.getElementById("spear-status-text").textContent`);
-    await releasePointer();
-    if (spearInstant !== spearBefore) {
-      guest.log(`OK: SPEAR button reacts instantly ("${spearBefore}" -> "${spearInstant}")`);
-    } else {
-      failures++;
-      guest.log(`FAIL: SPEAR button did not react instantly (stayed "${spearBefore}")`);
-    }
-    let spearRecovered = false;
-    for (let i = 0; i < 25; i++) {
-      await sleep(200);
-      if ((await guest.eval(`document.getElementById("spear-status-text").textContent`)) === "READY") {
-        spearRecovered = true;
-        break;
-      }
-    }
-    if (spearRecovered) guest.log("OK: spear cooldown recovered to READY");
-    else {
-      failures++;
-      guest.log("FAIL: spear cooldown stuck");
-    }
-
-    // Round-trip 3: the GUEST's grenade must break the floor on BOTH sides
+    // Round-trip 3: the GUEST's grenade must break the floor on BOTH sides.
+    // Fired early while the arena is fresh and both robots are alive + facing
+    // inward (late firing hits the collapsed rim or the void in ~half the runs).
     const count = async (s) => parseInt(await s.eval(`document.getElementById("tile-count").textContent.split("/")[0]`), 10);
     const hostTilesBefore = await count(host);
     const guestTilesBefore = await count(guest);
@@ -375,7 +358,6 @@ async function runScenario(label, hostMobile, guestMobile) {
     }
 
     // Round-trip 4: the HOST's grenade must break the floor on the guest.
-    // Nudge the host robot inward first so the grenade lands on the island.
     await host.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyS", bubbles: true, cancelable: true }))`);
     await sleep(600);
     await host.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyS", bubbles: true, cancelable: true }))`);
@@ -391,6 +373,32 @@ async function runScenario(label, hostMobile, guestMobile) {
     } else {
       failures++;
       guest.log(`FAIL: host grenade did not break the guest floor (${guestTilesBefore2} -> ${guestTilesAfter2})`);
+    }
+
+    // Round-trip 2: SPEAR button — instant + round-trip the same way
+    const spearBefore = await guest.eval(`document.getElementById("spear-status-text").textContent`);
+    await firePointer("#touch-spear");
+    await sleep(80);
+    const spearInstant = await guest.eval(`document.getElementById("spear-status-text").textContent`);
+    await releasePointer();
+    if (spearInstant !== spearBefore) {
+      guest.log(`OK: SPEAR button reacts instantly ("${spearBefore}" -> "${spearInstant}")`);
+    } else {
+      failures++;
+      guest.log(`FAIL: SPEAR button did not react instantly (stayed "${spearBefore}")`);
+    }
+    let spearRecovered = false;
+    for (let i = 0; i < 25; i++) {
+      await sleep(200);
+      if ((await guest.eval(`document.getElementById("spear-status-text").textContent`)) === "READY") {
+        spearRecovered = true;
+        break;
+      }
+    }
+    if (spearRecovered) guest.log("OK: spear cooldown recovered to READY");
+    else {
+      failures++;
+      guest.log("FAIL: spear cooldown stuck");
     }
 
     // Round-trip 2: guest holds W (movement input must reach the host and

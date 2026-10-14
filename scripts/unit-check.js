@@ -46,7 +46,7 @@
     boxes > 20 ? ok(`meta model renders (${boxes} boxes)`) : bad(`meta model too sparse (${boxes} boxes)`);
   }
 
-  // 1c. META palette: olive body, no blue/purple anywhere
+  // 1c. META palette: green body, white eyes, black jumpsuit — no blue/purple
   if (metaDef) {
     const toHex = (c) => ("000000" + c.toString(16)).slice(-6);
     const hex = (c) => toHex(metaDef.colors[c]);
@@ -54,11 +54,11 @@
     for (const key of Object.keys(metaDef.colors)) {
       const v = metaDef.colors[key];
       const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
-      if (b > r && b > g) badColors.push(`${key}=#${hex(key)}`);
+      if (b > r * 1.25 && b > g * 1.25) badColors.push(`${key}=#${hex(key)}`);
     }
-    hex("head") === "96a117" && hex("visor") === "c4d41c" && hex("dark") === "272125"
-      ? ok(`meta palette exact (head #${hex("head")}, accent #${hex("visor")}, dark #${hex("dark")})`)
-      : bad(`meta palette wrong (head #${hex("head")})`);
+    hex("head") === "c5d41d" && hex("eye") === "ffffff" && hex("body") === "272125" && hex("dark") === "272125"
+      ? ok(`meta palette exact (green #${hex("head")}, white eyes #${hex("eye")}, black suit #${hex("body")})`)
+      : bad(`meta palette wrong (head #${hex("head")}, eyes #${hex("eye")}, body #${hex("body")})`);
     badColors.length === 0 ? ok("no blue/purple in the meta palette") : bad(`blue-ish colors: ${badColors.join(", ")}`);
   }
 
@@ -114,17 +114,24 @@
     ? ok("clear() empties the scene")
     : bad(`scene children left: ${scene.children.length}`);
 
-  // 3b. Green laser beam: spawns, fades and is cleaned up
+  // 3b. Green laser beam: spawns, has a white-hot core, lasts ~0.4s, cleans up
   fx.fireLaserBeam({ x: 0, y: 1, z: 0, dirX: 0, dirZ: -1, maxDist: 4.32, color: 0x39ff14 });
   fx.laserBeams.length === 1
     ? ok("laser beam spawned")
     : bad(`expected 1 beam, got ${fx.laserBeams.length}`);
-  const beamColor = fx.laserBeams[0].parts[1].mat.color.getHex();
-  beamColor === 0x39ff14 ? ok("laser colour is #39ff14") : bad(`laser colour 0x${beamColor.toString(16)}`);
-  for (let i = 0; i < 20; i++) fx.update(0.02);
-  fx.laserBeams.length === 0 && scene.children.length === 0
-    ? ok("laser faded and was removed (~0.4s)")
-    : bad(`laser still alive: ${fx.laserBeams.length}`);
+  const beamParts = fx.laserBeams[0].parts;
+  beamParts.length === 3 && beamParts[2].mat.color.getHex() === 0xffffff
+    ? ok("laser has a white-hot core (3 layers)")
+    : bad(`laser layers wrong (${beamParts.length})`);
+  beamParts[1].mat.color.getHex() === 0x39ff14
+    ? ok("laser colour is #39ff14")
+    : bad(`laser colour 0x${beamParts[1].mat.color.getHex().toString(16)}`);
+  for (let i = 0; i < 12; i++) fx.update(0.02); // 0.24s — must still be alive
+  const stillAlive = fx.laserBeams.length === 1;
+  for (let i = 0; i < 12; i++) fx.update(0.02); // 0.48s total — must be gone
+  stillAlive && fx.laserBeams.length === 0 && scene.children.length === 0
+    ? ok("laser lasts ~0.4s then fades and is removed")
+    : bad(`laser lifetime wrong (alive at 0.24s: ${stillAlive}, at 0.48s: ${fx.laserBeams.length})`);
 
   // 4. Music engine: starts, schedules steps, stops/restarts on mute
   const { audio } = await import("/src/audio.js");

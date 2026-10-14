@@ -162,30 +162,39 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0x96a117, body: 0x96a117, arm: 0x96a117, foot: 0x646638, belt: 0xc4d41c, dark: 0x272125, visor: 0xc4d41c, eye: 0xc4d41c, accent: 0xc4d41c, boot: 0x272125 },
+    colors: { head: 0xc5d41d, body: 0x272125, arm: 0xc5d41d, foot: 0xc5d41d, belt: 0x96a117, dark: 0x272125, visor: 0xeaff3a, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
     headExtras: [
-      // Green visor strip
-      { w: 1.50, h: 0.34, d: 0.16, x: 0, y: 0.10, z: 0.86, c: "visor" },
-      // Black eyes on the visor
-      { w: 0.26, h: 0.18, d: 0.08, x: -0.45, y: 0.10, z: 0.95, c: "dark" },
-      { w: 0.26, h: 0.18, d: 0.08, x: 0.45, y: 0.10, z: 0.95, c: "dark" },
-      // Yellow antenna tips
-      { w: 0.20, h: 0.36, d: 0.16, x: -0.55, y: 1.10, z: -0.30, c: "eye" },
-      { w: 0.20, h: 0.36, d: 0.16, x: 0.55, y: 1.10, z: -0.30, c: "eye" },
+      // Bright lime brow band
+      { w: 1.79, h: 0.18, d: 1.75, x: 0, y: 0.55, z: 0, c: "accent" },
+      // BIG white eyes on the green face
+      { w: 0.34, h: 0.40, d: 0.12, x: -0.48, y: 0.12, z: 0.92, c: "eye" },
+      { w: 0.34, h: 0.40, d: 0.12, x: 0.48, y: 0.12, z: 0.92, c: "eye" },
+      // Bright lime cheek panels
+      { w: 0.16, h: 0.50, d: 0.10, x: -0.78, y: -0.05, z: 0.88, c: "visor" },
+      { w: 0.16, h: 0.50, d: 0.10, x: 0.78, y: -0.05, z: 0.88, c: "visor" },
       // Dark mouth vent
-      { w: 0.40, h: 0.12, d: 0.08, x: 0, y: -0.42, z: 0.92, c: "dark" },
+      { w: 0.40, h: 0.14, d: 0.08, x: 0, y: -0.40, z: 0.92, c: "dark" },
+      // Antenna shafts (green) with bright lime tips
+      { w: 0.16, h: 0.50, d: 0.16, x: -0.55, y: 1.25, z: -0.25, c: "head" },
+      { w: 0.16, h: 0.50, d: 0.16, x: 0.55, y: 1.25, z: -0.25, c: "head" },
+      { w: 0.22, h: 0.30, d: 0.22, x: -0.55, y: 1.62, z: -0.25, c: "accent" },
+      { w: 0.22, h: 0.30, d: 0.22, x: 0.55, y: 1.62, z: -0.25, c: "accent" },
     ],
     bodyExtras: [
-      // Green chest core
-      { w: 0.50, h: 0.50, d: 0.12, x: 0, y: 0.00, z: 0.55, c: "visor" },
-      { w: 0.30, h: 0.30, d: 0.10, x: 0, y: 0.00, z: 0.63, c: "dark" },
-      // Yellow belly stripe
+      // Green chest plate on the black jumpsuit
+      { w: 0.62, h: 0.52, d: 0.10, x: 0, y: 0.06, z: 0.55, c: "head" },
+      // Dark core center
+      { w: 0.30, h: 0.30, d: 0.08, x: 0, y: 0.06, z: 0.62, c: "dark" },
+      // Bright lime belly stripe on the suit
       { w: 0.92, h: 0.12, d: 0.06, x: 0, y: -0.28, z: 0.56, c: "accent" },
+      // Jumpsuit shoulder straps (dark, over the green arms' base)
+      { w: 0.30, h: 0.20, d: 1.10, x: -0.72, y: 0.44, z: 0, c: "dark" },
+      { w: 0.30, h: 0.20, d: 1.10, x: 0.72, y: 0.44, z: 0, c: "dark" },
     ],
     armExtrasL: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
     armExtrasR: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
-    footExtrasL: [{ w: 0.46, h: 0.14, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
-    footExtrasR: [{ w: 0.46, h: 0.14, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
+    footExtrasL: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
+    footExtrasR: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
   },
 ];
 

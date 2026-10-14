@@ -614,7 +614,7 @@ export class Robot {
         maxDist: reach,
         color: 0x39ff14,
       });
-      fxManager.spawnSparkBurst(muzzleX, muzzleY, muzzleZ, 10, 0x39ff14, 0.5);
+      fxManager.spawnSparkBurst(muzzleX, muzzleY, muzzleZ, 14, 0x39ff14, 0.7);
 
       // Hitscan: hit anything alive within reach and inside a narrow cone
       if (target && target.state === "alive") {
@@ -626,7 +626,7 @@ export class Robot {
           if (align > 0.92) {
             audio.playSpearHit();
             target.applyImpulse(dirX * SPEAR_IMPULSE, dirZ * SPEAR_IMPULSE);
-            fxManager.spawnSparkBurst(target.pos.x, 0.6, target.pos.z, 24, 0x39ff14, 1.4);
+            fxManager.spawnSparkBurst(target.pos.x, 0.6, target.pos.z, 36, 0x39ff14, 1.8);
             if (onScreenShake) onScreenShake(0.35);
           }
         }
