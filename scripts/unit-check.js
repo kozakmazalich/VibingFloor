@@ -29,6 +29,20 @@
       : bad(`expected ${def.spikes.length} cones, got ${cones}`);
   }
 
+  // 1b. META VIBER is registered and renders
+  const metaDef = CHARACTERS.find((d) => d.id === "meta");
+  CHAR_TYPES.meta && metaDef
+    ? ok("META VIBER registered in CHARACTERS + CHAR_TYPES")
+    : bad("meta character missing");
+  if (metaDef) {
+    const mv = buildViber(metaDef);
+    let boxes = 0;
+    mv.root.traverse((o) => {
+      if (o.geometry && o.geometry.type === "BoxGeometry") boxes++;
+    });
+    boxes > 20 ? ok(`meta model renders (${boxes} boxes)`) : bad(`meta model too sparse (${boxes} boxes)`);
+  }
+
   // 2. Push multiplier (CHOG: 1.8 base → +40% → +50% again = 3.78)
   CHAR_TYPES.chog && CHAR_TYPES.chog.pushMult === 3.78
     ? ok("CHAR_TYPES.chog.pushMult = 3.78")

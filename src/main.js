@@ -35,12 +35,13 @@ const btnMenuSoundEl = document.getElementById("btn-menu-sound");
 const menuSoundIconEl = document.getElementById("menu-sound-icon");
 const menuSoundTextEl = document.getElementById("menu-sound-text");
 
-// Fighter selection buttons (5 Viber robots)
+// Fighter selection buttons (6 Viber robots)
 const btnCharJpgEl = document.getElementById("btn-char-jpg");
 const btnCharMossEl = document.getElementById("btn-char-moss");
 const btnCharMechaEl = document.getElementById("btn-char-mecha");
 const btnCharPhantomEl = document.getElementById("btn-char-phantom");
 const btnCharChogEl = document.getElementById("btn-char-chog");
+const btnCharMetaEl = document.getElementById("btn-char-meta");
 const menuP1AvatarEl = document.getElementById("menu-p1-avatar");
 const menuP1NameEl = document.getElementById("menu-p1-name");
 const hudP1AvatarEl = document.getElementById("hud-p1-avatar");
@@ -615,13 +616,14 @@ function updateCameraFollow(dt) {
   camera.position.z += mz;
 }
 
-// 9. Character Switching Logic (5 Viber fighters)
+// 9. Character Switching Logic (6 Viber fighters)
 const charButtons = [
   { el: btnCharJpgEl, type: "robot1_jpg" },
   { el: btnCharMossEl, type: "moss" },
   { el: btnCharMechaEl, type: "mecha" },
   { el: btnCharPhantomEl, type: "phantom" },
   { el: btnCharChogEl, type: "chog" },
+  { el: btnCharMetaEl, type: "meta" },
 ];
 
 function selectCharacter(type) {

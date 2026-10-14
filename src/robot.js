@@ -44,6 +44,7 @@ export const CHAR_TYPES = {
   mecha: { idx: 2, name: "Volt Viber", portrait: "assets/robot2_portrait.png" },
   phantom: { idx: 3, name: "Phantom Viber", portrait: "assets/robot4_portrait.png" },
   chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 3.78 },
+  meta: { idx: 5, name: "Meta Viber", portrait: "assets/robot6_portrait.png" },
 };
 
 export class Robot {
