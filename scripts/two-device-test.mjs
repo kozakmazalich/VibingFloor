@@ -257,6 +257,14 @@ async function runScenario(label, hostMobile, guestMobile) {
       host.log(`FAIL: arenas differ (${arenaA} vs ${arenaB})`);
     }
 
+    // Nudge the guest robot inward: its corner spawn ([17,17] on the 20x20
+    // arena) falls victim to the shrinking rim before the grenade round-trip
+    // in a good share of runs, which makes the grenade checks flaky.
+    await guest.eval(`window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW", bubbles: true, cancelable: true }))`);
+    await sleep(700);
+    await guest.eval(`window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW", bubbles: true, cancelable: true }))`);
+    await sleep(300);
+
     // Round-trip 1: REAL touch button (pointer events) — the guest HUD must
     // react INSTANTLY (local prediction), and the authoritative cooldown must
     // round-trip through the host afterwards.
@@ -345,7 +353,13 @@ async function runScenario(label, hostMobile, guestMobile) {
       host.log(`OK: guest grenade broke the host floor (${hostTilesBefore} -> ${hostTilesAfter})`);
     } else {
       failures++;
-      host.log(`FAIL: guest grenade did not break the host floor (${hostTilesBefore} -> ${hostTilesAfter})`);
+      const diag = await guest.eval(`JSON.stringify({
+        roundOver: !document.getElementById("win-overlay").classList.contains("hidden"),
+        hud: document.getElementById("in-game-hud").classList.contains("hidden") ? "hidden" : "shown",
+        grenadeStatus: document.getElementById("grenade-status-text").textContent,
+        tiles: document.getElementById("tile-count").textContent,
+      })`);
+      host.log(`FAIL: guest grenade did not break the host floor (${hostTilesBefore} -> ${hostTilesAfter}) diag=${diag}`);
     }
     if (guestTilesBefore - guestTilesAfter >= 3) {
       guest.log(`OK: guest floor broke instantly (${guestTilesBefore} -> ${guestTilesAfter})`);
