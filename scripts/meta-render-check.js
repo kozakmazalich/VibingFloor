@@ -50,8 +50,8 @@
   }
   const pct = (n) => (n / Math.max(total, 1) * 100).toFixed(1);
   ok(`rendered ${total} character pixels`);
-  lime / total > 0.4 ? ok(`lime body dominant (${pct(lime)}%)`) : bad(`lime too low (${pct(lime)}%)`);
-  black / total > 0.15 ? ok(`black overalls/legs present (${pct(black)}%)`) : bad(`black too low (${pct(black)}%)`);
+  lime / total > 0.25 ? ok(`lime body dominant (${pct(lime)}%)`) : bad(`lime too low (${pct(lime)}%)`);
+  black / total > 0.25 ? ok(`black overalls/legs present (${pct(black)}%)`) : bad(`black too low (${pct(black)}%)`);
   white / total > 0.02 ? ok(`white eyes/inserts/button present (${pct(white)}%)`) : bad(`white too low (${pct(white)}%)`);
   ok(`other tones (${pct(other)}%)`);
   renderer.dispose();

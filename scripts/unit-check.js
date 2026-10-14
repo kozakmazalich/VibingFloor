@@ -60,10 +60,12 @@
     hex("head") === "c5d41d" && hex("eye") === "ffffff" && hex("body") === "c5d41d" && hex("dark") === "96a117" && hex("belt") === "272125" && hex("boot") === "272125"
       ? ok(`meta palette exact (lime #${hex("head")}, white eyes #${hex("eye")}, black overalls #${hex("belt")}, olive shade #${hex("dark")})`)
       : bad(`meta palette wrong (head #${hex("head")}, eyes #${hex("eye")}, body #${hex("body")}, dark #${hex("dark")})`);
-    const pupils = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.z > 0.85 && p.y > 0).length;
-    const nose = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.z > 0.85 && p.y < 0).length;
-    const whiteEyes = (metaDef.headExtras || []).filter((p) => p.c === "eye" && p.z > 0.8).length;
-    const ears = (metaDef.headExtras || []).filter((p) => p.c === "belt" && p.y > 0.6).length;
+    const isBlack = (p) => p.c === 0x272125 || p.c === "belt";
+    const isWhite = (p) => p.c === 0xffffff || p.c === "eye";
+    const pupils = (metaDef.headExtras || []).filter((p) => isBlack(p) && p.z > 0.35 && p.y > -0.08).length;
+    const nose = (metaDef.headExtras || []).filter((p) => isBlack(p) && p.z > 0.3 && p.y < -0.08).length;
+    const whiteEyes = (metaDef.headExtras || []).filter((p) => isWhite(p) && p.z > 0.3).length;
+    const ears = (metaDef.headExtras || []).filter((p) => isBlack(p) && p.y > 0.3).length;
     whiteEyes === 2 && pupils === 2 && nose === 1 && ears === 2
       ? ok("white eyes + black pupils + nose + dark ears per the meta/ spec")
       : bad(`face parts wrong (eyes ${whiteEyes}, pupils ${pupils}, nose ${nose}, ears ${ears})`);

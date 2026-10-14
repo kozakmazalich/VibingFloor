@@ -163,47 +163,48 @@ export const CHARACTERS = [
   {
     id: "meta", name: "META VIBER",
     laser: true,
-    // Design spec from assets/meta/gemini-code-1791996909575.js:
-    // lime body, black overalls (bib + straps + waist + legs), dark ears with
-    // white inserts, big white square eyes with black pupils + nose block,
-    // crown highlight, olive chin shade, dark cuffs with bright lime hands.
-    colors: { head: 0xc5d41d, body: 0xc5d41d, arm: 0xc5d41d, foot: 0x272125, belt: 0x272125, dark: 0x96a117, visor: 0xeaff3a, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
+    customBuild: "meta", // chibi body built by buildMetaViber (see below)
+    // Design spec from assets/meta/gemini-code-1791997066782.html: exact
+    // proportions + extras in that preview's coordinate system.
+    colors: { head: 0xc5d41d, body: 0xc5d41d, arm: 0xc5d41d, foot: 0x272125, belt: 0x272125, dark: 0x96a117, visor: 0xc5d41d, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
     headExtras: [
-      // Ears on top of the head (near-black blocks with white inner inserts)
-      { w: 0.26, h: 0.22, d: 0.24, x: -0.24, y: 0.74, z: 0.00, c: "belt" },
-      { w: 0.11, h: 0.11, d: 0.07, x: -0.24, y: 0.70, z: 0.14, c: "eye" },
-      { w: 0.26, h: 0.22, d: 0.24, x: 0.24, y: 0.74, z: 0.00, c: "belt" },
-      { w: 0.11, h: 0.11, d: 0.07, x: 0.24, y: 0.70, z: 0.14, c: "eye" },
-      // Brighter lime crown band + olive depth shade under the chin
-      { w: 0.80, h: 0.06, d: 1.76, x: 0, y: 0.55, z: 0, c: "accent" },
-      { w: 0.80, h: 0.06, d: 1.76, x: 0, y: -0.52, z: 0, c: "dark" },
-      // Large square white eyes (sclera)
-      { w: 0.34, h: 0.36, d: 0.08, x: -0.20, y: 0.10, z: 0.86, c: "eye" },
-      { w: 0.34, h: 0.36, d: 0.08, x: 0.20, y: 0.10, z: 0.86, c: "eye" },
-      // Black cube pupils protruding from the centre of the eyes
-      { w: 0.12, h: 0.12, d: 0.06, x: -0.20, y: 0.10, z: 0.92, c: "belt" },
-      { w: 0.12, h: 0.12, d: 0.06, x: 0.20, y: 0.10, z: 0.92, c: "belt" },
-      // Center nose block wedged between the eyes
-      { w: 0.10, h: 0.15, d: 0.07, x: 0, y: -0.16, z: 0.90, c: "belt" },
+      // Ears on top of the head + white cubes on the front of the ears
+      { w: 0.24, h: 0.20, d: 0.22, x: -0.22, y: 0.44, z: 0.02, c: 0x272125 },
+      { w: 0.10, h: 0.10, d: 0.06, x: -0.22, y: 0.39, z: 0.14, c: 0xffffff },
+      { w: 0.24, h: 0.20, d: 0.22, x: 0.22, y: 0.44, z: 0.02, c: 0x272125 },
+      { w: 0.10, h: 0.10, d: 0.06, x: 0.22, y: 0.39, z: 0.14, c: 0xffffff },
+      // Big square white eyes
+      { w: 0.32, h: 0.34, d: 0.08, x: -0.19, y: -0.02, z: 0.36, c: 0xffffff },
+      { w: 0.32, h: 0.34, d: 0.08, x: 0.19, y: -0.02, z: 0.36, c: 0xffffff },
+      // Protruding black cube pupils
+      { w: 0.11, h: 0.11, d: 0.07, x: -0.19, y: -0.02, z: 0.42, c: 0x272125 },
+      { w: 0.11, h: 0.11, d: 0.07, x: 0.19, y: -0.02, z: 0.42, c: 0x272125 },
+      // Black nose between the eyes
+      { w: 0.09, h: 0.14, d: 0.07, x: 0.00, y: -0.12, z: 0.37, c: 0x272125 },
     ],
     bodyExtras: [
-      // Overalls bib on the front of the torso + shoulder straps
-      { w: 0.52, h: 0.44, d: 0.10, x: 0, y: 1.02, z: 0.54, c: "belt" },
-      { w: 0.12, h: 0.16, d: 1.08, x: -0.20, y: 1.46, z: 0, c: "belt" },
-      { w: 0.12, h: 0.16, d: 1.08, x: 0.20, y: 1.46, z: 0, c: "belt" },
-      // White chest button (slightly right of center on the bib)
-      { w: 0.10, h: 0.10, d: 0.06, x: 0.05, y: 1.14, z: 0.62, c: "eye" },
+      // Overalls: bib + two shoulder straps
+      { w: 0.46, h: 0.36, d: 0.44, x: 0.00, y: -0.06, z: 0.02, c: 0x272125 },
+      { w: 0.11, h: 0.14, d: 0.44, x: -0.17, y: 0.18, z: 0.02, c: 0x272125 },
+      { w: 0.11, h: 0.14, d: 0.44, x: 0.17, y: 0.18, z: 0.02, c: 0x272125 },
+      // White square button on the bib
+      { w: 0.10, h: 0.10, d: 0.06, x: 0.06, y: 0.04, z: 0.25, c: 0xffffff },
+      // White stripe over the viewer's right leg
+      { w: 0.22, h: 0.06, d: 0.24, x: 0.15, y: -0.27, z: 0.00, c: 0xffffff },
     ],
-    // Dark wrist cuffs; the bright lime hands are the foreL/foreR meshes
-    // (visor colour = 0xeaff3a).
-    armExtrasL: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "belt" }],
-    armExtrasR: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "belt" }],
-    // White trim around the left thigh (the +x leg, per the spec)
-    footExtrasR: [{ w: 0.26, h: 0.08, d: 0.56, x: 0, y: -0.15, z: 0, c: "eye" }],
+    armExtrasL: [
+      { w: 0.23, h: 0.14, d: 0.23, x: 0.00, y: -0.10, z: 0.00, c: 0x272125 }, // dark cuff
+      { w: 0.22, h: 0.10, d: 0.24, x: 0.00, y: -0.21, z: 0.02, c: 0xeaff3a }, // lime hand
+    ],
+    armExtrasR: [
+      { w: 0.23, h: 0.14, d: 0.23, x: 0.00, y: -0.10, z: 0.00, c: 0x272125 },
+      { w: 0.22, h: 0.10, d: 0.24, x: 0.00, y: -0.21, z: 0.02, c: 0xeaff3a },
+    ],
   },
 ];
 
 export function buildViber(def) {
+  if (def.customBuild === "meta") return buildMetaViber(def);
   const C = def.colors;
   const mats = [];
   function M(color, opts) {
@@ -278,4 +279,92 @@ export function buildViber(def) {
   addSpikes(def.spikes);
   root.scale.setScalar(0.8);
   return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat, eyeMat };
+}
+
+// META VIBER chibi build — matches assets/meta/gemini-code-1791997066782.html
+// one-to-one: big head on a stubby torso, short arms with cuffs + lime hands,
+// short legs with boots, extras in the preview's exact coordinates.
+function buildMetaViber(def) {
+  const C = def.colors;
+  const mats = [];
+  function M(color, opts) {
+    const m = new THREE.MeshLambertMaterial(Object.assign({ color }, opts || {}));
+    mats.push(m);
+    return m;
+  }
+  const headMat = M(C.head), bodyMat = M(C.body), armMat = M(C.arm), footMat = M(C.foot),
+    bootMat = M(C.boot);
+  // Flat per-colour cache for the numeric extras (same as the HTML preview),
+  // with emissive white/lime so the eyes and hands read as bright as the
+  // other vibers' face plates under the game lighting.
+  const matCache = new Map();
+  function getMat(c) {
+    if (!matCache.has(c)) {
+      let mat;
+      if (c === 0xffffff) mat = M(c, { emissive: 0xffffff, emissiveIntensity: 0.55 });
+      else if (c === 0xeaff3a) mat = M(c, { emissive: 0xeaff3a, emissiveIntensity: 0.45 });
+      else mat = M(c);
+      matCache.set(c, mat);
+    }
+    return matCache.get(c);
+  }
+
+  const root = new THREE.Group();
+  const bodyPivot = new THREE.Group();
+  bodyPivot.position.y = 0.66;
+  root.add(bodyPivot);
+
+  // Torso
+  const torso = mkBox(0.62, 0.52, 0.40, bodyMat);
+  bodyPivot.add(torso);
+
+  // Head (wider than the torso — the chibi look)
+  const head = mkBox(0.76, 0.68, 0.68, headMat);
+  head.position.set(0, 0.60, 0);
+  bodyPivot.add(head);
+
+  // Arms
+  const armL = new THREE.Group();
+  armL.position.set(-0.42, 0.14, 0);
+  armL.add(mkBox(0.20, 0.24, 0.20, armMat));
+  bodyPivot.add(armL);
+  const armR = new THREE.Group();
+  armR.position.set(0.42, 0.14, 0);
+  armR.add(mkBox(0.20, 0.24, 0.20, armMat));
+  bodyPivot.add(armR);
+
+  // Legs + boots
+  const legL = new THREE.Group();
+  legL.position.set(-0.15, 0.40, 0);
+  const legMeshL = mkBox(0.22, 0.30, 0.22, footMat);
+  legMeshL.position.y = -0.12;
+  const bootL = mkBox(0.28, 0.12, 0.34, bootMat);
+  bootL.position.set(0, -0.33, 0.04);
+  legL.add(legMeshL, bootL);
+  root.add(legL);
+  const legR = new THREE.Group();
+  legR.position.set(0.15, 0.40, 0);
+  const legMeshR = mkBox(0.22, 0.30, 0.22, footMat);
+  legMeshR.position.y = -0.12;
+  const bootR = mkBox(0.28, 0.12, 0.34, bootMat);
+  bootR.position.set(0, -0.33, 0.04);
+  legR.add(legMeshR, bootR);
+  root.add(legR);
+
+  function addExtras(parent, list) {
+    if (!list || !list.length) return;
+    for (const p of list) {
+      const b = mkBox(p.w, p.h, p.d, getMat(p.c));
+      b.position.set(p.x || 0, p.y || 0, p.z || 0);
+      if (p.rx) b.rotation.x = p.rx; if (p.ry) b.rotation.y = p.ry; if (p.rz) b.rotation.z = p.rz;
+      parent.add(b);
+    }
+  }
+  addExtras(head, def.headExtras);
+  addExtras(torso, def.bodyExtras);
+  addExtras(armL, def.armExtrasL);
+  addExtras(armR, def.armExtrasR);
+
+  root.scale.setScalar(0.8);
+  return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat: null, eyeMat: null };
 }
