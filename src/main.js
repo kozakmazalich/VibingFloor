@@ -6,7 +6,7 @@ import { CHAR_TYPES } from "./robot.js";
 import { MAPS } from "./maps.js";
 import { audio } from "./audio.js";
 import { isTouchDevice, setupTouchControls } from "./touch.js";
-import { walletState, connectWallet, signWinMessage } from "./wallet.js";
+import { walletState, signWinMessage } from "./wallet.js";
 import { Net } from "./net.js";
 
 // DOM Elements: Menus & Overlays
@@ -93,9 +93,9 @@ const btnSoundEl = document.getElementById("btn-sound");
 const btnResetCamEl = document.getElementById("btn-reset-cam");
 const btnHudRestartEl = document.getElementById("btn-hud-restart");
 
-// Wallet (Solana Mobile Wallet Adapter — optional, invisible without a wallet)
-const btnWalletConnectEl = document.getElementById("btn-wallet-connect");
-const walletBtnTextEl = document.getElementById("wallet-btn-text");
+// Wallet UI (Solana Mobile Wallet Adapter) removed — the connect button is
+// gone from the menu. The crypto hook itself stays in src/wallet.js (used
+// only if a wallet was ever connected, which the UI no longer offers).
 const hudWalletEl = document.getElementById("hud-wallet");
 const toastEl = document.getElementById("toast");
 let toastTimer = 0;
@@ -110,12 +110,9 @@ function showToast(message) {
 }
 
 function updateWalletUI() {
-  if (walletState.status === "connected") {
-    if (hudWalletEl) {
-      hudWalletEl.textContent = `◈ ${walletState.displayAddress}`;
-      hudWalletEl.classList.remove("hidden");
-    }
-    if (walletBtnTextEl) walletBtnTextEl.textContent = `${walletState.displayAddress} ✓`;
+  if (walletState.status === "connected" && hudWalletEl) {
+    hudWalletEl.textContent = `◈ ${walletState.displayAddress}`;
+    hudWalletEl.classList.remove("hidden");
   }
 }
 
@@ -747,31 +744,6 @@ if (onlineCodeInputEl) {
       e.preventDefault();
       btnOnlineJoinEl.click();
     }
-  });
-}
-
-// Wallet connect (optional crypto — see src/wallet.js)
-if (btnWalletConnectEl) {
-  btnWalletConnectEl.addEventListener("click", async () => {
-    audio.playClick();
-    if (walletState.status === "connected") {
-      showToast(`Wallet: ${walletState.displayAddress}`);
-      return;
-    }
-    btnWalletConnectEl.disabled = true;
-    const res = await connectWallet();
-    btnWalletConnectEl.disabled = false;
-    if (res.ok) {
-      updateWalletUI();
-      showToast("Wallet connected");
-    } else if (res.reason === "web") {
-      showToast("Wallet requires the Android app");
-    } else if (res.reason === "no-wallet") {
-      showToast("No MWA wallet found on device");
-    } else if (res.reason && res.reason !== "rejected") {
-      showToast(`Wallet: ${res.reason}`);
-    }
-    // "rejected" — the user cancelled in Seed Vault: stay silent
   });
 }
 
