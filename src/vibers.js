@@ -162,39 +162,46 @@ export const CHARACTERS = [
   },
   {
     id: "meta", name: "META VIBER",
-    colors: { head: 0xc5d41d, body: 0x272125, arm: 0xc5d41d, foot: 0xc5d41d, belt: 0x96a117, dark: 0x272125, visor: 0xeaff3a, eye: 0xffffff, accent: 0xeaff3a, boot: 0x272125 },
+    // Rebuilt 1:1 from assets/meta.jpg (pixel-sampled palette): lime body,
+    // black suit, beige face/hands/chest, olive right-side shade, glowing
+    // yellow-green hip panels, black visor strip, arms raised in a V.
+    colors: { head: 0xc4d41c, body: 0x272125, arm: 0x272125, foot: 0x272125, belt: 0x96a117, dark: 0x14161a, visor: 0xcfcbbf, eye: 0xdbec22, accent: 0xdbec22, boot: 0x1a1a1b, glow: 0xbfe05e },
+    armPose: "raised",
     headExtras: [
-      // Bright lime brow band
-      { w: 1.79, h: 0.18, d: 1.75, x: 0, y: 0.55, z: 0, c: "accent" },
-      // BIG white eyes on the green face
-      { w: 0.34, h: 0.40, d: 0.12, x: -0.48, y: 0.12, z: 0.92, c: "eye" },
-      { w: 0.34, h: 0.40, d: 0.12, x: 0.48, y: 0.12, z: 0.92, c: "eye" },
-      // Bright lime cheek panels
-      { w: 0.16, h: 0.50, d: 0.10, x: -0.78, y: -0.05, z: 0.88, c: "visor" },
-      { w: 0.16, h: 0.50, d: 0.10, x: 0.78, y: -0.05, z: 0.88, c: "visor" },
-      // Dark mouth vent
-      { w: 0.40, h: 0.14, d: 0.08, x: 0, y: -0.40, z: 0.92, c: "dark" },
-      // Antenna shafts (green) with bright lime tips
-      { w: 0.16, h: 0.50, d: 0.16, x: -0.55, y: 1.25, z: -0.25, c: "head" },
-      { w: 0.16, h: 0.50, d: 0.16, x: 0.55, y: 1.25, z: -0.25, c: "head" },
-      { w: 0.22, h: 0.30, d: 0.22, x: -0.55, y: 1.62, z: -0.25, c: "accent" },
-      { w: 0.22, h: 0.30, d: 0.22, x: 0.55, y: 1.62, z: -0.25, c: "accent" },
+      // Bright lime helmet crown (the lit top of the head in the photo)
+      { w: 1.50, h: 0.16, d: 1.46, x: 0, y: 0.62, z: -0.15, c: "eye" },
+      // Black seam where the helmet meets the face
+      { w: 1.79, h: 0.12, d: 1.75, x: 0, y: -0.14, z: 0, c: "dark" },
+      // Beige face plate (lower front of the head)
+      { w: 1.34, h: 0.58, d: 0.14, x: 0, y: -0.44, z: 0.79, c: "visor" },
+      // Black visor strip across the beige face
+      { w: 1.10, h: 0.22, d: 0.10, x: 0, y: -0.30, z: 0.88, c: "dark" },
+      // Olive shade panel on the right side (the photo's shadowed side)
+      { w: 0.10, h: 1.30, d: 1.50, x: 0.83, y: 0, z: 0, c: "belt" },
     ],
     bodyExtras: [
-      // Green chest plate on the black jumpsuit
-      { w: 0.62, h: 0.52, d: 0.10, x: 0, y: 0.06, z: 0.55, c: "head" },
-      // Dark core center
-      { w: 0.30, h: 0.30, d: 0.08, x: 0, y: 0.06, z: 0.62, c: "dark" },
-      // Bright lime belly stripe on the suit
-      { w: 0.92, h: 0.12, d: 0.06, x: 0, y: -0.28, z: 0.56, c: "accent" },
-      // Jumpsuit shoulder straps (dark, over the green arms' base)
-      { w: 0.30, h: 0.20, d: 1.10, x: -0.72, y: 0.44, z: 0, c: "dark" },
-      { w: 0.30, h: 0.20, d: 1.10, x: 0.72, y: 0.44, z: 0, c: "dark" },
+      // Lime collar at the top of the black suit
+      { w: 1.30, h: 0.22, d: 1.08, x: 0, y: 0.40, z: 0, c: "head" },
+      // Beige chest plate
+      { w: 0.52, h: 0.34, d: 0.10, x: 0, y: 0.10, z: 0.56, c: "visor" },
+      // Dark core detail on the chest
+      { w: 0.20, h: 0.12, d: 0.08, x: 0, y: 0.10, z: 0.63, c: "dark" },
+      // Olive shade panel on the right side of the body
+      { w: 0.10, h: 0.80, d: 0.98, x: 0.64, y: 0, z: 0, c: "belt" },
+      // Lime hip stripes
+      { w: 0.26, h: 0.30, d: 0.10, x: -0.50, y: -0.36, z: 0.54, c: "head" },
+      { w: 0.26, h: 0.30, d: 0.10, x: 0.50, y: -0.36, z: 0.54, c: "head" },
     ],
-    armExtrasL: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
-    armExtrasR: [{ w: 0.50, h: 0.14, d: 0.54, x: 0, y: -0.46, z: 0, c: "accent" }],
-    footExtrasL: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
-    footExtrasR: [{ w: 0.46, h: 0.16, d: 0.54, x: 0, y: -0.60, z: 0, c: "boot" }],
+    // Beige hands (foreL/foreR use the visor material) on the raised arms.
+    footExtrasL: [
+      // Yellow-green glowing panel on the outer thigh
+      { w: 0.16, h: 0.34, d: 0.10, x: -0.28, y: 0.10, z: 0.08, c: "glow" },
+      { w: 0.50, h: 0.16, d: 0.58, x: 0, y: -0.60, z: 0, c: "boot" },
+    ],
+    footExtrasR: [
+      { w: 0.16, h: 0.34, d: 0.10, x: 0.28, y: 0.10, z: 0.08, c: "glow" },
+      { w: 0.50, h: 0.16, d: 0.58, x: 0, y: -0.60, z: 0, c: "boot" },
+    ],
   },
 ];
 
@@ -215,8 +222,9 @@ export function buildViber(def) {
     visorMat = M(C.visor, { emissive: C.visor, emissiveIntensity: 0.45 }),
     eyeMat = M(C.eye, { emissive: C.eye, emissiveIntensity: 0.7 }),
     accentMat = M(C.accent, { emissive: C.accent, emissiveIntensity: 0.25 }),
-    bootMat = M(C.boot);
-  const matByName = { head: headMat, body: bodyMat, arm: armMat, foot: footMat, belt: beltMat, dark: darkMat, visor: visorMat, eye: eyeMat, accent: accentMat, boot: bootMat };
+    bootMat = M(C.boot),
+    glowMat = C.glow != null ? M(C.glow, { emissive: C.glow, emissiveIntensity: 0.9 }) : accentMat;
+  const matByName = { head: headMat, body: bodyMat, arm: armMat, foot: footMat, belt: beltMat, dark: darkMat, visor: visorMat, eye: eyeMat, accent: accentMat, boot: bootMat, glow: glowMat };
   const legL = new THREE.Group(), legR = new THREE.Group();
   legL.position.set(-0.27, 0.66, 0); legR.position.set(0.27, 0.66, 0);
   bodyPivot.add(legL, legR);
@@ -271,6 +279,8 @@ export function buildViber(def) {
   addExtras(def.footExtrasL, legL);
   addExtras(def.footExtrasR, legR);
   addSpikes(def.spikes);
+  // META VIBER: arms raised up in a V (as in the reference photo).
+  if (def.armPose === "raised") { armL.rotation.z = -2.2; armR.rotation.z = 2.2; }
   root.scale.setScalar(0.8);
   return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat, eyeMat };
 }

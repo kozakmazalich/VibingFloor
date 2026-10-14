@@ -46,7 +46,9 @@
     boxes > 20 ? ok(`meta model renders (${boxes} boxes)`) : bad(`meta model too sparse (${boxes} boxes)`);
   }
 
-  // 1c. META palette: green body, white eyes, black jumpsuit — no blue/purple
+  // 1c. META palette (pixel-sampled from meta.jpg): lime #c4d41c body,
+  // beige #cfcbbf face/hands, black #272125 suit, olive #96a117 shade,
+  // yellow-green #bfe05e glow — no blue/purple, no white eyes
   if (metaDef) {
     const toHex = (c) => ("000000" + c.toString(16)).slice(-6);
     const hex = (c) => toHex(metaDef.colors[c]);
@@ -56,9 +58,10 @@
       const r = (v >> 16) & 255, g = (v >> 8) & 255, b = v & 255;
       if (b > r * 1.25 && b > g * 1.25) badColors.push(`${key}=#${hex(key)}`);
     }
-    hex("head") === "c5d41d" && hex("eye") === "ffffff" && hex("body") === "272125" && hex("dark") === "272125"
-      ? ok(`meta palette exact (green #${hex("head")}, white eyes #${hex("eye")}, black suit #${hex("body")})`)
-      : bad(`meta palette wrong (head #${hex("head")}, eyes #${hex("eye")}, body #${hex("body")})`);
+    hex("head") === "c4d41c" && hex("visor") === "cfcbbf" && hex("body") === "272125" && hex("belt") === "96a117" && hex("glow") === "bfe05e"
+      ? ok(`meta palette exact (lime #${hex("head")}, beige #${hex("visor")}, black suit #${hex("body")}, olive #${hex("belt")}, glow #${hex("glow")})`)
+      : bad(`meta palette wrong (head #${hex("head")}, visor #${hex("visor")}, body #${hex("body")})`);
+    hex("eye") !== "ffffff" ? ok("no white eyes (the photo has a black visor strip)") : bad("white eyes present");
     badColors.length === 0 ? ok("no blue/purple in the meta palette") : bad(`blue-ish colors: ${badColors.join(", ")}`);
   }
 
