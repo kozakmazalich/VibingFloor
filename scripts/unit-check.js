@@ -255,6 +255,16 @@
     ? ok("laser misses beyond its reach")
     : bad(`laser hit beyond reach (impulse ${b.vel.length().toFixed(1)})`);
 
+  // Directional fire: the laser must NOT lock onto a target off to the side
+  // (it is a straight beam along the facing, not a homing shot).
+  b.reset();
+  b.pos.set(p1s.x, 0, p1s.z - 3.0); // 3 units to the SIDE of the beam line
+  a.spearCooldown = 0;
+  a.triggerSpear(b, fx2, null);
+  b.vel.length() < 1
+    ? ok("laser does not auto-aim at a sideways target")
+    : bad(`laser locked onto a sideways target (impulse ${b.vel.length().toFixed(1)})`);
+
   a.dispose();
   b.dispose();
 
