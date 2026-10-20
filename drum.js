@@ -149,9 +149,12 @@ export function showPrizeDrum(onComplete, options = {}) {
   startAngle = ((drumGroup.rotation.x % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
   drumGroup.rotation.x = startAngle;
 
-  // Panel `i` sits at angle `-i * sliceAngle` in local space.
-  // Rotating drumGroup.rotation.x to `+i * sliceAngle` brings panel `i` directly facing +Z (camera).
-  const targetMod = (selectedTierIndex * sliceAngle) % (Math.PI * 2);
+  // Panel `i` sits at local angle `-i * sliceAngle` in the YZ plane. A drum
+  // rotation of `theta` moves a point at angle `a` to `a - theta`, so the
+  // panel reaches the +Z selection window exactly at `theta = -i * sliceAngle`.
+  // (The old `+i * sliceAngle` target stopped the drum on a gap — the win card
+  // then popped out of nowhere.)
+  const targetMod = ((-selectedTierIndex * sliceAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
   let delta = targetMod - startAngle;
   if (delta < 0) delta += Math.PI * 2;
 
@@ -354,7 +357,11 @@ function initPrizeDrumResources() {
 
     mesh.position.y = Math.sin(angle) * DRUM_RADIUS;
     mesh.position.z = Math.cos(angle) * DRUM_RADIUS;
-    mesh.rotation.x = angle;
+    // The outward radial direction at this position is (0, sin a, cos a).
+    // Rotating the plane by -angle maps its +Z normal exactly there, so every
+    // slat faces OUT (the previous +angle flipped the top/bottom/side slats
+    // inward and the backface culling hid or mirrored their numbers).
+    mesh.rotation.x = -angle;
 
     drumGroup.add(mesh);
     panelItems.push({ mesh, mat, tier, index: i });

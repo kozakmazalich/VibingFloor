@@ -11,6 +11,27 @@
   const amounts = new Set(PRIZE_TIERS.map((t) => t.amount));
   let won = null;
   let completed = false;
+
+  // Geometry regression: for EVERY tier, the drum's stop angle must bring
+  // that tier's panel exactly to the +Z selection window (not a gap).
+  // Replicates drum.js math: panel i sits at local angle a = -i*s;
+  // drum rotation theta moves a point at angle a to (a - theta); the window
+  // is at angle 0, so theta_target = -i*s (mod 2PI).
+  {
+    const count = PRIZE_TIERS.length;
+    const s = (Math.PI * 2) / count;
+    let badStops = 0;
+    for (let i = 0; i < count; i++) {
+      const theta = ((-i * s) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      const a = -i * s;
+      const worldAngle = ((a - theta) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+      if (Math.abs(worldAngle) > 1e-6) badStops++;
+    }
+    badStops === 0
+      ? ok(`stop angle lands every tier exactly on the window (${count} tiers)`)
+      : bad(`${badStops} tiers would stop off-window`);
+  }
+
   showPrizeDrum(
     (amount) => {
       won = amount;
