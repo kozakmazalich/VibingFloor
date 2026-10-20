@@ -15,6 +15,7 @@ const startMenuEl = document.getElementById("start-menu");
 const pauseMenuEl = document.getElementById("pause-menu");
 const winOverlayEl = document.getElementById("win-overlay");
 const inGameHudEl = document.getElementById("in-game-hud");
+const touchUiEl = document.getElementById("touch-ui");
 
 // Online 1V1 panel (PeerJS)
 const onlineMenuEl = document.getElementById("online-menu");
@@ -236,6 +237,12 @@ controls.maxDistance = 45;
 controls.maxPolarAngle = Math.PI / 2 - 0.08; // Don't orbit below ground
 controls.autoRotate = true;
 controls.autoRotateSpeed = 0.55;
+// Mobile: a two-finger gesture should ALSO rotate the camera (pinch still
+// zooms). The OrbitControls default (two fingers = dolly + pan) made trying
+// to rotate the view zoom/pan instead, which felt broken on a phone.
+if (isTouchDevice()) {
+  controls.touches.TWO = THREE.TOUCH.DOLLY_ROTATE;
+}
 
 // 5. High-Impact Cyber Arena Lighting
 const ambientLight = new THREE.AmbientLight(0x10152a, 1.4);
@@ -543,9 +550,11 @@ const game = new Game(scene, camera, {
     if (outcome.winnerId === 1) {
       // Player won -> spin the prize drum first, then reveal the win screen
       game.drumActive = true;
+      if (touchUiEl) touchUiEl.style.display = "none"; // keep the spin clean on mobile
       showPrizeDrum(
         (wonAmount) => {
           game.drumActive = false;
+          if (touchUiEl) touchUiEl.style.display = "";
           winSubtitleEl.textContent =
             (outcome.subText || "") + "  ·  +" + wonAmount.toLocaleString() + " $VIB";
           winOverlayEl.classList.remove("hidden");
@@ -578,6 +587,8 @@ const game = new Game(scene, camera, {
 // Debug/test hook: lets CDP check scripts inspect the running game.
 window.game = game;
 window.__renderer = renderer;
+window.__camera = camera;
+window.__controls = controls;
 
 // Wire the network into the game — all online sends (snapshots, input,
 // restart requests) go through game.net.

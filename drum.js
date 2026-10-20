@@ -307,7 +307,7 @@ function initPrizeDrumResources() {
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 0, 11.5);
+  fitDrumToAspect();
 
   rootGroup = new THREE.Group();
   scene.add(rootGroup);
@@ -845,8 +845,20 @@ function onWindowResize() {
   if (!camera) return;
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+  fitDrumToAspect();
 
   if (standaloneRenderer) {
     standaloneRenderer.setSize(window.innerWidth, window.innerHeight);
   }
+}
+
+// Pull the camera back on narrow (portrait) screens so the whole drum —
+// panels, rims, pointer cones and the win card — stays inside the frame.
+// On wide screens the original 11.5 framing is kept.
+function fitDrumToAspect() {
+  if (!camera) return;
+  const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+  const frameHalfWidth = (DRUM_WIDTH + 2.4) / 2; // + rims, pointers, margin
+  const neededDist = frameHalfWidth / Math.tan((camera.fov * Math.PI) / 360) / aspect;
+  camera.position.set(0, 0, Math.max(11.5, DRUM_RADIUS + neededDist));
 }
