@@ -8,6 +8,7 @@ import { audio } from "./audio.js";
 import { isTouchDevice, setupTouchControls } from "./touch.js";
 import { walletState, signWinMessage } from "./wallet.js";
 import { Net } from "./net.js";
+import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -539,7 +540,22 @@ const game = new Game(scene, camera, {
       winAvatarEl.style.display = "none";
     }
 
-    winOverlayEl.classList.remove("hidden");
+    if (outcome.winnerId === 1) {
+      // Player won -> spin the prize drum first, then reveal the win screen
+      game.drumActive = true;
+      showPrizeDrum(
+        (wonAmount) => {
+          game.drumActive = false;
+          winSubtitleEl.textContent =
+            (outcome.subText || "") + "  ·  +" + wonAmount.toLocaleString() + " $VIB";
+          winOverlayEl.classList.remove("hidden");
+        },
+        { renderer, manualLoop: true }
+      );
+    } else {
+      // Loss or draw -> current behavior, no drum
+      winOverlayEl.classList.remove("hidden");
+    }
   },
 
   onScreenShake: (amount) => {
@@ -561,6 +577,7 @@ const game = new Game(scene, camera, {
 
 // Debug/test hook: lets CDP check scripts inspect the running game.
 window.game = game;
+window.__renderer = renderer;
 
 // Wire the network into the game — all online sends (snapshots, input,
 // restart requests) go through game.net.
@@ -791,6 +808,7 @@ btnHudPauseEl.addEventListener("click", () => {
 });
 
 btnHudRestartEl.addEventListener("click", () => {
+  if (game.drumActive) return; // don't restart mid-spin
   audio.playClick();
   game.restartRound();
 });
@@ -875,6 +893,9 @@ function animate() {
 
   // Render scene
   renderer.render(scene, camera);
+
+  // Prize drum overlay (only draws while active — driven by this loop)
+  updatePrizeDrum();
 
   // Revert shake offset so controls stay grounded
   if (screenShakeAmount > 0.001) {

@@ -185,9 +185,9 @@ export class Game {
         e.preventDefault();
       }
 
-      // Quick restart with R
+      // Quick restart with R (blocked while the prize drum is spinning)
       if (e.code === "KeyR") {
-        if (this.state === "playing" || this.state === "round_over" || this.state === "paused") {
+        if (!this.drumActive && (this.state === "playing" || this.state === "round_over" || this.state === "paused")) {
           this.restartRound();
         }
       }
