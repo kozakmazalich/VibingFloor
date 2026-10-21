@@ -11,6 +11,7 @@ import { Net } from "./net.js";
 import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
 import { openProfile, wireProfileButtons } from "./profile.js";
 import { addWin } from "./staking.js";
+import { updateStakingVault } from "./stakingVault.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -786,14 +787,14 @@ btnMenuSoundEl.addEventListener("click", () => {
 const btnMenuProfileEl = document.getElementById("btn-menu-profile");
 btnMenuProfileEl.addEventListener("click", () => {
   audio.playClick();
-  openProfile();
+  openProfile(renderer);
 });
 const btnWinProfileEl = document.getElementById("btn-win-profile");
 if (btnWinProfileEl) {
   btnWinProfileEl.addEventListener("click", () => {
     audio.playClick();
     winOverlayEl.classList.add("hidden");
-    openProfile();
+    openProfile(renderer);
   });
 }
 wireProfileButtons();
@@ -926,6 +927,9 @@ function animate() {
 
   // Prize drum overlay (only draws while active — driven by this loop)
   updatePrizeDrum();
+
+  // Embedded staking vault (renders into #staking-viewport when active)
+  updateStakingVault();
 
   // Revert shake offset so controls stay grounded
   if (screenShakeAmount > 0.001) {

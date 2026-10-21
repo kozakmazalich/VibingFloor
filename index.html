@@ -629,10 +629,10 @@
       </div>
     </div>
 
-    <!-- Demo Profile / Staking Vault overlay -->
+    <!-- Profile / Staking Vault overlay -->
     <div id="profile-overlay" class="ui-overlay profile-overlay hidden">
       <div class="profile-card">
-        <div class="profile-header">
+        <div class="profile-header profile-panel">
           <h2>◈ PILOT PROFILE</h2>
           <span class="profile-demo-tag">DEMO MODE</span>
           <button id="btn-profile-close" class="profile-close" aria-label="Close">✕</button>
@@ -640,7 +640,7 @@
 
         <div class="profile-grid">
           <!-- LEFT: robot avatar + stats + actions -->
-          <aside class="profile-left">
+          <aside class="profile-left profile-panel">
             <div class="avatar-frame cyan profile-avatar-frame">
               <img id="profile-avatar" src="assets/robot1_portrait.png" alt="Viber" class="showcase-avatar" />
             </div>
@@ -679,10 +679,10 @@
             </div>
           </aside>
 
-          <!-- CENTER: reactive 3D coin pile -->
-          <section class="profile-center">
-            <div class="profile-coins-title">STAKED VIB VAULT</div>
-            <canvas id="profile-coins" width="340" height="220" aria-label="Staked VIB coin pile"></canvas>
+          <!-- RIGHT: embedded 3D sphere vault (renders into the main canvas) -->
+          <section class="profile-right profile-panel">
+            <div class="profile-coins-title">STAKED VIB REACTOR</div>
+            <div id="staking-viewport" class="staking-viewport" aria-label="3D staking vault"></div>
             <div class="profile-coins-sub">
               <span id="profile-cards-count" class="tabular">0</span> RWA CARDS CLAIMED
             </div>
@@ -690,8 +690,10 @@
         </div>
 
         <!-- BOTTOM: won stock cards -->
-        <div class="profile-cards-title">// WON RWA EQUITY CARDS</div>
-        <div id="profile-cards" class="profile-cards"></div>
+        <div class="profile-bottom profile-panel">
+          <div class="profile-cards-title">// WON RWA EQUITY CARDS</div>
+          <div id="profile-cards" class="profile-cards"></div>
+        </div>
       </div>
     </div>
 
