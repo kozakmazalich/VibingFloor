@@ -126,7 +126,7 @@ function onNextDay() {
   render();
 }
 
-export function openProfile(renderer) {
+export function openProfile() {
   els.overlay = document.getElementById("profile-overlay");
   els.avatar = document.getElementById("profile-avatar");
   els.wins = document.getElementById("profile-wins");
@@ -139,6 +139,7 @@ export function openProfile(renderer) {
   els.claimBtn = document.getElementById("btn-demo-claim");
   els.stakeBtn = document.getElementById("btn-demo-stake");
   els.nextBtn = document.getElementById("btn-demo-nextday");
+  els.vaultCanvas = document.getElementById("staking-canvas");
 
   if (!els.overlay) return;
 
@@ -150,14 +151,14 @@ export function openProfile(renderer) {
   render();
   els.overlay.classList.remove("hidden");
 
-  // Start the embedded 3D reactor (renders into #staking-viewport).
+  // The 3D reactor runs on its own canvas + its own animation loop.
   showStakingVault(
     (res) => {
       claimBusy = false;
       addClaimedStock(res);
       render();
     },
-    { renderer }
+    { canvas: els.vaultCanvas }
   );
 }
 

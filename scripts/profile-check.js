@@ -16,16 +16,36 @@
   const overlay = document.getElementById("profile-overlay");
   !overlay.classList.contains("hidden") ? ok("profile overlay opens") : bad("profile overlay hidden");
 
-  const viewport = document.getElementById("staking-viewport");
-  const rect = viewport.getBoundingClientRect();
+  const canvasEl = document.getElementById("staking-canvas");
+  const rect = canvasEl.getBoundingClientRect();
   rect.width > 50 && rect.height > 50
-    ? ok(`3D vault viewport present (${rect.width.toFixed(0)}x${rect.height.toFixed(0)})`)
-    : bad(`viewport missing/too small (${rect.width}x${rect.height})`);
+    ? ok(`3D vault canvas present (${rect.width.toFixed(0)}x${rect.height.toFixed(0)})`)
+    : bad(`canvas missing/too small (${rect.width}x${rect.height})`);
 
   const dbg0 = getVaultDebug();
   dbg0.active && dbg0.phase === "IDLE"
     ? ok(`vault live (phase=${dbg0.phase}, spheres=${dbg0.sphereCount})`)
     : bad(`vault not active (${JSON.stringify(dbg0)})`);
+
+  // Pixel proof: render one frame synchronously and verify the sphere
+  // cluster actually draws coloured pixels into the canvas.
+  {
+    const { updateStakingVault } = await import("/src/stakingVault.js");
+    updateStakingVault(performance.now());
+    const gl = canvasEl.getContext("webgl2") || canvasEl.getContext("webgl");
+    const W = canvasEl.width, H = canvasEl.height;
+    const px = new Uint8Array(W * H * 4);
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    let colored = 0;
+    for (let i = 0; i < W * H; i++) {
+      const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2];
+      if (r > 60 || g > 60 || b > 60) colored++;
+    }
+    const pct = (colored / (W * H) * 100).toFixed(1);
+    colored / (W * H) > 0.015
+      ? ok(`3D sphere cluster renders (${pct}% coloured pixels)`)
+      : bad(`canvas looks empty (${pct}% coloured pixels)`);
+  }
 
   const avatar = document.getElementById("profile-avatar").src;
   /assets\/(robot[1-5]_portrait\.png|meta\.jpg)$/.test(avatar)

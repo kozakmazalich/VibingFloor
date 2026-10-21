@@ -1,13 +1,13 @@
 /**
- * STAKING VAULT — embedded 3D reactor for the profile page.
+ * STAKING VAULT — self-contained 3D reactor for the profile page.
  *
- * A glowing cluster of spheres represents the staked $VIB. It sits in the
- * RIGHT column of the profile page and is rendered INTO THE MAIN CANVAS via
- * the shared WebGLRenderer (autoClear=false + clearDepth + scissored
- * viewport, exactly like drum.js). No second canvas, no second context.
+ * A glowing cluster of spheres represents the staked $VIB. It renders into
+ * its OWN canvas (passed in via options.canvas) with its own WebGLRenderer
+ * and its own animation loop — completely independent from the game scene,
+ * so it is always clearly visible inside the profile page.
  *
- * Reactive: the cluster reads getStakeState().totalStaked every frame —
- * more staked VIB = more / larger spheres, less = fewer / smaller.
+ * Reactive: reads getStakeState().totalStaked every frame — more staked VIB
+ * = more / larger spheres, less = fewer / smaller.
  *
  * triggerBreachAndClaim(): the cluster implodes into the center, a flash,
  * then a tier-coloured RWA stock card pops out (ticker + company + $USD).
@@ -43,8 +43,8 @@ const BASE_SPHERES = 6;
 
 // Module state
 let isActive = false;
+let canvas = null;
 let renderer = null;
-let viewportEl = null;
 let scene = null;
 let camera = null;
 let rootGroup = null;
@@ -59,10 +59,10 @@ let particleVelocities = null;
 let particleColors = null;
 let particleMat = null;
 
-let clusterSpheres = []; // { mesh, home: Vector3, phase }
+let clusterSpheres = []; // { mesh, home: Vector3 }
 let targetCount = -1;
 let targetScale = -1;
-let buildPop = 1; // pop-in lerp while the cluster rebuilds
+let buildPop = 1;
 let animPhase = "IDLE"; // IDLE | IMPLODING | REVEALING | FADING
 let phaseStartTime = 0;
 let lastFrameTime = 0;
@@ -70,18 +70,21 @@ let selectedStock = null;
 let currentStakeAmount = 0;
 let currentHoldHours = 24;
 let onCompleteCb = null;
+let rafId = 0;
+let onResizeBound = null;
 
 // Cached geometry/materials/textures
 const sphereGeo = new THREE.SphereGeometry(1, 20, 16);
 const clusterMatCache = new Map();
 const textureCache = new Map();
+const ZERO_V3 = new THREE.Vector3(0, 0, 0);
 
 /* ================= public API ================= */
 
 /**
- * Activate the reactor and start rendering into the viewport div.
+ * Activate the reactor on the given canvas.
  * @param {Function} callback(result) — { stock, usdValue } after a claim.
- * @param {{ stakeAmount?: number, holdHours?: number, renderer?: THREE.WebGLRenderer, viewport?: HTMLElement }} options
+ * @param {{ stakeAmount?: number, holdHours?: number, canvas?: HTMLCanvasElement }} options
  */
 export function showStakingVault(callback, options = {}) {
   if (isActive) return;
@@ -89,31 +92,29 @@ export function showStakingVault(callback, options = {}) {
   onCompleteCb = typeof callback === "function" ? callback : () => {};
   currentStakeAmount = options.stakeAmount ?? getStakeState().totalStaked;
   currentHoldHours = options.holdHours ?? getStakeState().holdHours;
-  renderer = options.renderer || null;
-  viewportEl = options.viewport || document.getElementById("staking-viewport");
+  canvas = options.canvas || null;
 
   initResources();
   resetIdle();
-  targetCount = -1; // force a rebuild on the first frame
+  targetCount = -1;
   animPhase = "IDLE";
   lastFrameTime = performance.now();
   phaseStartTime = lastFrameTime;
+
+  const loop = (now) => {
+    if (!isActive) return;
+    rafId = requestAnimationFrame(loop);
+    updateStakingVault(now);
+  };
+  rafId = requestAnimationFrame(loop);
 }
 
-/** Deactivate (profile closed) — no more rendering. */
+/** Deactivate (profile closed) — stop rendering. */
 export function hideStakingVault() {
   isActive = false;
   onCompleteCb = null;
-}
-
-/** Debug/test hook: { active, phase, sphereCount, targetCount }. */
-export function getVaultDebug() {
-  return {
-    active: isActive,
-    phase: animPhase,
-    sphereCount: clusterSpheres.length,
-    targetCount,
-  };
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = 0;
 }
 
 /** The sphere cluster implodes, a flash, then the stock card reveals. */
@@ -127,7 +128,12 @@ export function triggerBreachAndClaim() {
   phaseStartTime = performance.now();
 }
 
-/** Advance the animation one frame and render into the viewport. */
+/** Debug/test hook: { active, phase, sphereCount, targetCount }. */
+export function getVaultDebug() {
+  return { active: isActive, phase: animPhase, sphereCount: clusterSpheres.length, targetCount };
+}
+
+/** Advance the animation one frame (also used by the internal RAF). */
 export function updateStakingVault(now = performance.now()) {
   if (!isActive) return;
   const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
@@ -148,10 +154,11 @@ export function updateStakingVault(now = performance.now()) {
 
   if (animPhase === "IDLE") {
     clusterGroup.rotation.y += dt * 0.22;
+    clusterGroup.rotation.x += dt * 0.07;
     clusterGroup.position.y = Math.sin(now * 0.0016) * 0.08;
     const pop = easeOutBack(Math.min(1, buildPop));
     clusterGroup.scale.setScalar(pop);
-    if (flashMesh.visible) flashMesh.visible = false;
+    flashMesh.visible = false;
   } else if (animPhase === "IMPLODING") {
     const t = Math.min(elapsed / 0.9, 1.0);
     clusterGroup.rotation.y += dt * (0.22 + t * 9);
@@ -162,14 +169,13 @@ export function updateStakingVault(now = performance.now()) {
     if (t >= 1.0) {
       animPhase = "REVEALING";
       phaseStartTime = now;
-      triggerReveal(now);
+      triggerReveal();
     }
   } else if (animPhase === "REVEALING") {
-    clusterGroup.rotation.y += dt * 0.1;
     const t = Math.min(elapsed / 0.6, 1.0);
-    const pop = easeOutBack(t);
-    cardMesh.scale.setScalar(Math.max(0.001, pop));
+    cardMesh.scale.setScalar(Math.max(0.001, easeOutBack(t)));
     cardMesh.position.z = 0.1 + Math.min(elapsed * 1.2, 0.5);
+    cardMesh.rotation.y = Math.sin(elapsed * 1.2) * 0.06;
     updateParticles(dt, elapsed);
     if (elapsed >= 3.2) {
       animPhase = "FADING";
@@ -185,12 +191,10 @@ export function updateStakingVault(now = performance.now()) {
     }
   }
 
-  renderVault();
+  renderFrame();
 }
 
 /* ================= internals ================= */
-
-const ZERO_V3 = new THREE.Vector3(0, 0, 0);
 
 function getClusterMat(color) {
   if (!clusterMatCache.has(color)) {
@@ -204,9 +208,7 @@ function rebuildCluster(count, scale) {
   for (const s of clusterSpheres) clusterGroup.remove(s.mesh);
   clusterSpheres = [];
 
-  // Evenly distributed points on a sphere (fibonacci lattice), then a
-  // deterministic radial jitter so rebuilds keep a similar silhouette.
-  const R = 1.35 + scale * 0.7;
+  const R = 1.5 + scale * 0.6;
   const golden = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < count; i++) {
     const y = i === 0 ? 1 : 1 - (i / (count - 1)) * 2;
@@ -220,9 +222,9 @@ function rebuildCluster(count, scale) {
     );
     const mesh = new THREE.Mesh(sphereGeo, getClusterMat(CLUSTER_COLORS[i % CLUSTER_COLORS.length]));
     mesh.position.copy(pos);
-    mesh.scale.setScalar((0.16 + ((i * 13) % 10) / 10 * 0.2) * scale);
+    mesh.scale.setScalar((0.24 + ((i * 13) % 10) / 10 * 0.3) * scale);
     clusterGroup.add(mesh);
-    clusterSpheres.push({ mesh, home: pos.clone(), phase: (i * 0.37) % 1 });
+    clusterSpheres.push({ mesh, home: pos.clone() });
   }
 }
 
@@ -244,9 +246,7 @@ function finishAndCleanup() {
   const usdValue = selectedStock ? selectedStock.baseUsd * stakeMult * holdMult : 0;
 
   const cb = onCompleteCb;
-  if (cb) {
-    cb({ stock: selectedStock, usdValue });
-  }
+  if (cb) cb({ stock: selectedStock, usdValue });
 
   resetIdle();
   animPhase = "IDLE";
@@ -283,17 +283,11 @@ function easeOutBack(t) {
 function initResources() {
   if (scene) return;
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x05060f);
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
 
   rootGroup = new THREE.Group();
   scene.add(rootGroup);
-
-  // Backdrop covering the viewport frustum
-  const bgGeo = new THREE.PlaneGeometry(60, 40);
-  const bgMat = new THREE.MeshBasicMaterial({ color: 0x05060f });
-  const bgMesh = new THREE.Mesh(bgGeo, bgMat);
-  bgMesh.position.z = -3;
-  rootGroup.add(bgMesh);
 
   clusterGroup = new THREE.Group();
   rootGroup.add(clusterGroup);
@@ -320,9 +314,44 @@ function initResources() {
   rootGroup.add(cardMesh);
 
   initParticles();
+  initRenderer();
 }
 
-function triggerReveal(now) {
+function initRenderer() {
+  if (!canvas) return;
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  sizeRenderer();
+
+  if (!onResizeBound) {
+    onResizeBound = () => sizeRenderer();
+    window.addEventListener("resize", onResizeBound);
+  }
+}
+
+function sizeRenderer() {
+  if (!renderer || !canvas) return;
+  const w = canvas.clientWidth || 320;
+  const h = canvas.clientHeight || 220;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / Math.max(1, h);
+  camera.position.set(0, 0.3, fitDistance(camera.aspect));
+  camera.lookAt(0, 0.3, 0);
+  camera.updateProjectionMatrix();
+}
+
+function fitDistance(aspect) {
+  // Cluster radius ~2.2 * scale; the reveal card half-width is 1.7.
+  const need = 2.3 / Math.tan((45 * Math.PI) / 360) / Math.max(0.2, aspect);
+  return Math.max(7.2, need + 0.6);
+}
+
+function renderFrame() {
+  if (!renderer || !scene) return;
+  renderer.render(scene, camera);
+}
+
+function triggerReveal() {
   flashMesh.scale.setScalar(0.2);
   flashMesh.visible = true;
   clusterGroup.visible = false;
@@ -400,12 +429,12 @@ function getCardTexture(stock, hex, usdValue) {
   const key = `${stock.ticker}_${usdValue.toFixed(2)}`;
   if (textureCache.has(key)) return textureCache.get(key);
 
-  const canvas = document.createElement("canvas");
-  canvas.width = 768;
-  canvas.height = 1024;
-  const ctx = canvas.getContext("2d");
-  const w = canvas.width;
-  const h = canvas.height;
+  const canvasTex = document.createElement("canvas");
+  canvasTex.width = 768;
+  canvasTex.height = 1024;
+  const ctx = canvasTex.getContext("2d");
+  const w = canvasTex.width;
+  const h = canvasTex.height;
 
   ctx.fillStyle = "#0b1026";
   ctx.fillRect(0, 0, w, h);
@@ -444,47 +473,9 @@ function getCardTexture(stock, hex, usdValue) {
   ctx.font = '700 34px "Courier New", monospace';
   ctx.fillText("RWA EQUITY CREDITED", w / 2, 800);
 
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(canvasTex);
   tex.anisotropy = 4;
   tex.needsUpdate = true;
   textureCache.set(key, tex);
   return tex;
-}
-
-/* ================= viewport rendering ================= */
-
-function renderVault() {
-  if (!renderer || !viewportEl || !scene) return;
-  const rect = viewportEl.getBoundingClientRect();
-  if (rect.width < 4 || rect.height < 4) return;
-
-  const dpr = renderer.getPixelRatio();
-  const canvas = renderer.domElement;
-  const px = Math.round(rect.left * dpr);
-  const w = Math.round(rect.width * dpr);
-  const h = Math.round(rect.height * dpr);
-  // viewport y is measured from the BOTTOM of the canvas
-  const vy = Math.round(canvas.height - (rect.top + rect.height) * dpr);
-
-  camera.aspect = rect.width / rect.height;
-  camera.position.set(0, 0.25, fitDistance(camera.aspect));
-  camera.lookAt(0, 0.25, 0);
-  camera.updateProjectionMatrix();
-
-  const prevAutoClear = renderer.autoClear;
-  renderer.autoClear = false;
-  renderer.setViewport(px, vy, w, h);
-  renderer.setScissor(px, vy, w, h);
-  renderer.setScissorTest(true);
-  renderer.clearDepth();
-  renderer.render(scene, camera);
-  renderer.setScissorTest(false);
-  renderer.setViewport(0, 0, canvas.width, canvas.height);
-  renderer.autoClear = prevAutoClear;
-}
-
-function fitDistance(aspect) {
-  // Cluster radius ~2.2 * scale; the reveal card half-width is 1.7.
-  const need = 2.3 / Math.tan((45 * Math.PI) / 360) / Math.max(0.2, aspect);
-  return Math.max(7.2, need + 0.6);
 }
