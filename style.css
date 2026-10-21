@@ -1896,7 +1896,7 @@ body {
 }
 
 .profile-card {
-  width: min(900px, 100%);
+  width: min(1080px, 100%);
   max-height: calc(100vh - 28px);
   overflow-y: auto;
   display: flex;
@@ -1953,7 +1953,7 @@ body {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: 290px 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 14px;
 }
 
@@ -2037,11 +2037,12 @@ body {
   text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
 }
 
-/* Dedicated canvas for the 3D vault — opaque, always on top of the panel. */
+/* Dedicated canvas for the 3D vault — opaque, always on top of the panel.
+   16:9 like the original full-screen reference so the reactor fills it. */
 .staking-canvas {
   width: 100%;
-  max-width: 460px;
-  aspect-ratio: 3 / 2;
+  max-width: 680px;
+  aspect-ratio: 16 / 9;
   display: block;
   border: 1px solid rgba(0, 229, 255, 0.45);
   border-radius: 14px;

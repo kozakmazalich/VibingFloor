@@ -341,10 +341,12 @@ function initVaultResources() {
   reactorGroup = new THREE.Group();
   rootGroup.add(reactorGroup);
 
-  // Central Plasma Sphere Core (plain solid orb — colour driven by the stake)
+  // Central Plasma Sphere Core (exact reference look: glowing wireframe cage
+  // over the dark inner core — colour driven by the staked amount)
   const sphereGeo = new THREE.SphereGeometry(1.4, 32, 32);
   centralSphereMat = new THREE.MeshBasicMaterial({
     color: COLORS.cyanNum,
+    wireframe: true,
     transparent: true,
     opacity: 0.85,
   });
