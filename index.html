@@ -218,6 +218,14 @@
             <span class="btn-text">ONLINE 1V1</span>
             <span class="key-tag">P2P</span>
           </button>
+          <button id="btn-menu-profile" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">◈</span>
+            <span class="btn-text">PROFILE · STAKING DEMO</span>
+          </button>
           <button id="btn-menu-sound" class="cyber-btn cyber-btn-secondary">
             <span class="btn-corner tl"></span>
             <span class="btn-corner tr"></span>
@@ -610,6 +618,65 @@
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Demo Profile / Staking Vault overlay -->
+    <div id="profile-overlay" class="ui-overlay profile-overlay hidden">
+      <div class="profile-card">
+        <div class="profile-header">
+          <h2>◈ PILOT PROFILE</h2>
+          <span class="profile-demo-tag">DEMO MODE</span>
+          <button id="btn-profile-close" class="profile-close" aria-label="Close">✕</button>
+        </div>
+
+        <div class="profile-robot">
+          <div class="avatar-frame cyan">
+            <img id="profile-avatar" src="assets/robot1_portrait.png" alt="Viber" class="showcase-avatar" />
+          </div>
+          <div class="profile-robot-info">
+            <div id="profile-name" class="profile-robot-name">CRIMSON MINER</div>
+            <div class="profile-robot-role">VIBER PILOT // VAULT ACCESS</div>
+          </div>
+        </div>
+
+        <div class="profile-stats">
+          <div class="stat">
+            <label>$VIB BALANCE</label>
+            <div id="profile-vib" class="stat-value tabular">0</div>
+          </div>
+          <div class="stat">
+            <label>STAKED $VIB</label>
+            <div id="profile-staked" class="stat-value tabular">0</div>
+          </div>
+          <div class="stat">
+            <label>HOLD TIME</label>
+            <div id="profile-hold" class="stat-value tabular">24h</div>
+            <div id="profile-hold-tier" class="stat-tier">x1.0</div>
+          </div>
+          <div class="stat">
+            <label>RWA CARDS</label>
+            <div id="profile-cards-count" class="stat-value tabular">0</div>
+          </div>
+        </div>
+
+        <div class="profile-actions">
+          <button id="btn-demo-claim" class="cyber-btn cyber-btn-primary">
+            <span class="btn-icon">💰</span>
+            <span class="btn-text">CLAIM +1,000,000 $VIB</span>
+          </button>
+          <button id="btn-demo-nextday" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-icon">☀</span>
+            <span class="btn-text">NEXT DAY ➜</span>
+          </button>
+          <button id="btn-demo-stake" class="cyber-btn cyber-btn-wallet">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">STAKE 1,000,000 $VIB</span>
+          </button>
+        </div>
+
+        <div class="profile-cards-title">// WON RWA EQUITY CARDS</div>
+        <div id="profile-cards" class="profile-cards"></div>
       </div>
     </div>
 

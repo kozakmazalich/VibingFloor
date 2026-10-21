@@ -9,6 +9,7 @@ import { isTouchDevice, setupTouchControls } from "./touch.js";
 import { walletState, signWinMessage } from "./wallet.js";
 import { Net } from "./net.js";
 import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
+import { openProfile, wireProfileButtons } from "./profile.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -778,6 +779,15 @@ if (onlineCodeInputEl) {
 btnMenuSoundEl.addEventListener("click", () => {
   handleSoundToggle();
 });
+
+// Demo profile / staking vault screen
+const btnMenuProfileEl = document.getElementById("btn-menu-profile");
+btnMenuProfileEl.addEventListener("click", () => {
+  audio.playClick();
+  const meta = CHAR_TYPES[game.selectedChar] || CHAR_TYPES.robot1_jpg;
+  openProfile({ name: meta.name, portrait: meta.portrait });
+});
+wireProfileButtons();
 
 // UI Event Listeners: Pause Menu
 btnPauseResumeEl.addEventListener("click", () => {
