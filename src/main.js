@@ -737,6 +737,7 @@ diffTabEls.forEach((btn, i) => {
 selectDifficulty("normal", true);
 
 // UI Event Listeners: Start Menu
+// INITIALIZE BATTLE starts a match and never opens the profile.
 btnMenuPlayEl.addEventListener("click", () => {
   audio.playClick();
   game.startGame();
@@ -782,11 +783,12 @@ btnMenuSoundEl.addEventListener("click", () => {
   handleSoundToggle();
 });
 
-// Demo profile / staking vault screen (menu + win screen)
+// PROFILE · STAKING DEMO opens the profile page and nothing else.
+// (The win-screen PROFILE button does the same.)
 const btnMenuProfileEl = document.getElementById("btn-menu-profile");
 btnMenuProfileEl.addEventListener("click", () => {
   audio.playClick();
-  startMenuEl.classList.add("hidden"); // the profile is its own page
+  startMenuEl.classList.add("hidden");
   openProfile();
 });
 const btnWinProfileEl = document.getElementById("btn-win-profile");

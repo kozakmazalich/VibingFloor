@@ -1,22 +1,25 @@
 /**
  * PROFILE PAGE — pilot profile with the staking demo.
  *
- * Desktop layout: LEFT = random robot portrait + WINS / $VIB / STAKED / hold
- * stats + CLAIM / STAKE / NEXT DAY buttons; RIGHT = the embedded 3D sphere
- * vault (src/stakingVault.js renders into #staking-viewport via the shared
- * renderer); BOTTOM (full width) = grid of claimed RWA stock cards.
- * Mobile: everything stacks vertically.
+ * Desktop: LEFT = portrait + WINS / $VIB / STAKED / hold + CLAIM / STAKE;
+ * RIGHT = the 3D reactor (stakingVault.js draws into #staking-canvas);
+ * BELOW = claimed RWA stock cards. Mobile stacks those blocks.
  *
  * Single source of truth: src/staking.js.
+ * CLAIM only credits $VIB. The safe opens from the vault's own button,
+ * which stakingVault.js mounts under the reactor canvas.
  */
 import {
   getStakeState,
   claimReward,
   stakeVIB,
+  topUpVIB,
   advanceDay,
+  burnStake,
   addClaimedStock,
+  updateLatestClaimedStock,
 } from "./staking.js";
-import { showStakingVault, hideStakingVault, triggerBreachAndClaim } from "./stakingVault.js";
+import { showStakingVault, hideStakingVault } from "./stakingVault.js";
 
 const PORTRAITS = [
   "assets/robot1_portrait.png",
@@ -35,8 +38,13 @@ const TIER_COLORS = {
   LEGENDARY: "#ffd700",
 };
 
+const STAKE_MIN = 1_000_000;
+const STAKE_MAX = 10_000_000;
+const STAKE_STEP = 100_000;
+
 const els = {};
-let claimBusy = false;
+let lastVaultW = 0;
+let lastVaultH = 0;
 
 function fmt(n) {
   return n.toLocaleString("en-US");
@@ -49,10 +57,8 @@ function holdLabel(hours) {
   return `${hours}h`;
 }
 
-function holdTier(hours) {
-  if (hours >= 168) return "x2.0";
-  if (hours >= 72) return "x1.25";
-  return "x1.0";
+function holdTier(luck) {
+  return `x${luck.toFixed(2)}`;
 }
 
 function renderCards(stocks) {
@@ -61,7 +67,7 @@ function renderCards(stocks) {
   if (!stocks.length) {
     const empty = document.createElement("div");
     empty.className = "profile-empty";
-    empty.textContent = "No RWA cards yet — stake, then claim to breach the vault.";
+    empty.textContent = "No RWA cards yet — open the safe under the reactor.";
     els.cards.appendChild(empty);
     return;
   }
@@ -87,43 +93,166 @@ function render() {
   if (els.vib) els.vib.textContent = fmt(s.vibBalance);
   if (els.staked) els.staked.textContent = fmt(s.totalStaked);
   if (els.hold) els.hold.textContent = holdLabel(s.holdHours);
-  if (els.holdTier) els.holdTier.textContent = holdTier(s.holdHours);
+  if (els.holdTier) els.holdTier.textContent = holdTier(s.luckMultiplier);
   if (els.cardsCount) els.cardsCount.textContent = String(s.claimedStocks.length);
-  if (els.claimBtn) {
-    els.claimBtn.disabled = claimBusy;
-    els.claimBtn.classList.toggle("disabled", els.claimBtn.disabled);
-  }
-  if (els.stakeBtn) {
-    els.stakeBtn.disabled = claimBusy || s.vibBalance < 1000000;
-    els.stakeBtn.classList.toggle("disabled", els.stakeBtn.disabled);
-  }
-  if (els.nextBtn) els.nextBtn.disabled = claimBusy;
+  syncStakeSlider(s);
   renderCards(s.claimedStocks);
 }
 
-function onClaim() {
-  if (claimBusy) return;
-  // CLAIM is wired to claimReward(): the +1,000,000 $VIB faucet — and when
-  // there is staked VIB it ALSO triggers the implosion + stock reveal.
-  claimReward();
-  const s = getStakeState();
-  if (s.totalStaked >= 1000000) {
-    claimBusy = true;
-    triggerBreachAndClaim();
+/**
+ * Largest amount the slider can offer: whole steps, never past the vault cap
+ * or the free balance. A second deposit is a top-up into the same vault.
+ */
+function stakeCeiling(s) {
+  const free = Math.max(0, Number(s.vibBalance) || 0);
+  const room = s.totalStaked > 0
+    ? Math.min(free, Math.max(0, STAKE_MAX - s.totalStaked))
+    : Math.min(free, STAKE_MAX);
+  return Math.floor(room / STAKE_STEP) * STAKE_STEP;
+}
+
+function syncStakeSlider(s) {
+  const slider = els.stakeSlider;
+  const max = stakeCeiling(s);
+  const disabled = max < STAKE_MIN;
+  const active = s.totalStaked > 0;
+  if (slider) {
+    slider.min = String(STAKE_MIN);
+    slider.max = String(Math.max(STAKE_MIN, max));
+    slider.step = String(STAKE_STEP);
+    slider.disabled = disabled;
+    let value = Number(slider.value);
+    if (!Number.isFinite(value)) value = Math.min(STAKE_MIN, max);
+    value = Math.round(value / STAKE_STEP) * STAKE_STEP;
+    if (value < STAKE_MIN) value = Math.min(STAKE_MIN, max);
+    if (value > max) value = max;
+    if (!disabled) slider.value = String(value);
+    const span = Math.max(STAKE_MIN, max) - STAKE_MIN;
+    const pct = span > 0 ? ((value - STAKE_MIN) / span) * 100 : 100;
+    slider.style.setProperty("--stake-pct", `${Math.max(0, Math.min(100, pct))}%`);
   }
+  const shown = disabled ? 0 : Number(els.stakeSlider && els.stakeSlider.value) || 0;
+  if (els.stakeValue) els.stakeValue.textContent = fmt(shown);
+  if (els.stakeMax) els.stakeMax.textContent = fmt(Math.max(0, max));
+  if (els.stakeBtn) {
+    els.stakeBtn.disabled = disabled;
+    els.stakeBtn.classList.toggle("disabled", disabled);
+    const label = els.stakeBtn.querySelector(".btn-text");
+    if (label) {
+      label.textContent = disabled
+        ? active
+          ? "VAULT AT MAX CAP"
+          : "STAKE $VIB"
+        : active
+          ? `TOP UP +${fmt(shown)} $VIB`
+          : `STAKE ${fmt(shown)} $VIB`;
+    }
+  }
+}
+
+function selectedStakeAmount() {
+  const raw = els.stakeSlider ? Number(els.stakeSlider.value) : 0;
+  if (!Number.isFinite(raw) || raw < STAKE_MIN) return 0;
+  return raw;
+}
+
+function vaultOptions() {
+  const s = getStakeState();
+  const canvas = els.vaultCanvas;
+  return {
+    canvas,
+    host: canvas ? canvas.parentElement : undefined,
+    stakeAmount: s.totalStaked,
+    holdHours: s.holdHours,
+    pureUpfront: s.pureUpfront,
+    vibBalance: s.vibBalance,
+    showUI: true,
+    onReveal: onCardWon,
+    onInitialStake: (amount) => {
+      if (stakeVIB(amount)) {
+        render();
+        refreshVault();
+      }
+    },
+    onTopUp: (amount) => {
+      if (topUpVIB(amount)) {
+        render();
+        refreshVault();
+      }
+    },
+  };
+}
+
+/** The safe puts the won card into WON RWA EQUITY as soon as it is drawn. */
+function onCardWon(res, meta) {
+  if (meta && meta.update) {
+    updateLatestClaimedStock(res);
+    render();
+    return;
+  }
+  addClaimedStock(res);
+  // The card already carries the stake and hold that produced it.
+  // What was staked is burnt, and the hold clock starts over.
+  burnStake();
   render();
+  refreshVault();
+}
+
+/** CLOSE fades the vault, then the idle reactor returns. The card is already saved. */
+function onVaultComplete() {
+  if (!els.overlay || els.overlay.classList.contains("hidden")) return;
+  showStakingVault(onVaultComplete, vaultOptions());
+  requestAnimationFrame(syncVaultSize);
+}
+
+function refreshVault() {
+  if (!els.overlay || els.overlay.classList.contains("hidden")) return;
+  if (!els.vaultCanvas) return;
+  showStakingVault(onVaultComplete, vaultOptions());
+}
+
+function onClaim() {
+  // Credits $VIB only. The safe is opened by the button under the reactor.
+  claimReward();
+  render();
+  // The vault HUD spends the free balance, so it needs the new wallet too.
+  refreshVault();
 }
 
 function onStake() {
-  if (claimBusy) return;
-  const ok = stakeVIB(1000000);
-  if (ok) render(); // the 3D sphere cluster grows on the next vault frame
+  const s = getStakeState();
+  const amount = selectedStakeAmount();
+  if (!amount) return;
+  const ok = s.totalStaked > 0 ? topUpVIB(amount) : stakeVIB(amount);
+  if (!ok) return;
+  render();
+  refreshVault();
+}
+
+function onStakeSlider() {
+  syncStakeSlider(getStakeState());
+}
+
+/**
+ * stakingVault.js sizes its drawing buffer from the canvas's client box, and
+ * only again on window resize. Ping that once the CSS box has actually changed.
+ */
+function syncVaultSize() {
+  const canvas = els.vaultCanvas || document.getElementById("staking-canvas");
+  if (!canvas) return;
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (w < 8 || h < 8) return;
+  if (w === lastVaultW && h === lastVaultH) return;
+  lastVaultW = w;
+  lastVaultH = h;
+  window.dispatchEvent(new Event("resize"));
 }
 
 function onNextDay() {
-  if (claimBusy) return;
   advanceDay();
   render();
+  refreshVault();
 }
 
 export function openProfile() {
@@ -138,6 +267,9 @@ export function openProfile() {
   els.cards = document.getElementById("profile-cards");
   els.claimBtn = document.getElementById("btn-demo-claim");
   els.stakeBtn = document.getElementById("btn-demo-stake");
+  els.stakeSlider = document.getElementById("stake-amount");
+  els.stakeValue = document.getElementById("stake-amount-value");
+  els.stakeMax = document.getElementById("stake-amount-max");
   els.nextBtn = document.getElementById("btn-demo-nextday");
   els.vaultCanvas = document.getElementById("staking-canvas");
 
@@ -150,30 +282,46 @@ export function openProfile() {
 
   render();
   els.overlay.classList.remove("hidden");
+  els.overlay.setAttribute("aria-hidden", "false");
 
-  // The 3D reactor runs on its own canvas + its own animation loop.
-  showStakingVault(
-    (res) => {
-      claimBusy = false;
-      addClaimedStock(res);
-      render();
-    },
-    { canvas: els.vaultCanvas }
-  );
+  // The overlay is display:none while closed, so the canvas has no box yet.
+  // stakingVault.js reads clientWidth/clientHeight when the renderer is created.
+  const mountVault = (triesLeft) => {
+    const canvas = els.vaultCanvas;
+    if (!canvas) return;
+    if ((canvas.clientWidth < 8 || canvas.clientHeight < 8) && triesLeft > 0) {
+      requestAnimationFrame(() => mountVault(triesLeft - 1));
+      return;
+    }
+    showStakingVault(onVaultComplete, vaultOptions());
+    requestAnimationFrame(syncVaultSize);
+  };
+  requestAnimationFrame(() => mountVault(30));
 }
 
 export function closeProfile() {
   hideStakingVault();
-  if (els.overlay) els.overlay.classList.add("hidden");
+  lastVaultW = 0;
+  lastVaultH = 0;
+  if (els.overlay) {
+    els.overlay.classList.add("hidden");
+    els.overlay.setAttribute("aria-hidden", "true");
+  }
 }
 
 export function wireProfileButtons() {
   const claim = document.getElementById("btn-demo-claim");
   const stake = document.getElementById("btn-demo-stake");
+  const slider = document.getElementById("stake-amount");
   const next = document.getElementById("btn-demo-nextday");
   const close = document.getElementById("btn-profile-close");
+  els.stakeBtn = stake;
+  els.stakeSlider = slider;
+  els.stakeValue = document.getElementById("stake-amount-value");
+  els.stakeMax = document.getElementById("stake-amount-max");
   if (claim) claim.addEventListener("click", onClaim);
   if (stake) stake.addEventListener("click", onStake);
+  if (slider) slider.addEventListener("input", onStakeSlider);
   if (next) next.addEventListener("click", onNextDay);
   if (close) close.addEventListener("click", closeProfile);
 }

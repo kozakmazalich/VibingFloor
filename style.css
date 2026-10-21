@@ -1869,50 +1869,52 @@ body {
   pointer-events: auto;
   position: fixed;
   inset: 0;
+  height: auto;
   z-index: 110; /* above the start/win menu screens (z 100) */
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  /* Own page background: deep space + neon aurora, no game canvas behind */
-  background:
-    radial-gradient(ellipse 80% 55% at 18% -12%, rgba(0, 229, 255, 0.16), transparent 60%),
-    radial-gradient(ellipse 70% 50% at 85% 112%, rgba(255, 45, 149, 0.14), transparent 60%),
-    radial-gradient(ellipse 60% 45% at 55% 45%, rgba(57, 255, 20, 0.05), transparent 70%),
-    #070912;
-  padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  justify-content: flex-start;
+  overflow: hidden;
+  background: #000000;
+  padding:
+    calc(14px + env(safe-area-inset-top, 0px))
+    calc(14px + env(safe-area-inset-right, 0px))
+    calc(14px + env(safe-area-inset-bottom, 0px))
+    calc(14px + env(safe-area-inset-left, 0px));
+}
+
+/* Closed profile must leave the layout. Opacity-only hiding kept a full-screen
+   layer (and a zero-size canvas if we also used display:none too late). */
+.profile-overlay.hidden {
+  display: none;
 }
 
 .profile-overlay::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(0, 229, 255, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 229, 255, 0.05) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, black 30%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 40%, black 30%, transparent 100%);
+  content: none;
 }
 
 .profile-card {
-  width: min(1080px, 100%);
-  max-height: calc(100vh - 28px);
+  width: min(1200px, 100%);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  font-family: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  gap: 12px;
+  font-family: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
   color: #e2e8f0;
 }
 
 .profile-panel {
-  background: rgba(14, 20, 40, 0.85);
+  background: #000000;
   border: 1px solid rgba(0, 229, 255, 0.32);
   border-radius: 16px;
-  box-shadow: 0 0 34px rgba(0, 229, 255, 0.14), 0 22px 50px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  box-shadow: none;
   padding: 16px 18px;
 }
 
@@ -1922,25 +1924,41 @@ body {
   gap: 14px;
 }
 
+.profile-heading {
+  min-width: 0;
+}
+
 .profile-header h2 {
   margin: 0;
-  font-size: 22px;
-  letter-spacing: 1.5px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(16px, 2.4vw, 22px);
+  letter-spacing: 1.6px;
   color: #00e5ff;
   text-shadow: 0 0 14px rgba(0, 229, 255, 0.6);
 }
 
+.profile-kicker {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  color: #7a8299;
+}
+
 .profile-demo-tag {
-  font-size: 11px;
-  letter-spacing: 1.5px;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 1.4px;
   color: #ffd700;
   border: 1px solid rgba(255, 215, 0, 0.55);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 4px 10px;
+  white-space: nowrap;
 }
 
 .profile-close {
   margin-left: auto;
+  flex: 0 0 auto;
   background: rgba(255, 45, 149, 0.12);
   color: #ff2d95;
   border: 1px solid rgba(255, 45, 149, 0.45);
@@ -1951,10 +1969,18 @@ body {
   cursor: pointer;
 }
 
+.profile-close:focus-visible,
+.profile-actions .cyber-btn:focus-visible {
+  outline: 2px solid #00e5ff;
+  outline-offset: 2px;
+}
+
 .profile-grid {
   display: grid;
-  grid-template-columns: 300px 1fr;
-  gap: 14px;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  min-width: 0;
 }
 
 /* --- LEFT column --- */
@@ -1962,12 +1988,14 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
 }
 
 .profile-avatar-frame {
-  width: 112px;
-  height: 112px;
+  width: 132px;
+  height: 132px;
   margin: 0 auto;
+  border-radius: 16px;
 }
 
 .profile-stats {
@@ -1977,7 +2005,7 @@ body {
 }
 
 .profile-stats .stat {
-  background: rgba(8, 11, 26, 0.6);
+  background: #000000;
   border: 1px solid rgba(0, 229, 255, 0.18);
   border-radius: 12px;
   padding: 10px 12px;
@@ -1985,34 +2013,57 @@ body {
 
 .profile-stats label {
   display: block;
-  font-size: 10px;
-  letter-spacing: 1.5px;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
   color: #7a8299;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .stat-value {
-  font-size: 19px;
+  font-size: 18px;
+  line-height: 1.15;
   color: #00e5ff;
   text-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
   word-break: break-word;
 }
 
+.stat-hold-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .stat-tier {
-  font-size: 12px;
+  flex: 0 0 auto;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 0.5px;
   color: #ffd700;
-  margin-top: 3px;
+  border: 1px solid rgba(255, 215, 0, 0.45);
+  border-radius: 999px;
+  padding: 2px 7px;
+  text-shadow: 0 0 8px rgba(255, 215, 0, 0.35);
 }
 
 .profile-actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-top: auto;
 }
 
 .profile-actions .cyber-btn {
   width: 100%;
-  min-height: 46px;
+  min-height: 48px;
+  padding: 12px 12px;
+  letter-spacing: 0.6px;
+  font-size: 11px;
+  line-height: 1.25;
+  white-space: normal;
+  text-align: center;
 }
 
 .profile-actions .cyber-btn.disabled {
@@ -2020,38 +2071,191 @@ body {
   pointer-events: none;
 }
 
+/* Stake amount — same neon glass language as the profile stats. */
+.stake-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px 8px;
+  background: #000000;
+  border: 1px solid rgba(0, 229, 255, 0.35);
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.stake-slider-head,
+.stake-slider-scale {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.stake-slider-kicker {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #7a8299;
+}
+
+.stake-slider-value {
+  font-size: 16px;
+  color: #00e5ff;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.stake-slider-scale {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #586075;
+}
+
+.stake-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.stake-slider input[type="range"]:focus-visible {
+  outline: 2px solid #00e5ff;
+  outline-offset: 2px;
+}
+
+.stake-slider input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e5ff var(--stake-pct, 0%), rgba(122, 130, 153, 0.35) var(--stake-pct, 0%));
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+}
+
+.stake-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin-top: -8px;
+  border-radius: 4px;
+  border: 2px solid #ffffff;
+  background: #00e5ff;
+  box-shadow: 0 0 12px #00e5ff, 0 0 0 1px rgba(0, 229, 255, 0.4);
+  cursor: pointer;
+}
+
+.stake-slider input[type="range"]::-moz-range-track {
+  height: 6px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(122, 130, 153, 0.35);
+}
+
+.stake-slider input[type="range"]::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: #00e5ff;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.45);
+}
+
+.stake-slider input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 2px solid #ffffff;
+  background: #00e5ff;
+  box-shadow: 0 0 12px #00e5ff;
+  cursor: pointer;
+}
+
+.stake-slider input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 /* --- RIGHT: embedded 3D vault viewport --- */
 .profile-right {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 320px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
 }
 
-.profile-coins-title {
-  font-size: 12px;
+.profile-coins-title,
+.profile-cards-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
   letter-spacing: 2px;
   color: #ffd700;
   text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+  align-self: flex-start;
 }
 
-/* Dedicated canvas for the 3D vault — opaque, always on top of the panel.
-   16:9 like the original full-screen reference so the reactor fills it. */
+.profile-vault {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+/* Vault control bar is injected under the canvas by stakingVault.js. */
+.staking-vault-hud {
+  width: 100%;
+  max-width: min(100%, 720px);
+  box-sizing: border-box;
+}
+
+.staking-vault-hud button,
+.staking-vault-hud select {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  font-family: inherit;
+}
+
+.staking-vault-hud input[type="range"] {
+  min-height: 44px;
+  max-width: 100%;
+}
+
+/* Square viewport so the plasma sphere fills the view instead of sitting
+   in a wide 16:9 letterbox. No border: the animation is the black field.
+   Height comes only from aspect-ratio — a min-height that fights the ratio
+   stretches the page. The vault reads this client box. */
 .staking-canvas {
   width: 100%;
-  max-width: 680px;
-  aspect-ratio: 16 / 9;
+  max-width: min(100%, 720px);
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  height: auto;
   display: block;
-  border: 1px solid rgba(0, 229, 255, 0.45);
-  border-radius: 14px;
-  background: #05060f;
-  box-shadow: 0 0 26px rgba(0, 229, 255, 0.2);
+  border: none;
+  border-radius: 0;
+  background: #000000;
+  box-shadow: none;
+}
+
+/* Tall desktop: leave room under the square for the open-safe bar. */
+@media (min-width: 900px) and (min-height: 700px) {
+  .staking-canvas {
+    width: min(100%, 640px, calc(100dvh - 340px));
+    min-height: 0;
+    max-height: none;
+  }
 }
 
 .profile-coins-sub {
-  font-size: 11px;
+  align-self: flex-start;
+  font-size: 12px;
+  font-weight: 700;
   letter-spacing: 1.5px;
   color: #7a8299;
 }
@@ -2062,9 +2266,8 @@ body {
 }
 
 .profile-cards-title {
-  font-size: 12px;
-  letter-spacing: 1.5px;
   color: #7a8299;
+  text-shadow: none;
   margin-bottom: 10px;
 }
 
@@ -2086,7 +2289,7 @@ body {
 
 .stock-card {
   --stock-color: #00e5ff;
-  background: rgba(8, 11, 26, 0.7);
+  background: #000000;
   border: 1px solid var(--stock-color);
   border-radius: 12px;
   padding: 12px;
@@ -2094,6 +2297,7 @@ body {
 }
 
 .stock-tier {
+  font-family: 'Orbitron', sans-serif;
   font-size: 9px;
   letter-spacing: 1.5px;
   color: var(--stock-color);
@@ -2101,6 +2305,7 @@ body {
 }
 
 .stock-ticker {
+  font-family: 'Orbitron', sans-serif;
   font-size: 20px;
   font-weight: 900;
   color: #fff;
@@ -2125,31 +2330,48 @@ body {
   margin-top: 4px;
 }
 
-/* --- MOBILE: stacked, thumb-friendly, no horizontal scroll --- */
-@media (max-width: 760px) {
+/* --- MOBILE + short landscape: avatar+stats → vault → cards. --- */
+@media (max-width: 800px), (max-height: 520px) {
   .profile-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .profile-left {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
   }
   .profile-avatar-frame {
-    width: 88px;
-    height: 88px;
-    margin: 0;
-  }
-  .profile-stats {
-    flex: 1 1 100%;
+    width: 108px;
+    height: 108px;
   }
   .profile-actions {
-    flex: 1 1 100%;
+    margin-top: 0;
   }
-  .profile-right {
-    min-height: 240px;
-  }
-  .profile-actions .cyber-btn {
+  .profile-actions .cyber-btn,
+  .profile-close {
     min-height: 48px;
+    min-width: 44px;
+  }
+  .staking-canvas {
+    width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+  .profile-header {
+    flex-wrap: wrap;
+  }
+  .profile-demo-tag {
+    order: 3;
+  }
+}
+
+/* Short landscape: a full-bleed square is taller than the screen. Keep it
+   large, but cap it so the reactor and the cards are both reachable. */
+@media (max-height: 520px) {
+  .staking-canvas {
+    width: min(100%, 460px);
+    max-width: 100%;
+    min-height: 0;
+    max-height: none;
   }
 }

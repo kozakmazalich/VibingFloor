@@ -630,13 +630,16 @@
     </div>
 
     <!-- Profile / Staking Vault overlay -->
-    <div id="profile-overlay" class="ui-overlay profile-overlay hidden">
+    <div id="profile-overlay" class="ui-overlay profile-overlay hidden" aria-hidden="true">
       <div class="profile-card">
-        <div class="profile-header profile-panel">
-          <h2>◈ PILOT PROFILE</h2>
+        <header class="profile-header profile-panel">
+          <div class="profile-heading">
+            <h2>PILOT PROFILE</h2>
+            <p class="profile-kicker">STAKING VAULT · RWA EQUITY</p>
+          </div>
           <span class="profile-demo-tag">DEMO MODE</span>
-          <button id="btn-profile-close" class="profile-close" aria-label="Close">✕</button>
-        </div>
+          <button id="btn-profile-close" class="profile-close" aria-label="Close profile">✕</button>
+        </header>
 
         <div class="profile-grid">
           <!-- LEFT: robot avatar + stats + actions -->
@@ -650,17 +653,19 @@
                 <div id="profile-wins" class="stat-value tabular">0</div>
               </div>
               <div class="stat">
-                <label>$VIB BALANCE</label>
+                <label>$VIB</label>
                 <div id="profile-vib" class="stat-value tabular">0</div>
               </div>
               <div class="stat">
-                <label>STAKED $VIB</label>
+                <label>STAKED</label>
                 <div id="profile-staked" class="stat-value tabular">0</div>
               </div>
-              <div class="stat">
-                <label>HOLD / LOCK</label>
-                <div id="profile-hold" class="stat-value tabular">24h</div>
-                <div id="profile-hold-tier" class="stat-tier">x1.0</div>
+              <div class="stat stat-hold">
+                <label>HOLD</label>
+                <div class="stat-hold-row">
+                  <div id="profile-hold" class="stat-value tabular">24h</div>
+                  <div id="profile-hold-tier" class="stat-tier">x1.0</div>
+                </div>
               </div>
             </div>
             <div class="profile-actions">
@@ -668,6 +673,26 @@
                 <span class="btn-icon">💰</span>
                 <span class="btn-text">CLAIM +1,000,000 $VIB</span>
               </button>
+              <div class="stake-slider">
+                <div class="stake-slider-head">
+                  <span class="stake-slider-kicker">STAKE AMOUNT</span>
+                  <span id="stake-amount-value" class="stake-slider-value tabular">1,000,000</span>
+                </div>
+                <input
+                  id="stake-amount"
+                  type="range"
+                  min="1000000"
+                  max="2500000"
+                  step="100000"
+                  value="1000000"
+                  aria-label="Stake amount"
+                  style="--stake-pct: 0%"
+                />
+                <div class="stake-slider-scale">
+                  <span class="tabular">1,000,000</span>
+                  <span id="stake-amount-max" class="tabular">2,500,000</span>
+                </div>
+              </div>
               <button id="btn-demo-stake" class="cyber-btn cyber-btn-wallet">
                 <span class="btn-icon">⚡</span>
                 <span class="btn-text">STAKE 1,000,000 $VIB</span>
@@ -680,9 +705,11 @@
           </aside>
 
           <!-- RIGHT: dedicated 3D sphere vault (own canvas + own loop) -->
-          <section class="profile-right profile-panel">
+          <section class="profile-right profile-panel" aria-label="Staked VIB reactor">
             <div class="profile-coins-title">STAKED VIB REACTOR</div>
-            <canvas id="staking-canvas" class="staking-canvas" width="640" height="360" aria-label="3D staking vault"></canvas>
+            <div class="profile-vault">
+              <canvas id="staking-canvas" class="staking-canvas" aria-label="3D staking vault"></canvas>
+            </div>
             <div class="profile-coins-sub">
               <span id="profile-cards-count" class="tabular">0</span> RWA CARDS CLAIMED
             </div>
@@ -691,7 +718,7 @@
 
         <!-- BOTTOM: won stock cards -->
         <div class="profile-bottom profile-panel">
-          <div class="profile-cards-title">// WON RWA EQUITY CARDS</div>
+          <div class="profile-cards-title">WON RWA EQUITY</div>
           <div id="profile-cards" class="profile-cards"></div>
         </div>
       </div>
