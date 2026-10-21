@@ -786,6 +786,7 @@ btnMenuSoundEl.addEventListener("click", () => {
 const btnMenuProfileEl = document.getElementById("btn-menu-profile");
 btnMenuProfileEl.addEventListener("click", () => {
   audio.playClick();
+  startMenuEl.classList.add("hidden"); // the profile is its own page
   openProfile();
 });
 const btnWinProfileEl = document.getElementById("btn-win-profile");
@@ -794,6 +795,14 @@ if (btnWinProfileEl) {
     audio.playClick();
     winOverlayEl.classList.add("hidden");
     openProfile();
+  });
+}
+// Closing the profile returns to the screen it was opened from.
+const btnProfileCloseEl = document.getElementById("btn-profile-close");
+if (btnProfileCloseEl) {
+  btnProfileCloseEl.addEventListener("click", () => {
+    if (game.state === "menu") startMenuEl.classList.remove("hidden");
+    else if (game.state === "round_over") winOverlayEl.classList.remove("hidden");
   });
 }
 wireProfileButtons();
