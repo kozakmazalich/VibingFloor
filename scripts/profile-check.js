@@ -66,14 +66,14 @@
   const hold1 = document.getElementById("profile-hold").textContent;
   hold1 !== hold0 ? ok(`next day: ${hold0} -> ${hold1}`) : bad("hold did not advance");
 
-  // STAKE -> the reactive 3D cluster grows
-  const spheresBefore = getVaultDebug().sphereCount;
+  // STAKE -> the reactive 3D reactor swells with the staked amount
+  const scaleBefore = getVaultDebug().reactorScale;
   document.getElementById("btn-demo-stake").click();
-  await sleep(500);
+  await sleep(800);
   const dbg1 = getVaultDebug();
-  dbg1.sphereCount > spheresBefore
-    ? ok(`sphere cluster grew with the stake (${spheresBefore} -> ${dbg1.sphereCount})`)
-    : bad(`cluster did not react (${spheresBefore} -> ${dbg1.sphereCount})`);
+  dbg1.reactorScale > scaleBefore + 0.01
+    ? ok(`reactor swelled with the stake (${scaleBefore.toFixed(2)} -> ${dbg1.reactorScale.toFixed(2)})`)
+    : bad(`reactor did not react (${scaleBefore.toFixed(2)} -> ${dbg1.reactorScale.toFixed(2)})`);
 
   // CLAIM (staked now) -> implosion -> reveal -> card collected
   const cards0 = document.querySelectorAll("#profile-cards .stock-card").length;

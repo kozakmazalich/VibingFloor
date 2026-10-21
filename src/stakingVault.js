@@ -1,103 +1,95 @@
 /**
- * STAKING VAULT — self-contained 3D reactor for the profile page.
+ * VIB STAKING VAULT & ALCHEMY FORGE — RWA Stock Reveal Module.
+ * Ported from the original design (gemini-code-1792588207540.js):
+ *   - Central glowing wireframe plasma sphere + inner core
+ *   - 3 orbital neon rings with satellite spheres (hold-hours speed boost)
+ *   - Singularity implosion -> holographic stock certificate with a
+ *     PROCEDURAL VECTOR COMPANY LOGO in a medallion (NVDA spiral, TSLA T,
+ *     Apple, Windows squares, ₿, 𝕏, default bull)
+ *   - Particle shockwave, tier-coloured card, payout + fractional shares
  *
- * A glowing cluster of spheres represents the staked $VIB. It renders into
- * its OWN canvas (passed in via options.canvas) with its own WebGLRenderer
- * and its own animation loop — completely independent from the game scene,
- * so it is always clearly visible inside the profile page.
- *
- * Reactive: reads getStakeState().totalStaked every frame — more staked VIB
- * = more / larger spheres, less = fewer / smaller.
- *
- * triggerBreachAndClaim(): the cluster implodes into the center, a flash,
- * then a tier-coloured RWA stock card pops out (ticker + company + $USD).
- * The callback receives { stock, usdValue }.
+ * Renders into the profile page's own canvas (options.canvas) with its own
+ * renderer + animation loop — fully independent from the game scene.
+ * Reactivity: the reactor scales gently with getStakeState().totalStaked.
  */
 import * as THREE from "three";
 import { getStakeState } from "./staking.js";
 
 export const RWA_STOCKS = [
-  { tier: "COMMON", ticker: "SPY", name: "S&P 500 ETF", baseUsd: 0.5, icon: "bull" },
-  { tier: "COMMON", ticker: "BRK.B", name: "Berkshire Hathaway", baseUsd: 0.5, icon: "shield" },
-  { tier: "UNCOMMON", ticker: "AAPL", name: "Apple Inc.", baseUsd: 2.0, icon: "apple" },
-  { tier: "UNCOMMON", ticker: "MSFT", name: "Microsoft Corp.", baseUsd: 2.0, icon: "windows" },
-  { tier: "RARE", ticker: "NVDA", name: "NVIDIA Corp.", baseUsd: 8.0, icon: "nvidia" },
-  { tier: "RARE", ticker: "TSLA", name: "Tesla Inc.", baseUsd: 8.0, icon: "tesla" },
-  { tier: "EPIC", ticker: "MSTR", name: "MicroStrategy", baseUsd: 35.0, icon: "bitcoin" },
-  { tier: "EPIC", ticker: "COIN", name: "Coinbase Global", baseUsd: 35.0, icon: "coin" },
-  { tier: "LEGENDARY", ticker: "SPACEX", name: "SpaceX Pre-IPO RWA", baseUsd: 250.0, icon: "spacex" },
+  { tier: "COMMON", ticker: "SPY", name: "S&P 500 ETF", baseUsd: 0.5, color: "#7a8299", icon: "bull" },
+  { tier: "COMMON", ticker: "BRK.B", name: "Berkshire Hathaway", baseUsd: 0.5, color: "#7a8299", icon: "shield" },
+  { tier: "UNCOMMON", ticker: "AAPL", name: "Apple Inc.", baseUsd: 2.0, color: "#39ff14", icon: "apple" },
+  { tier: "UNCOMMON", ticker: "MSFT", name: "Microsoft Corp.", baseUsd: 2.0, color: "#39ff14", icon: "windows" },
+  { tier: "RARE", ticker: "NVDA", name: "NVIDIA Corp.", baseUsd: 8.0, color: "#00e5ff", icon: "nvidia" },
+  { tier: "RARE", ticker: "TSLA", name: "Tesla Inc.", baseUsd: 8.0, color: "#00e5ff", icon: "tesla" },
+  { tier: "EPIC", ticker: "MSTR", name: "MicroStrategy", baseUsd: 35.0, color: "#ff2d95", icon: "bitcoin" },
+  { tier: "EPIC", ticker: "COIN", name: "Coinbase Global", baseUsd: 35.0, color: "#ff2d95", icon: "coin" },
+  { tier: "LEGENDARY", ticker: "SPACEX", name: "SpaceX Pre-IPO RWA", baseUsd: 250.0, color: "#ffd700", icon: "spacex" },
 ];
 
-// Card/UI tier colours (profile spec).
-const TIER_COLORS = {
-  COMMON: "#7a8299",
-  UNCOMMON: "#00e5ff",
-  RARE: "#39ff14",
-  EPIC: "#ff2d95",
-  LEGENDARY: "#ffd700",
+const COLORS = {
+  bgNum: 0x05060f,
+  cyanNum: 0x00e5ff,
+  magentaNum: 0xff2d95,
+  goldNum: 0xffd700,
+  greenNum: 0x39ff14,
+  greyNum: 0x7a8299,
 };
-
-const CLUSTER_COLORS = [0xffd700, 0x00e5ff, 0xff2d95, 0x39ff14];
-const MAX_SPHERES = 26;
-const BASE_SPHERES = 6;
 
 // Module state
 let isActive = false;
 let canvas = null;
 let renderer = null;
+let sharedRenderer = null;
+let rafId = 0;
+let onResizeBound = null;
+
 let scene = null;
 let camera = null;
 let rootGroup = null;
-let clusterGroup = null;
-let flashMesh = null;
-let flashMat = null;
-let cardMesh = null;
-let cardMat = null;
+let reactorGroup = null;
+let revealGroup = null;
+
+let centralSphere = null;
+let centralSphereMat = null;
+let satelliteSpheres = [];
+let orbitRings = [];
+
+let revealCardMesh = null;
+let revealCardMat = null;
+
 let particleSystem = null;
 let particlePositions = null;
 let particleVelocities = null;
 let particleColors = null;
 let particleMat = null;
+const PARTICLE_COUNT = 80;
 
-let clusterSpheres = []; // { mesh, home: Vector3 }
-let targetCount = -1;
-let targetScale = -1;
-let buildPop = 1;
-let animPhase = "IDLE"; // IDLE | IMPLODING | REVEALING | FADING
+let animPhase = "IDLE"; // 'REACTOR_IDLE' | 'IMPLODING' | 'REVEALING' | 'FADING' | 'IDLE'
 let phaseStartTime = 0;
 let lastFrameTime = 0;
 let selectedStock = null;
-let currentStakeAmount = 0;
+let currentStakeAmount = 1000000;
 let currentHoldHours = 24;
-let onCompleteCb = null;
-let rafId = 0;
-let onResizeBound = null;
+let onCompleteCallback = null;
+let reactorScaleTarget = 1;
 
-// Cached geometry/materials/textures
-const sphereGeo = new THREE.SphereGeometry(1, 20, 16);
-const clusterMatCache = new Map();
 const textureCache = new Map();
-const ZERO_V3 = new THREE.Vector3(0, 0, 0);
 
 /* ================= public API ================= */
 
-/**
- * Activate the reactor on the given canvas.
- * @param {Function} callback(result) — { stock, usdValue } after a claim.
- * @param {{ stakeAmount?: number, holdHours?: number, canvas?: HTMLCanvasElement }} options
- */
-export function showStakingVault(callback, options = {}) {
+export function showStakingVault(onComplete, options = {}) {
   if (isActive) return;
   isActive = true;
-  onCompleteCb = typeof callback === "function" ? callback : () => {};
+  onCompleteCallback = typeof onComplete === "function" ? onComplete : () => {};
   currentStakeAmount = options.stakeAmount ?? getStakeState().totalStaked;
   currentHoldHours = options.holdHours ?? getStakeState().holdHours;
   canvas = options.canvas || null;
+  if (options.renderer) sharedRenderer = options.renderer;
 
-  initResources();
-  resetIdle();
-  targetCount = -1;
-  animPhase = "IDLE";
+  initVaultResources();
+  resetVaultForIdle();
+  animPhase = "REACTOR_IDLE";
   lastFrameTime = performance.now();
   phaseStartTime = lastFrameTime;
 
@@ -109,150 +101,106 @@ export function showStakingVault(callback, options = {}) {
   rafId = requestAnimationFrame(loop);
 }
 
-/** Deactivate (profile closed) — stop rendering. */
 export function hideStakingVault() {
   isActive = false;
-  onCompleteCb = null;
+  onCompleteCallback = null;
   if (rafId) cancelAnimationFrame(rafId);
   rafId = 0;
 }
 
-/** The sphere cluster implodes, a flash, then the stock card reveals. */
 export function triggerBreachAndClaim() {
-  if (!isActive || animPhase !== "IDLE") return;
-  const st = getStakeState();
-  currentStakeAmount = st.totalStaked;
-  currentHoldHours = st.holdHours;
+  if (animPhase !== "REACTOR_IDLE") return;
   selectedStock = rollWeightedStock(currentHoldHours);
   animPhase = "IMPLODING";
   phaseStartTime = performance.now();
+  for (let i = 0; i < satelliteSpheres.length; i++) {
+    satelliteSpheres[i].userData.imploding = true;
+  }
 }
 
-/** Debug/test hook: { active, phase, sphereCount, targetCount }. */
 export function getVaultDebug() {
-  return { active: isActive, phase: animPhase, sphereCount: clusterSpheres.length, targetCount };
+  return {
+    active: isActive,
+    phase: animPhase === "REACTOR_IDLE" ? "IDLE" : animPhase,
+    sphereCount: satelliteSpheres.length,
+    reactorScale: reactorGroup ? reactorGroup.scale.x : 1,
+  };
 }
 
-/** Advance the animation one frame (also used by the internal RAF). */
 export function updateStakingVault(now = performance.now()) {
   if (!isActive) return;
+
   const dt = Math.min((now - lastFrameTime) / 1000, 0.1);
   lastFrameTime = now;
   const elapsed = (now - phaseStartTime) / 1000;
 
-  // Reactive cluster: follow the staking state every frame
-  const st = getStakeState();
-  const n = Math.min(MAX_SPHERES, BASE_SPHERES + Math.floor(st.totalStaked / 1000000));
-  const s = 0.85 + Math.min(1.4, st.totalStaked / 6000000);
-  if (n !== targetCount || Math.abs(s - targetScale) > 0.01) {
-    targetCount = n;
-    targetScale = s;
-    rebuildCluster(n, s);
-    buildPop = 0;
-  }
-  if (buildPop < 1) buildPop = Math.min(1, buildPop + dt * 3.5);
+  // Reactive: the reactor swells gently with the staked amount
+  const staked = getStakeState().totalStaked;
+  reactorScaleTarget = 1 + Math.min(0.5, staked / 12000000);
+  reactorGroup.scale.lerp(new THREE.Vector3(reactorScaleTarget, reactorScaleTarget, reactorScaleTarget), Math.min(1, dt * 3));
 
-  if (animPhase === "IDLE") {
-    clusterGroup.rotation.y += dt * 0.22;
-    clusterGroup.rotation.x += dt * 0.07;
-    clusterGroup.position.y = Math.sin(now * 0.0016) * 0.08;
-    const pop = easeOutBack(Math.min(1, buildPop));
-    clusterGroup.scale.setScalar(pop);
-    flashMesh.visible = false;
-  } else if (animPhase === "IMPLODING") {
-    const t = Math.min(elapsed / 0.9, 1.0);
-    clusterGroup.rotation.y += dt * (0.22 + t * 9);
-    for (const s of clusterSpheres) {
-      s.mesh.position.lerpVectors(s.home, ZERO_V3, t * t);
-      s.mesh.scale.setScalar(Math.max(0.02, 1 - t));
+  // Rotate orbital rings and satellites (hold-hours speed boost)
+  const speedFactor = currentHoldHours >= 168 ? 2.5 : currentHoldHours >= 72 ? 1.7 : 1.0;
+  for (let i = 0; i < orbitRings.length; i++) {
+    orbitRings[i].rotation.z += dt * 0.4 * (i % 2 === 0 ? 1 : -1) * speedFactor;
+  }
+
+  for (let i = 0; i < satelliteSpheres.length; i++) {
+    const sat = satelliteSpheres[i];
+    const orbit = sat.userData;
+    orbit.angle += dt * orbit.speed * speedFactor;
+
+    if (sat.userData.imploding) {
+      orbit.radius = Math.max(0.1, orbit.radius - dt * 6.0);
+      sat.scale.multiplyScalar(Math.max(0.85, 1.0 - dt * 2.0));
     }
-    if (t >= 1.0) {
-      animPhase = "REVEALING";
-      phaseStartTime = now;
-      triggerReveal();
+
+    sat.position.x = Math.cos(orbit.angle) * orbit.radius;
+    sat.position.y = Math.sin(orbit.angle) * orbit.radius * Math.sin(orbit.inclination);
+    sat.position.z = Math.sin(orbit.angle) * orbit.radius * Math.cos(orbit.inclination);
+  }
+
+  // Pulsate the central plasma sphere
+  if (centralSphere) {
+    const pulse = 1.0 + Math.sin(now * 0.005) * 0.06;
+    centralSphere.scale.setScalar(pulse);
+  }
+
+  if (animPhase === "REACTOR_IDLE") {
+    reactorGroup.position.y = Math.sin(now * 0.002) * 0.08;
+  } else if (animPhase === "IMPLODING") {
+    if (elapsed >= 0.8) {
+      triggerStockRevealCard(now);
     }
   } else if (animPhase === "REVEALING") {
-    const t = Math.min(elapsed / 0.6, 1.0);
-    cardMesh.scale.setScalar(Math.max(0.001, easeOutBack(t)));
-    cardMesh.position.z = 0.1 + Math.min(elapsed * 1.2, 0.5);
-    cardMesh.rotation.y = Math.sin(elapsed * 1.2) * 0.06;
-    updateParticles(dt, elapsed);
-    if (elapsed >= 3.2) {
+    const revealElapsed = elapsed - 0.8;
+    const t = Math.min(revealElapsed / 0.6, 1.0);
+    const popScale = easeOutBack(t);
+    const pulse = 1.0 + Math.sin(revealElapsed * 8.0) * 0.02;
+    revealCardMesh.scale.setScalar(popScale * pulse);
+    revealCardMesh.position.z = 2.5 + Math.min(revealElapsed * 1.5, 0.5);
+
+    if (particleSystem.visible) {
+      updateParticles(dt, revealElapsed);
+    }
+
+    if (revealElapsed >= 3.5) {
       animPhase = "FADING";
       phaseStartTime = now;
     }
   } else if (animPhase === "FADING") {
     const t = Math.min(elapsed / 0.4, 1.0);
-    cardMat.opacity = 1 - t;
-    particleMat.opacity = Math.max(0, 1 - t * 2);
+    setVaultOpacity(1.0 - t);
     if (t >= 1.0) {
       finishAndCleanup();
       return;
     }
   }
 
-  renderFrame();
+  renderVaultScene();
 }
 
-/* ================= internals ================= */
-
-function getClusterMat(color) {
-  if (!clusterMatCache.has(color)) {
-    clusterMatCache.set(color, new THREE.MeshBasicMaterial({ color }));
-  }
-  return clusterMatCache.get(color);
-}
-
-function rebuildCluster(count, scale) {
-  if (!clusterGroup) return;
-  for (const s of clusterSpheres) clusterGroup.remove(s.mesh);
-  clusterSpheres = [];
-
-  const R = 1.5 + scale * 0.6;
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < count; i++) {
-    const y = i === 0 ? 1 : 1 - (i / (count - 1)) * 2;
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const th = i * golden;
-    const jitter = 0.82 + ((i * 37) % 100) / 100 * 0.36;
-    const pos = new THREE.Vector3(
-      Math.cos(th) * r * R * jitter,
-      y * R * jitter,
-      Math.sin(th) * r * R * jitter
-    );
-    const mesh = new THREE.Mesh(sphereGeo, getClusterMat(CLUSTER_COLORS[i % CLUSTER_COLORS.length]));
-    mesh.position.copy(pos);
-    mesh.scale.setScalar((0.24 + ((i * 13) % 10) / 10 * 0.3) * scale);
-    clusterGroup.add(mesh);
-    clusterSpheres.push({ mesh, home: pos.clone() });
-  }
-}
-
-function resetIdle() {
-  if (cardMesh) {
-    cardMesh.visible = false;
-    cardMat.opacity = 1;
-  }
-  if (particleSystem) {
-    particleSystem.visible = false;
-    particleMat.opacity = 1;
-  }
-  if (clusterGroup) clusterGroup.visible = true;
-}
-
-function finishAndCleanup() {
-  const stakeMult = Math.max(0, currentStakeAmount) / 1000000;
-  const holdMult = currentHoldHours >= 168 ? 2.0 : currentHoldHours >= 72 ? 1.25 : 1.0;
-  const usdValue = selectedStock ? selectedStock.baseUsd * stakeMult * holdMult : 0;
-
-  const cb = onCompleteCb;
-  if (cb) cb({ stock: selectedStock, usdValue });
-
-  resetIdle();
-  animPhase = "IDLE";
-  phaseStartTime = performance.now();
-  targetCount = -1; // rebuild the (possibly changed) cluster next frame
-}
+/* ================= rolling ================= */
 
 function rollWeightedStock(holdHours) {
   const weights = RWA_STOCKS.map((stock) => {
@@ -280,53 +228,129 @@ function easeOutBack(t) {
   return 1 + c2 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
 }
 
-function initResources() {
+/* ================= scene ================= */
+
+function initVaultResources() {
   if (scene) return;
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x05060f);
+  scene.background = new THREE.Color(COLORS.bgNum);
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+  sizeCamera();
 
   rootGroup = new THREE.Group();
   scene.add(rootGroup);
 
-  clusterGroup = new THREE.Group();
-  rootGroup.add(clusterGroup);
+  // Backdrop
+  const bgGeo = new THREE.PlaneGeometry(60, 40);
+  const bgMat = new THREE.MeshBasicMaterial({ color: COLORS.bgNum, transparent: true, opacity: 0.94 });
+  const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+  bgMesh.position.z = -6.0;
+  rootGroup.add(bgMesh);
 
-  // Implosion flash (additive sphere)
-  const flashGeo = new THREE.SphereGeometry(1, 24, 16);
-  flashMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+  // --- A. SPHERICAL OVERCHARGE REACTOR ---
+  reactorGroup = new THREE.Group();
+  rootGroup.add(reactorGroup);
+
+  // Central plasma sphere (wireframe)
+  const sphereGeo = new THREE.SphereGeometry(1.4, 32, 32);
+  centralSphereMat = new THREE.MeshBasicMaterial({
+    color: COLORS.cyanNum,
+    wireframe: true,
     transparent: true,
-    opacity: 0.9,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
+    opacity: 0.85,
   });
-  flashMesh = new THREE.Mesh(flashGeo, flashMat);
-  flashMesh.visible = false;
-  rootGroup.add(flashMesh);
+  centralSphere = new THREE.Mesh(sphereGeo, centralSphereMat);
+  reactorGroup.add(centralSphere);
 
-  // Reveal card plane
-  const cardGeo = new THREE.PlaneGeometry(3.4, 4.7);
-  cardMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthTest: false });
-  cardMesh = new THREE.Mesh(cardGeo, cardMat);
-  cardMesh.visible = false;
-  cardMesh.renderOrder = 20;
-  rootGroup.add(cardMesh);
+  // Inner solid core glow sphere
+  const coreGeo = new THREE.SphereGeometry(1.25, 24, 24);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0x030614 });
+  const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+  reactorGroup.add(coreMesh);
 
+  // Orbital rings + satellite spheres
+  const ringCount = 3;
+  const satPerRing = 6;
+  for (let r = 0; r < ringCount; r++) {
+    const radius = 2.4 + r * 0.75;
+    const ringGeo = new THREE.TorusGeometry(radius, 0.03, 8, 48);
+    ringGeo.rotateX(Math.PI / 2 + r * 0.4);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: r === 0 ? COLORS.cyanNum : r === 1 ? COLORS.magentaNum : COLORS.goldNum,
+      transparent: true,
+      opacity: 0.4,
+    });
+    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+    reactorGroup.add(ringMesh);
+    orbitRings.push(ringMesh);
+
+    for (let s = 0; s < satPerRing; s++) {
+      const satGeo = new THREE.SphereGeometry(0.18, 16, 16);
+      const satMat = new THREE.MeshBasicMaterial({ color: ringMat.color });
+      const satMesh = new THREE.Mesh(satGeo, satMat);
+
+      const angle = (s / satPerRing) * Math.PI * 2;
+      satMesh.userData = {
+        radius,
+        angle,
+        speed: 1.2 + r * 0.4,
+        inclination: (r - 1) * 0.5,
+        imploding: false,
+      };
+      reactorGroup.add(satMesh);
+      satelliteSpheres.push(satMesh);
+    }
+  }
+
+  // --- B. 3D HOLOGRAPHIC REVEAL CARD ---
+  revealGroup = new THREE.Group();
+  rootGroup.add(revealGroup);
+
+  const cardGeo = new THREE.PlaneGeometry(4.2, 5.8);
+  revealCardMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 1.0,
+    depthTest: false,
+  });
+  revealCardMesh = new THREE.Mesh(cardGeo, revealCardMat);
+  revealCardMesh.position.set(0, 0, 2.5);
+  revealCardMesh.visible = false;
+  revealCardMesh.renderOrder = 20;
+  revealGroup.add(revealCardMesh);
+
+  // --- C. PARTICLES ---
   initParticles();
+
+  // --- D. RENDERER (profile canvas) ---
   initRenderer();
 }
 
 function initRenderer() {
-  if (!canvas) return;
+  if (renderer || !canvas) return;
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   sizeRenderer();
 
   if (!onResizeBound) {
-    onResizeBound = () => sizeRenderer();
+    onResizeBound = () => sizeCameraAndRenderer();
     window.addEventListener("resize", onResizeBound);
   }
+}
+
+function sizeCameraAndRenderer() {
+  sizeCamera();
+  sizeRenderer();
+}
+
+function sizeCamera() {
+  if (!camera) return;
+  const aspect = (canvas ? canvas.clientWidth / Math.max(1, canvas.clientHeight) : window.innerWidth / window.innerHeight);
+  camera.aspect = aspect || 1;
+  // Fit the reactor rings (radius ~3.9) on narrow screens
+  const need = 4.2 / Math.tan((45 * Math.PI) / 360) / Math.max(0.2, camera.aspect);
+  camera.position.set(0, 0, Math.max(11, need + 0.5));
+  camera.lookAt(0, 0, 0);
+  camera.updateProjectionMatrix();
 }
 
 function sizeRenderer() {
@@ -334,148 +358,342 @@ function sizeRenderer() {
   const w = canvas.clientWidth || 320;
   const h = canvas.clientHeight || 220;
   renderer.setSize(w, h, false);
-  camera.aspect = w / Math.max(1, h);
-  camera.position.set(0, 0.3, fitDistance(camera.aspect));
-  camera.lookAt(0, 0.3, 0);
-  camera.updateProjectionMatrix();
 }
 
-function fitDistance(aspect) {
-  // Cluster radius ~2.2 * scale; the reveal card half-width is 1.7.
-  const need = 2.3 / Math.tan((45 * Math.PI) / 360) / Math.max(0.2, aspect);
-  return Math.max(7.2, need + 0.6);
+function renderVaultScene() {
+  if (renderer) {
+    renderer.render(scene, camera);
+    return;
+  }
+  if (sharedRenderer && scene) {
+    const prevAutoClear = sharedRenderer.autoClear;
+    sharedRenderer.autoClear = false;
+    sharedRenderer.clearDepth();
+    sharedRenderer.render(scene, camera);
+    sharedRenderer.autoClear = prevAutoClear;
+  }
 }
 
-function renderFrame() {
-  if (!renderer || !scene) return;
-  renderer.render(scene, camera);
-}
+/* ================= reveal choreography ================= */
 
-function triggerReveal() {
-  flashMesh.scale.setScalar(0.2);
-  flashMesh.visible = true;
-  clusterGroup.visible = false;
+function triggerStockRevealCard(now) {
+  animPhase = "REVEALING";
+  phaseStartTime = now;
 
-  const tier = selectedStock.tier;
-  const color = TIER_COLORS[tier] || TIER_COLORS.COMMON;
-  const stakeMult = Math.max(0, currentStakeAmount) / 1000000;
-  const holdMult = currentHoldHours >= 168 ? 2.0 : currentHoldHours >= 72 ? 1.25 : 1.0;
-  const usdValue = selectedStock.baseUsd * stakeMult * holdMult;
+  reactorGroup.visible = false;
 
-  cardMat.map = getCardTexture(selectedStock, color, usdValue);
-  cardMat.needsUpdate = true;
-  cardMat.opacity = 1;
-  cardMesh.scale.setScalar(0.001);
-  cardMesh.visible = true;
+  revealCardMat.map = getStockCardTexture(selectedStock, currentStakeAmount, currentHoldHours);
+  revealCardMat.needsUpdate = true;
+  revealCardMesh.scale.setScalar(0.01);
+  revealCardMesh.visible = true;
 
-  spawnBurst(color);
-}
-
-function initParticles() {
-  const geo = new THREE.BufferGeometry();
-  particlePositions = new Float32Array(75 * 3);
-  particleVelocities = new Float32Array(75 * 3);
-  particleColors = new Float32Array(75 * 3);
-  geo.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
-  geo.setAttribute("color", new THREE.BufferAttribute(particleColors, 3));
-  particleMat = new THREE.PointsMaterial({
-    size: 0.16,
-    vertexColors: true,
-    transparent: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  particleSystem = new THREE.Points(geo, particleMat);
-  particleSystem.visible = false;
-  particleSystem.renderOrder = 21;
-  rootGroup.add(particleSystem);
-}
-
-function spawnBurst(tierHex) {
   particleSystem.visible = true;
-  particleMat.opacity = 1;
-  const c = new THREE.Color(tierHex);
-  for (let i = 0; i < 75; i++) {
+  particleMat.opacity = 1.0;
+  const col = new THREE.Color(selectedStock.color);
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
-    particlePositions[i3] = (Math.random() - 0.5) * 1.4;
-    particlePositions[i3 + 1] = (Math.random() - 0.5) * 1.4;
-    particlePositions[i3 + 2] = 0.4;
-    const a = Math.random() * Math.PI * 2;
-    const sp = 1.4 + Math.random() * 3.4;
-    particleVelocities[i3] = Math.cos(a) * sp;
-    particleVelocities[i3 + 1] = Math.sin(a) * sp + 1.2;
-    particleVelocities[i3 + 2] = (Math.random() - 0.4) * 2;
-    particleColors[i3] = c.r;
-    particleColors[i3 + 1] = c.g;
-    particleColors[i3 + 2] = c.b;
+    particlePositions[i3] = (Math.random() - 0.5) * 1.0;
+    particlePositions[i3 + 1] = (Math.random() - 0.5) * 1.0;
+    particlePositions[i3 + 2] = 2.5;
+
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 3.0 + Math.random() * 5.0;
+    particleVelocities[i3] = Math.cos(angle) * speed;
+    particleVelocities[i3 + 1] = Math.sin(angle) * speed;
+    particleVelocities[i3 + 2] = (Math.random() - 0.5) * 3.0;
+
+    particleColors[i3] = col.r;
+    particleColors[i3 + 1] = col.g;
+    particleColors[i3 + 2] = col.b;
   }
   particleSystem.geometry.attributes.position.needsUpdate = true;
   particleSystem.geometry.attributes.color.needsUpdate = true;
 }
 
 function updateParticles(dt, elapsed) {
-  for (let i = 0; i < 75; i++) {
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
-    particleVelocities[i3 + 1] -= 4.5 * dt;
     particlePositions[i3] += particleVelocities[i3] * dt;
     particlePositions[i3 + 1] += particleVelocities[i3 + 1] * dt;
     particlePositions[i3 + 2] += particleVelocities[i3 + 2] * dt;
   }
   particleSystem.geometry.attributes.position.needsUpdate = true;
-  particleMat.opacity = Math.max(0, 1 - (elapsed / 3.2) * 0.9);
+  particleMat.opacity = Math.max(0, 1.0 - (elapsed / 3.5) * 0.7);
 }
 
-function getCardTexture(stock, hex, usdValue) {
-  const key = `${stock.ticker}_${usdValue.toFixed(2)}`;
-  if (textureCache.has(key)) return textureCache.get(key);
+function resetVaultForIdle() {
+  reactorGroup.visible = true;
+  revealCardMesh.visible = false;
+  particleSystem.visible = false;
+  for (let i = 0; i < satelliteSpheres.length; i++) {
+    satelliteSpheres[i].userData.imploding = false;
+    satelliteSpheres[i].userData.radius = 2.4 + Math.floor(i / 6) * 0.75;
+    satelliteSpheres[i].scale.setScalar(1.0);
+  }
+  setVaultOpacity(1.0);
+}
+
+function setVaultOpacity(alpha) {
+  centralSphereMat.opacity = 0.85 * alpha;
+  revealCardMat.opacity = alpha;
+}
+
+function finishAndCleanup() {
+  const stakeMultiplier = currentStakeAmount / 1000000;
+  const holdMultiplier = currentHoldHours >= 168 ? 2.0 : currentHoldHours >= 72 ? 1.25 : 1.0;
+  const finalUsd = selectedStock ? selectedStock.baseUsd * stakeMultiplier * holdMultiplier : 0;
+
+  const cb = onCompleteCallback;
+  if (cb) {
+    cb({
+      stock: selectedStock,
+      usdValue: finalUsd,
+      stakeAmount: currentStakeAmount,
+      holdHours: currentHoldHours,
+    });
+  }
+
+  resetVaultForIdle();
+  animPhase = "REACTOR_IDLE";
+  phaseStartTime = performance.now();
+}
+
+/* ================= particles ================= */
+
+function initParticles() {
+  const geo = new THREE.BufferGeometry();
+  particlePositions = new Float32Array(PARTICLE_COUNT * 3);
+  particleVelocities = new Float32Array(PARTICLE_COUNT * 3);
+  particleColors = new Float32Array(PARTICLE_COUNT * 3);
+
+  geo.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(particleColors, 3));
+
+  const spriteCanvas = document.createElement("canvas");
+  spriteCanvas.width = 32;
+  spriteCanvas.height = 32;
+  const ctx = spriteCanvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.beginPath();
+  ctx.arc(16, 16, 14, 0, Math.PI * 2);
+  ctx.fill();
+  const spriteTex = new THREE.CanvasTexture(spriteCanvas);
+
+  particleMat = new THREE.PointsMaterial({
+    size: 0.28,
+    map: spriteTex,
+    vertexColors: true,
+    transparent: true,
+    opacity: 1.0,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+
+  particleSystem = new THREE.Points(geo, particleMat);
+  particleSystem.visible = false;
+  particleSystem.renderOrder = 22;
+  rootGroup.add(particleSystem);
+}
+
+/* ================= card texture + vector logos ================= */
+
+function getStockCardTexture(stock, stakeAmount, holdHours) {
+  const cacheKey = `${stock.ticker}_${stakeAmount}_${holdHours}`;
+  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey);
 
   const canvasTex = document.createElement("canvas");
-  canvasTex.width = 768;
-  canvasTex.height = 1024;
+  canvasTex.width = 1024;
+  canvasTex.height = 1408; // 3:4 aspect ratio
   const ctx = canvasTex.getContext("2d");
   const w = canvasTex.width;
   const h = canvasTex.height;
 
-  ctx.fillStyle = "#0b1026";
+  // 1. Background
+  ctx.fillStyle = "#080b1a";
   ctx.fillRect(0, 0, w, h);
 
-  ctx.strokeStyle = hex;
-  ctx.lineWidth = 14;
-  ctx.shadowColor = hex;
-  ctx.shadowBlur = 30;
-  ctx.strokeRect(40, 40, w - 80, h - 80);
+  // Scanlines
+  ctx.fillStyle = "rgba(0, 229, 255, 0.025)";
+  for (let y = 0; y < h; y += 10) {
+    ctx.fillRect(0, y, w, 4);
+  }
+
+  // 2. Card border + cyber corners
+  const mainColor = stock.color;
+  ctx.strokeStyle = mainColor;
+  ctx.lineWidth = 10;
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 24;
+  ctx.strokeRect(32, 32, w - 64, h - 64);
+
+  ctx.fillStyle = mainColor;
+  const notch = 40;
+  ctx.fillRect(32, 32, notch, notch);
+  ctx.fillRect(w - 32 - notch, 32, notch, notch);
+  ctx.fillRect(32, h - 32 - notch, notch, notch);
+  ctx.fillRect(w - 32 - notch, h - 32 - notch, notch, notch);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = hex;
-  ctx.font = '900 44px "Orbitron", "Impact", sans-serif';
+  // 3. Logo medallion
+  ctx.save();
+  ctx.translate(w / 2, 240);
+  ctx.fillStyle = "rgba(0, 229, 255, 0.12)";
+  ctx.beginPath();
+  ctx.arc(0, 0, 110, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = mainColor;
+  ctx.lineWidth = 6;
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 18;
+  ctx.stroke();
+  ctx.restore();
+
+  drawVectorLogo(ctx, w / 2, 240, stock.icon, mainColor);
+
+  // 4. Ticker + company name
   ctx.textAlign = "center";
-  ctx.fillText(stock.tier, w / 2, 150);
+  ctx.textBaseline = "middle";
 
   ctx.fillStyle = "#ffffff";
-  ctx.shadowColor = hex;
-  ctx.shadowBlur = 22;
-  ctx.font = '900 150px "Orbitron", "Impact", sans-serif';
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 16;
+  ctx.font = '900 68px "Orbitron", "Impact", sans-serif';
   ctx.fillText(`$${stock.ticker}`, w / 2, 430);
-  ctx.shadowBlur = 0;
 
   ctx.fillStyle = "#7a8299";
-  ctx.font = '700 40px "Courier New", monospace';
-  ctx.fillText(stock.name.toUpperCase(), w / 2, 520);
-
-  ctx.fillStyle = hex;
-  ctx.shadowColor = hex;
-  ctx.shadowBlur = 20;
-  ctx.font = '900 88px "Orbitron", "Impact", sans-serif';
-  ctx.fillText(`+$${usdValue.toFixed(2)} USD`, w / 2, 700);
   ctx.shadowBlur = 0;
+  ctx.font = '700 28px "Courier New", monospace';
+  ctx.fillText(stock.name.toUpperCase(), w / 2, 500);
 
+  // 5. Payout box ($USD + fractional shares)
+  const stakeMultiplier = stakeAmount / 1000000;
+  const holdMultiplier = holdHours >= 168 ? 2.0 : holdHours >= 72 ? 1.25 : 1.0;
+  const totalUsdValue = stock.baseUsd * stakeMultiplier * holdMultiplier;
+  const mockSharePrice = stock.baseUsd > 100 ? 185 : stock.baseUsd > 10 ? 140 : 225;
+  const fractionalShares = totalUsdValue / mockSharePrice;
+
+  ctx.fillStyle = "#0f1633";
+  ctx.strokeStyle = mainColor;
+  ctx.lineWidth = 4;
+  ctx.fillRect(80, 580, w - 160, 260);
+  ctx.strokeRect(80, 580, w - 160, 260);
+
+  ctx.fillStyle = "#7a8299";
+  ctx.font = '700 24px "Courier New", monospace';
+  ctx.fillText("RWA EQUITY ALLOCATION", w / 2, 630);
+
+  ctx.fillStyle = mainColor;
+  ctx.shadowColor = mainColor;
+  ctx.shadowBlur = 20;
+  ctx.font = '900 64px "Orbitron", sans-serif';
+  ctx.fillText(`+$${totalUsdValue.toFixed(2)} USD`, w / 2, 700);
+
+  ctx.fillStyle = "#ffffff";
+  ctx.shadowBlur = 0;
+  ctx.font = '700 26px "Courier New", monospace';
+  ctx.fillText(`${fractionalShares.toFixed(4)} SHARES CREDITED`, w / 2, 770);
+
+  // 6. Stake & hold metadata footer
   ctx.fillStyle = "#586075";
-  ctx.font = '700 34px "Courier New", monospace';
-  ctx.fillText("RWA EQUITY CREDITED", w / 2, 800);
+  ctx.font = '700 22px "Courier New", monospace';
+  ctx.fillText(`STAKE: ${(stakeAmount / 1000000).toFixed(1)}M VIB  |  HOLD: ${holdHours}H`, w / 2, 950);
+
+  // Viral footer tagline
+  ctx.fillStyle = COLORS.cyanNum;
+  ctx.shadowColor = COLORS.cyanNum;
+  ctx.shadowBlur = 10;
+  ctx.font = '900 26px "Orbitron", sans-serif';
+  ctx.fillText("⚡ VIBING FLOOR ALCHEMY ⚡", w / 2, 1120);
 
   const tex = new THREE.CanvasTexture(canvasTex);
   tex.anisotropy = 4;
   tex.needsUpdate = true;
-  textureCache.set(key, tex);
+  textureCache.set(cacheKey, tex);
   return tex;
+}
+
+/**
+ * Procedural vector logo renderer for each RWA stock (inside the medallion).
+ */
+function drawVectorLogo(ctx, cx, cy, iconType, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 8;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 15;
+
+  if (iconType === "nvidia") {
+    // Spiral eye
+    ctx.beginPath();
+    ctx.arc(cx, cy, 55, 0, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30, 0, Math.PI * 1.2);
+    ctx.stroke();
+  } else if (iconType === "tesla") {
+    // T shield
+    ctx.beginPath();
+    ctx.moveTo(cx - 50, cy - 45);
+    ctx.lineTo(cx + 50, cy - 45);
+    ctx.moveTo(cx, cy - 45);
+    ctx.lineTo(cx, cy + 55);
+    ctx.stroke();
+  } else if (iconType === "apple") {
+    // Apple silhouette
+    ctx.beginPath();
+    ctx.arc(cx, cy + 10, 38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx + 15, cy - 35, 12, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (iconType === "windows") {
+    // 4 squares
+    const s = 24;
+    ctx.fillRect(cx - s - 4, cy - s - 4, s, s);
+    ctx.fillRect(cx + 4, cy - s - 4, s, s);
+    ctx.fillRect(cx - s - 4, cy + 4, s, s);
+    ctx.fillRect(cx + 4, cy + 4, s, s);
+  } else if (iconType === "bitcoin") {
+    // Bitcoin
+    ctx.font = "900 85px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("₿", cx, cy);
+  } else if (iconType === "spacex") {
+    // X with orbital arc
+    ctx.font = "900 80px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("𝕏", cx, cy);
+  } else if (iconType === "coin") {
+    // Coin circle with C
+    ctx.beginPath();
+    ctx.arc(cx, cy, 52, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 34, Math.PI * 0.4, Math.PI * 1.6);
+    ctx.stroke();
+  } else if (iconType === "shield") {
+    // Shield outline
+    ctx.beginPath();
+    ctx.moveTo(cx - 45, cy - 50);
+    ctx.lineTo(cx + 45, cy - 50);
+    ctx.lineTo(cx + 45, cy + 5);
+    ctx.quadraticCurveTo(cx + 45, cy + 35, cx, cy + 55);
+    ctx.quadraticCurveTo(cx - 45, cy + 35, cx - 45, cy + 5);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    // Default bull chart
+    ctx.font = "900 70px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("📈", cx, cy);
+  }
+  ctx.restore();
 }
