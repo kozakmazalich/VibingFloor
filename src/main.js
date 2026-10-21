@@ -10,6 +10,7 @@ import { walletState, signWinMessage } from "./wallet.js";
 import { Net } from "./net.js";
 import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
 import { openProfile, wireProfileButtons } from "./profile.js";
+import { addWin } from "./staking.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -516,6 +517,7 @@ const game = new Game(scene, camera, {
     // Track the player's win streak for the signed memo
     if (outcome.winnerId === 1) {
       winStreak++;
+      addWin(); // profile WINS counter
     } else {
       winStreak = 0;
     }
@@ -780,13 +782,20 @@ btnMenuSoundEl.addEventListener("click", () => {
   handleSoundToggle();
 });
 
-// Demo profile / staking vault screen
+// Demo profile / staking vault screen (menu + win screen)
 const btnMenuProfileEl = document.getElementById("btn-menu-profile");
 btnMenuProfileEl.addEventListener("click", () => {
   audio.playClick();
-  const meta = CHAR_TYPES[game.selectedChar] || CHAR_TYPES.robot1_jpg;
-  openProfile({ name: meta.name, portrait: meta.portrait });
+  openProfile();
 });
+const btnWinProfileEl = document.getElementById("btn-win-profile");
+if (btnWinProfileEl) {
+  btnWinProfileEl.addEventListener("click", () => {
+    audio.playClick();
+    winOverlayEl.classList.add("hidden");
+    openProfile();
+  });
+}
 wireProfileButtons();
 
 // UI Event Listeners: Pause Menu

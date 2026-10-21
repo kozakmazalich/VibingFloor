@@ -1,6 +1,6 @@
-// Profile demo check: open the overlay, claim 1M $VIB, advance a day,
-// stake 1M, wait for the 3D vault to finish, and verify a stock card lands
-// in the inventory grid.
+// Profile demo check: open the profile, verify the random robot avatar,
+// claim 1M $VIB, advance a day, stake 1M (overlay hides while the 3D vault
+// plays), and verify a tier-coloured stock card lands in the grid.
 (async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const out = [];
@@ -11,12 +11,14 @@
 
   await sleep(1500);
   document.getElementById("btn-menu-profile").click();
-  await sleep(400);
+  await sleep(500);
   const overlay = document.getElementById("profile-overlay");
   !overlay.classList.contains("hidden") ? ok("profile overlay opens") : bad("profile overlay hidden");
 
-  const name = document.getElementById("profile-name").textContent;
-  name.length > 0 ? ok(`robot shown: ${name}`) : bad("no robot name");
+  const avatar = document.getElementById("profile-avatar").src;
+  /assets\/(robot[1-5]_portrait\.png|meta\.jpg)$/.test(avatar)
+    ? ok(`random robot portrait shown (${avatar.split("/").pop()})`)
+    : bad(`avatar wrong (${avatar})`);
 
   const vib0 = num(document.getElementById("profile-vib").textContent);
   document.getElementById("btn-demo-claim").click();
@@ -40,17 +42,23 @@
   staked1 - staked0 === 1000000
     ? ok(`staked +1,000,000 (${staked0} -> ${staked1})`)
     : bad(`stake wrong (${staked0} -> ${staked1})`);
+  overlay.classList.contains("hidden")
+    ? ok("profile hides while the 3D vault plays")
+    : bad("profile still visible during the vault");
 
-  // The 3D vault runs its own RAF (implode 0.8s + reveal 3.5s + fade 0.4s)
+  // Vault: 2.5s reactor + 0.8s implode + 4.3s reveal + 0.4s fade
   let cardCount = cards0;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 70; i++) {
     await sleep(200);
     cardCount = document.querySelectorAll("#profile-cards .stock-card").length;
     if (cardCount > cards0) break;
   }
   cardCount > cards0
     ? ok(`stock card collected after the vault (${cards0} -> ${cardCount})`)
-    : bad(`no stock card after 12s (${cardCount})`);
+    : bad(`no stock card after 14s (${cardCount})`);
+  !overlay.classList.contains("hidden")
+    ? ok("profile reopens after the vault")
+    : bad("profile did not reopen");
 
   document.getElementById("btn-profile-close").click();
   await sleep(150);

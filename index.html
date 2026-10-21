@@ -417,6 +417,14 @@
             <span class="btn-icon">🏠</span>
             <span class="btn-text">MAIN MENU</span>
           </button>
+          <button id="btn-win-profile" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">◈</span>
+            <span class="btn-text">PROFILE</span>
+          </button>
         </div>
       </div>
     </div>
@@ -630,51 +638,58 @@
           <button id="btn-profile-close" class="profile-close" aria-label="Close">✕</button>
         </div>
 
-        <div class="profile-robot">
-          <div class="avatar-frame cyan">
-            <img id="profile-avatar" src="assets/robot1_portrait.png" alt="Viber" class="showcase-avatar" />
-          </div>
-          <div class="profile-robot-info">
-            <div id="profile-name" class="profile-robot-name">CRIMSON MINER</div>
-            <div class="profile-robot-role">VIBER PILOT // VAULT ACCESS</div>
-          </div>
+        <div class="profile-grid">
+          <!-- LEFT: robot avatar + stats + actions -->
+          <aside class="profile-left">
+            <div class="avatar-frame cyan profile-avatar-frame">
+              <img id="profile-avatar" src="assets/robot1_portrait.png" alt="Viber" class="showcase-avatar" />
+            </div>
+            <div class="profile-stats">
+              <div class="stat">
+                <label>WINS</label>
+                <div id="profile-wins" class="stat-value tabular">0</div>
+              </div>
+              <div class="stat">
+                <label>$VIB BALANCE</label>
+                <div id="profile-vib" class="stat-value tabular">0</div>
+              </div>
+              <div class="stat">
+                <label>STAKED $VIB</label>
+                <div id="profile-staked" class="stat-value tabular">0</div>
+              </div>
+              <div class="stat">
+                <label>HOLD / LOCK</label>
+                <div id="profile-hold" class="stat-value tabular">24h</div>
+                <div id="profile-hold-tier" class="stat-tier">x1.0</div>
+              </div>
+            </div>
+            <div class="profile-actions">
+              <button id="btn-demo-claim" class="cyber-btn cyber-btn-primary">
+                <span class="btn-icon">💰</span>
+                <span class="btn-text">CLAIM +1,000,000 $VIB</span>
+              </button>
+              <button id="btn-demo-stake" class="cyber-btn cyber-btn-wallet">
+                <span class="btn-icon">⚡</span>
+                <span class="btn-text">STAKE 1,000,000 $VIB</span>
+              </button>
+              <button id="btn-demo-nextday" class="cyber-btn cyber-btn-secondary">
+                <span class="btn-icon">☀</span>
+                <span class="btn-text">NEXT DAY ➜</span>
+              </button>
+            </div>
+          </aside>
+
+          <!-- CENTER: reactive 3D coin pile -->
+          <section class="profile-center">
+            <div class="profile-coins-title">STAKED VIB VAULT</div>
+            <canvas id="profile-coins" width="340" height="220" aria-label="Staked VIB coin pile"></canvas>
+            <div class="profile-coins-sub">
+              <span id="profile-cards-count" class="tabular">0</span> RWA CARDS CLAIMED
+            </div>
+          </section>
         </div>
 
-        <div class="profile-stats">
-          <div class="stat">
-            <label>$VIB BALANCE</label>
-            <div id="profile-vib" class="stat-value tabular">0</div>
-          </div>
-          <div class="stat">
-            <label>STAKED $VIB</label>
-            <div id="profile-staked" class="stat-value tabular">0</div>
-          </div>
-          <div class="stat">
-            <label>HOLD TIME</label>
-            <div id="profile-hold" class="stat-value tabular">24h</div>
-            <div id="profile-hold-tier" class="stat-tier">x1.0</div>
-          </div>
-          <div class="stat">
-            <label>RWA CARDS</label>
-            <div id="profile-cards-count" class="stat-value tabular">0</div>
-          </div>
-        </div>
-
-        <div class="profile-actions">
-          <button id="btn-demo-claim" class="cyber-btn cyber-btn-primary">
-            <span class="btn-icon">💰</span>
-            <span class="btn-text">CLAIM +1,000,000 $VIB</span>
-          </button>
-          <button id="btn-demo-nextday" class="cyber-btn cyber-btn-secondary">
-            <span class="btn-icon">☀</span>
-            <span class="btn-text">NEXT DAY ➜</span>
-          </button>
-          <button id="btn-demo-stake" class="cyber-btn cyber-btn-wallet">
-            <span class="btn-icon">⚡</span>
-            <span class="btn-text">STAKE 1,000,000 $VIB</span>
-          </button>
-        </div>
-
+        <!-- BOTTOM: won stock cards -->
         <div class="profile-cards-title">// WON RWA EQUITY CARDS</div>
         <div id="profile-cards" class="profile-cards"></div>
       </div>

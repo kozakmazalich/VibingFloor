@@ -1,43 +1,130 @@
 /**
- * PROFILE — STAKING DEMO (local test harness).
+ * PROFILE PAGE — pilot profile with the staking demo.
  *
- * A temporary demo screen to exercise the staking vault end-to-end:
- *   - shows the player's viber robot, $VIB balance, staked amount and hold time
- *   - infinite "+1,000,000 $VIB" claim button
- *   - "next day" button advancing the staking hold time (reward tiers at 72h/168h)
- *   - STAKE button that plays the real 3D stakingVault animation and collects
- *     the won RWA stock cards into the inventory
+ * Layout (desktop): LEFT = random robot portrait + WINS/$VIB stats + CLAIM /
+ * STAKE / NEXT DAY buttons; CENTER = a 3D pile of VIB coins that grows with
+ * the staked amount; BOTTOM = grid of claimed RWA stock cards.
+ * Mobile: everything stacks vertically.
  *
- * Everything is LOCAL DEMO state (localStorage) — no real tokens, no wallet.
+ * Single source of truth: src/staking.js (getStakeState / claimReward /
+ * stakeVIB / advanceDay / addClaimedStock).
  */
+import * as THREE from "three";
+import {
+  getStakeState,
+  claimReward,
+  stakeVIB,
+  advanceDay,
+  addClaimedStock,
+} from "./staking.js";
 import { showStakingVault, triggerBreachAndClaim } from "./stakingVault.js";
 
-const STORAGE_KEY = "vf-demo-profile-v1";
-const STAKE_STEP = 1000000;
+const PORTRAITS = [
+  "assets/robot1_portrait.png",
+  "assets/robot2_portrait.png",
+  "assets/robot3_portrait.png",
+  "assets/robot4_portrait.png",
+  "assets/robot5_portrait.png",
+  "assets/meta.jpg",
+];
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    /* private mode etc. */
-  }
-  return { vib: 2500000, staked: 0, holdHours: 24, cards: [] };
-}
-
-function saveState(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* ignore */
-  }
-}
-
-let state = loadState();
+// Tier colours for the stock cards (per the profile spec).
+const TIER_COLORS = {
+  COMMON: "#7a8299",
+  UNCOMMON: "#00e5ff",
+  RARE: "#39ff14",
+  EPIC: "#ff2d95",
+  LEGENDARY: "#ffd700",
+};
 
 const els = {};
 let vaultBusy = false;
 
+/* ---------------------------------------------------------------- */
+/* 3D coin pile (center) — grows with totalStaked, 60fps, no bloom  */
+/* ---------------------------------------------------------------- */
+let coinRenderer = null;
+let coinScene = null;
+let coinCamera = null;
+let coinGroup = null;
+let coinRaf = 0;
+let coinCoins = [];
+let coinCount = -1;
+
+function buildCoinPile(count) {
+  if (!coinGroup) return;
+  for (const c of coinCoins) coinGroup.remove(c);
+  coinCoins = [];
+
+  const geo = new THREE.CylinderGeometry(0.42, 0.42, 0.14, 22);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffd700 });
+  // Highlight rim for every coin (single shared geometry)
+  const rimGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.05, 22);
+  const rimMat = new THREE.MeshBasicMaterial({ color: 0xfff3b0 });
+
+  // Pyramid pile: rows of 1..n coins (max 6 rows = 21 coins)
+  const n = Math.min(6, Math.max(1, Math.ceil((Math.sqrt(8 * count + 1) - 1) / 2)));
+  let placed = 0;
+  for (let row = 1; row <= n && placed < count; row++) {
+    for (let i = 0; i < row && placed < count; i++) {
+      const coin = new THREE.Mesh(geo, mat);
+      const x = (i - (row - 1) / 2) * 0.98;
+      const y = (n - row) * 0.16 + 0.1 + (placed % 2) * 0.02;
+      coin.position.set(x, y, 0);
+      coin.rotation.x = Math.PI / 2;
+      const rim = new THREE.Mesh(rimGeo, rimMat);
+      rim.position.set(x, y + 0.06, 0);
+      rim.rotation.x = Math.PI / 2;
+      coinGroup.add(coin, rim);
+      coinCoins.push(coin, rim);
+      placed++;
+    }
+  }
+}
+
+function syncCoinPile(staked) {
+  const count = Math.min(21, 3 + Math.floor(staked / 1000000));
+  if (count !== coinCount) {
+    coinCount = count;
+    buildCoinPile(count);
+  }
+}
+
+function startCoinLoop() {
+  if (coinRaf) return;
+  const loop = () => {
+    if (!coinRenderer) return;
+    coinRaf = requestAnimationFrame(loop);
+    if (coinGroup) {
+      coinGroup.rotation.y += 0.012;
+      coinGroup.position.y = Math.sin(performance.now() * 0.0015) * 0.06;
+    }
+    coinRenderer.render(coinScene, coinCamera);
+  };
+  coinRaf = requestAnimationFrame(loop);
+}
+
+function stopCoinLoop() {
+  if (coinRaf) cancelAnimationFrame(coinRaf);
+  coinRaf = 0;
+}
+
+function initCoinPile(canvas) {
+  if (coinRenderer) return;
+  coinRenderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  coinRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  coinRenderer.setSize(canvas.clientWidth || 320, canvas.clientHeight || 200, false);
+  coinScene = new THREE.Scene();
+  coinCamera = new THREE.PerspectiveCamera(45, canvas.clientWidth / Math.max(1, canvas.clientHeight), 0.1, 50);
+  coinCamera.position.set(0, 0.6, 5.2);
+  coinCamera.lookAt(0, 0.9, 0);
+  coinGroup = new THREE.Group();
+  coinScene.add(coinGroup);
+}
+
+/* ---------------------------------------------------------------- */
+/* UI rendering                                                      */
+/* ---------------------------------------------------------------- */
 function fmt(n) {
   return n.toLocaleString("en-US");
 }
@@ -45,7 +132,7 @@ function fmt(n) {
 function holdLabel(hours) {
   const days = Math.floor(hours / 24);
   const rem = hours % 24;
-  if (days > 0 && rem === 0) return `${days}d (${hours}h)`;
+  if (days > 0 && rem === 0) return `${days}d`;
   return `${hours}h`;
 }
 
@@ -55,20 +142,21 @@ function holdTier(hours) {
   return "x1.0";
 }
 
-function renderCards() {
+function renderCards(stocks) {
   if (!els.cards) return;
   els.cards.innerHTML = "";
-  if (!state.cards.length) {
+  if (!stocks.length) {
     const empty = document.createElement("div");
     empty.className = "profile-empty";
-    empty.textContent = "No RWA cards yet — stake to roll the vault.";
+    empty.textContent = "No RWA cards yet — stake to breach the vault.";
     els.cards.appendChild(empty);
     return;
   }
-  for (const c of state.cards) {
+  for (const c of stocks) {
+    const color = TIER_COLORS[c.tier] || "#7a8299";
     const card = document.createElement("div");
     card.className = "stock-card";
-    card.style.setProperty("--stock-color", c.color);
+    card.style.setProperty("--stock-color", color);
     card.innerHTML = `
       <div class="stock-tier">${c.tier}</div>
       <div class="stock-ticker">$${c.ticker}</div>
@@ -81,88 +169,100 @@ function renderCards() {
 }
 
 function render() {
-  if (els.vib) els.vib.textContent = fmt(state.vib);
-  if (els.staked) els.staked.textContent = fmt(state.staked);
-  if (els.hold) els.hold.textContent = holdLabel(state.holdHours);
-  if (els.holdTier) els.holdTier.textContent = holdTier(state.holdHours);
-  if (els.cardsCount) els.cardsCount.textContent = String(state.cards.length);
+  const s = getStakeState();
+  if (els.vib) els.vib.textContent = fmt(s.vibBalance);
+  if (els.staked) els.staked.textContent = fmt(s.totalStaked);
+  if (els.wins) els.wins.textContent = String(s.wins);
+  if (els.hold) els.hold.textContent = holdLabel(s.holdHours);
+  if (els.holdTier) els.holdTier.textContent = holdTier(s.holdHours);
+  if (els.cardsCount) els.cardsCount.textContent = String(s.claimedStocks.length);
   if (els.stakeBtn) {
-    els.stakeBtn.disabled = vaultBusy || state.vib < STAKE_STEP;
+    els.stakeBtn.disabled = vaultBusy || s.vibBalance < 1000000;
     els.stakeBtn.classList.toggle("disabled", els.stakeBtn.disabled);
   }
-  renderCards();
+  if (els.claimBtn) els.claimBtn.disabled = vaultBusy;
+  if (els.nextBtn) els.nextBtn.disabled = vaultBusy;
+  renderCards(s.claimedStocks);
+  syncCoinPile(s.totalStaked);
 }
 
-function claimVib() {
-  state.vib += STAKE_STEP;
-  saveState(state);
+/* ---------------------------------------------------------------- */
+/* Actions                                                           */
+/* ---------------------------------------------------------------- */
+function onClaim() {
+  claimReward();
   render();
 }
 
-function nextDay() {
-  state.holdHours += 24;
-  saveState(state);
+function onNextDay() {
+  advanceDay();
   render();
 }
 
-function stakeVib() {
-  if (vaultBusy || state.vib < STAKE_STEP) return;
+function onStake() {
+  if (vaultBusy) return;
+  const s = getStakeState();
+  if (s.vibBalance < 1000000) return;
+
+  stakeVIB(1000000);
   vaultBusy = true;
-  state.vib -= STAKE_STEP;
-  state.staked += STAKE_STEP;
-  saveState(state);
   render();
+  if (els.overlay) els.overlay.classList.add("hidden");
 
-  // Real 3D staking vault (its own full-screen standalone renderer + RAF).
-  // The vault idles as an orbiting reactor; trigger the breach a moment later
-  // so the implode -> stock reveal -> fade sequence plays.
+  const { totalStaked, holdHours } = getStakeState();
   showStakingVault(
     (res) => {
       vaultBusy = false;
-      if (res && res.stock) {
-        state.cards.unshift({
-          ticker: res.stock.ticker,
-          name: res.stock.name,
-          tier: res.stock.tier,
-          color: res.stock.color,
-          usdValue: res.usdValue,
-          stakeAmount: res.stakeAmount,
-          holdHours: res.holdHours,
-        });
-      }
-      saveState(state);
+      addClaimedStock(res);
       render();
+      if (els.overlay) els.overlay.classList.remove("hidden");
     },
-    { stakeAmount: state.staked, holdHours: state.holdHours }
+    { stakeAmount: totalStaked, holdHours }
   );
-  setTimeout(() => triggerBreachAndClaim(), 1600);
+
+  // Give the reactor ~2.5s to spin before the implosion/claim sequence
+  setTimeout(() => triggerBreachAndClaim(), 2500);
 }
 
-export function openProfile(robot) {
+/* ---------------------------------------------------------------- */
+/* Public API                                                        */
+/* ---------------------------------------------------------------- */
+export function openProfile() {
   els.overlay = document.getElementById("profile-overlay");
   els.avatar = document.getElementById("profile-avatar");
-  els.name = document.getElementById("profile-name");
+  els.wins = document.getElementById("profile-wins");
   els.vib = document.getElementById("profile-vib");
   els.staked = document.getElementById("profile-staked");
   els.hold = document.getElementById("profile-hold");
   els.holdTier = document.getElementById("profile-hold-tier");
   els.cardsCount = document.getElementById("profile-cards-count");
   els.cards = document.getElementById("profile-cards");
+  els.claimBtn = document.getElementById("btn-demo-claim");
   els.stakeBtn = document.getElementById("btn-demo-stake");
+  els.nextBtn = document.getElementById("btn-demo-nextday");
+  els.coinCanvas = document.getElementById("profile-coins");
 
   if (!els.overlay) return;
 
-  if (robot) {
-    if (els.avatar && robot.portrait) els.avatar.src = robot.portrait;
-    if (els.name) els.name.textContent = robot.name || "VIBER";
+  // Random robot portrait until there is an account system
+  if (els.avatar) {
+    els.avatar.src = PORTRAITS[Math.floor(Math.random() * PORTRAITS.length)];
   }
 
   render();
   els.overlay.classList.remove("hidden");
+
+  if (els.coinCanvas) {
+    initCoinPile(els.coinCanvas);
+    coinCount = -1; // force a rebuild now that the scene exists
+    syncCoinPile(getStakeState().totalStaked);
+    startCoinLoop();
+  }
 }
 
 export function closeProfile() {
   if (els.overlay) els.overlay.classList.add("hidden");
+  stopCoinLoop();
 }
 
 export function wireProfileButtons() {
@@ -170,8 +270,8 @@ export function wireProfileButtons() {
   const next = document.getElementById("btn-demo-nextday");
   const stake = document.getElementById("btn-demo-stake");
   const close = document.getElementById("btn-profile-close");
-  if (claim) claim.addEventListener("click", claimVib);
-  if (next) next.addEventListener("click", nextDay);
-  if (stake) stake.addEventListener("click", stakeVib);
+  if (claim) claim.addEventListener("click", onClaim);
+  if (next) next.addEventListener("click", onNextDay);
+  if (stake) stake.addEventListener("click", onStake);
   if (close) close.addEventListener("click", closeProfile);
 }
