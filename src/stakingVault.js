@@ -662,6 +662,7 @@ function initVaultScene() {
     new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })
   );
   cardBasePlane.position.z = 0.0;
+  cardBasePlane.renderOrder = 1;
   cardGroup.add(cardBasePlane);
 
   // Layer 2 (z = +0.07): Mid Holographic Vector Logo Medallion & Ticker
@@ -670,6 +671,7 @@ function initVaultScene() {
     new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })
   );
   cardMidHoloPlane.position.z = 0.07;
+  cardMidHoloPlane.renderOrder = 2;
   cardGroup.add(cardMidHoloPlane);
 
   // Layer 3 (z = +0.15): Foreground Pop-out Payout Box & Fractional Shares
@@ -678,6 +680,7 @@ function initVaultScene() {
     new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })
   );
   cardFrontParallaxPlane.position.z = 0.15;
+  cardFrontParallaxPlane.renderOrder = 3;
   cardGroup.add(cardFrontParallaxPlane);
 
   // Layer 4 (z = +0.17): Diagonal Holographic Foil Sheen Sweep
@@ -692,6 +695,7 @@ function initVaultScene() {
   cardSheenPlane = new THREE.Mesh(sheenGeo, sheenMat);
   cardSheenPlane.rotation.z = -0.35;
   cardSheenPlane.position.z = 0.17;
+  cardSheenPlane.renderOrder = 4;
   cardGroup.add(cardSheenPlane);
 
   // Card Backplate so 540° spin looks solid from behind
@@ -701,6 +705,7 @@ function initVaultScene() {
   );
   backPlane.rotation.y = Math.PI;
   backPlane.position.z = -0.14;
+  backPlane.renderOrder = 0;
   cardGroup.add(backPlane);
 
   cardHaloSprite = new THREE.Sprite(
@@ -715,6 +720,7 @@ function initVaultScene() {
   );
   cardHaloSprite.scale.setScalar(7.5);
   cardHaloSprite.position.z = -0.4;
+  cardHaloSprite.renderOrder = -1;
   cardGroup.add(cardHaloSprite);
 
   const swGeo = new THREE.RingGeometry(0.6, 0.85, 64);

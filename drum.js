@@ -53,6 +53,9 @@ const DISPLAY_DURATION = 2.5;  // Seconds to hold the winning amount lit up
 const FADE_OUT_DURATION = 0.45;
 const FULL_SPINS = 6;          // Full revolutions before stopping on target
 const PARTICLE_COUNT = 75;     // Kept low for M1 integrated GPU
+const POINTER_LEFT_Z = -Math.PI / 2;  // left cone points right, into the window
+const POINTER_RIGHT_Z = Math.PI / 2; // right cone points left, into the window
+const POINTER_TICK = 0.32;           // mechanical flick on each passing slat
 
 // ============================================================================
 // 3. MODULE STATE (Singleton for Memory & Mesh Reuse)
@@ -204,14 +207,14 @@ export function updatePrizeDrum(now = performance.now()) {
     const prevTick = Math.floor(prevAngle / sliceAngle);
     const currTick = Math.floor(drumGroup.rotation.x / sliceAngle);
     if (currTick !== prevTick && t < 0.94) {
-      // Kick pointers outward slightly on tick
-      pointerLeft.rotation.z = -0.32;
-      pointerRight.rotation.z = 0.32;
+      // Kick the tips away from the selection window, then spring back
+      pointerLeft.rotation.z = POINTER_LEFT_Z - POINTER_TICK;
+      pointerRight.rotation.z = POINTER_RIGHT_Z + POINTER_TICK;
     }
 
-    // Spring pointers back to center
-    pointerLeft.rotation.z += (0 - pointerLeft.rotation.z) * Math.min(1, dt * 18);
-    pointerRight.rotation.z += (0 - pointerRight.rotation.z) * Math.min(1, dt * 18);
+    // Spring pointers back to their inward-pointing resting angle
+    pointerLeft.rotation.z += (POINTER_LEFT_Z - pointerLeft.rotation.z) * Math.min(1, dt * 18);
+    pointerRight.rotation.z += (POINTER_RIGHT_Z - pointerRight.rotation.z) * Math.min(1, dt * 18);
 
     // Pulse neon frame intensity with spin speed
     const speedFactor = Math.max(0, 1 - t);
@@ -427,12 +430,12 @@ function initPrizeDrumResources() {
   const ptrMat = new THREE.MeshBasicMaterial({ color: COLORS.cyanNum });
 
   pointerLeft = new THREE.Mesh(ptrGeo, ptrMat);
-  pointerLeft.rotation.z = -Math.PI / 2;
+  pointerLeft.rotation.z = POINTER_LEFT_Z;
   pointerLeft.position.set(-winWidth / 2 - 0.25, 0, DRUM_RADIUS + 0.3);
   frameGroup.add(pointerLeft);
 
   pointerRight = new THREE.Mesh(ptrGeo, ptrMat);
-  pointerRight.rotation.z = Math.PI / 2;
+  pointerRight.rotation.z = POINTER_RIGHT_Z;
   pointerRight.position.set(winWidth / 2 + 0.25, 0, DRUM_RADIUS + 0.3);
   frameGroup.add(pointerRight);
 
@@ -499,8 +502,8 @@ function triggerResultPresentation(now) {
   animPhase = 'CELEBRATING';
   phaseStartTime = now;
 
-  pointerLeft.rotation.z = 0;
-  pointerRight.rotation.z = 0;
+  pointerLeft.rotation.z = POINTER_LEFT_Z;
+  pointerRight.rotation.z = POINTER_RIGHT_Z;
 
   const isWin = selectedTier.amount > 0;
   const isJackpot = selectedTier.amount >= 50000;
