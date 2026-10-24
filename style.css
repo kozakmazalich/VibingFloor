@@ -648,11 +648,16 @@ body {
    ========================================= */
 .survivors-strip {
   display: flex;
+  flex-wrap: wrap; /* chips wrap to the next line instead of pushing HUD buttons off-screen */
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
   margin-left: 14px;
   padding-left: 14px;
   border-left: 1px solid rgba(255, 255, 255, 0.12);
+  max-width: 100%;
+  min-width: 0; /* allow shrinking inside the flex row */
+  overflow: hidden;
 }
 
 .surv-chip {
@@ -1112,8 +1117,10 @@ body {
 
 .top-bar {
   display: flex;
+  flex-wrap: wrap; /* let sections wrap on narrow screens instead of overflowing */
   justify-content: space-between;
   align-items: flex-start;
+  gap: 8px;
   pointer-events: auto;
 }
 
