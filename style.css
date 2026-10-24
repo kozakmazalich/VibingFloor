@@ -49,8 +49,10 @@ body {
   padding: 20px;
   opacity: 1;
   visibility: visible;
-  transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-              visibility 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  /* Fast (100ms) — a 250ms visibility fade made rapid clicks land in the gap
+     where the overlay is still "visible" but not interactive (felt dead on Mac). */
+  transition: opacity 0.1s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.1s cubic-bezier(0.16, 1, 0.3, 1);
   pointer-events: auto;
 }
 
@@ -125,6 +127,120 @@ body {
   0%   { transform: rotate(-5deg) scale(1) translate(0, 0); }
   50%  { transform: rotate(3deg) scale(1.09) translate(2%, -1.6%); }
   100% { transform: rotate(-2deg) scale(1.05) translate(-2%, 1.6%); }
+}
+
+/* Neon cyber grid floor — cheap CSS-only depth cue (performance-optimization:
+   gradients render once, then a slow transform moves the whole layer). */
+.menu-grid {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: -10%;
+  height: 55%;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 229, 255, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.09) 1px, transparent 1px);
+  background-size: 46px 46px;
+  transform: perspective(340px) rotateX(62deg);
+  transform-origin: 50% 100%;
+  mask-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 55%, #000 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 55%, #000 100%);
+  animation: gridScroll 7s linear infinite;
+  will-change: transform;
+  opacity: 0.7;
+}
+
+@keyframes gridScroll {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 0 46px, 0 0; }
+}
+
+/* Faint CRT scanlines over everything — sells the "arena broadcast" vibe at
+   near-zero cost (single repeating-linear-gradient). */
+.menu-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(10, 10, 20, 0.35) 3px,
+    transparent 4px
+  );
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+}
+
+/* Staggered entrance: each menu panel fades + slides up in sequence so the
+   card assembles instead of blinking in as one block (game-ui-ux). Runs once
+   on load; the start menu is visible at boot so this plays exactly once. */
+#start-menu .fighter-select-panel,
+#start-menu .map-select-panel,
+#start-menu .diff-select-panel,
+#start-menu .bot-select-panel,
+#start-menu .vs-showcase,
+#start-menu .menu-actions,
+#start-menu .menu-controls-guide {
+  animation: riseIn 0.42s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+#start-menu .menu-header            { animation: riseIn 0.42s cubic-bezier(0.16,1,0.3,1) backwards; }
+#start-menu .fighter-select-panel   { animation-delay: 0.06s; }
+#start-menu .map-select-panel       { animation-delay: 0.12s; }
+#start-menu .diff-select-panel      { animation-delay: 0.18s; }
+#start-menu .bot-select-panel       { animation-delay: 0.24s; }
+#start-menu .vs-showcase            { animation-delay: 0.30s; }
+#start-menu .menu-actions           { animation-delay: 0.36s; }
+#start-menu .menu-controls-guide    { animation-delay: 0.42s; }
+
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hover spotlight: selector tabs and menu buttons light up under the cursor
+   with a soft radial glow that tracks mouse position. The custom property
+   --mx/--my is written by JS; the gradient itself is static so this stays
+   GPU-cheap (transform/opacity only). */
+.char-tab-btn,
+.map-tab-btn,
+.diff-tab-btn,
+.cyber-btn {
+  position: relative;
+  overflow: hidden;
+}
+.char-tab-btn::after,
+.map-tab-btn::after,
+.diff-tab-btn::after,
+.cyber-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0; /* above the button's own background, below its text content */
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  background: radial-gradient(
+    220px circle at var(--mx, 50%) var(--my, 50%),
+    rgba(0, 229, 255, 0.18),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+.char-tab-btn:hover::after,
+.map-tab-btn:hover::after,
+.diff-tab-btn:hover::after,
+.cyber-btn:hover::after {
+  opacity: 1;
+}
+
+/* Keep labels/thumbs above the spotlight overlay layer */
+.char-tab-btn > *,
+.map-tab-btn > *,
+.diff-tab-btn > *,
+.cyber-btn > * {
+  position: relative;
+  z-index: 1;
 }
 
 #start-menu .menu-card {
@@ -468,6 +584,129 @@ body {
   max-width: 560px;
 }
 
+/* =========================================
+   MATCH SIZE (BOT COUNT) SELECTOR
+   ========================================= */
+.bot-select-panel {
+  width: 100%;
+  background: rgba(12, 16, 32, 0.75);
+  border: 1px solid rgba(0, 229, 255, 0.2);
+  border-radius: 14px;
+  padding: 10px 14px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bot-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.bot-tab-btn {
+  background: rgba(16, 24, 48, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  color: #e2e8f0;
+}
+
+.bot-tab-btn:hover {
+  background: rgba(24, 36, 68, 0.95);
+  border-color: rgba(0, 229, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.bot-tab-btn.active {
+  background: rgba(0, 229, 255, 0.14);
+  border-color: #00e5ff;
+  box-shadow: 0 0 14px rgba(0, 229, 255, 0.3);
+}
+
+.bot-tab-btn.active .tab-name {
+  color: #00e5ff;
+}
+
+.bot-tab-btn.active .tab-status-badge {
+  background: #00e5ff;
+  color: #0a0a14;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.6);
+}
+
+/* =========================================
+   SURVIVORS STRIP (in-game HUD)
+   One chip per fighter; eliminated fade + grey.
+   ========================================= */
+.survivors-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.surv-chip {
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  padding: 2px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 2px solid rgba(0, 229, 255, 0.55);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.25);
+  transition: filter 0.25s ease, opacity 0.25s ease, transform 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.surv-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 5px;
+}
+
+.surv-chip.you {
+  border-color: #00e5ff;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.55);
+}
+
+.surv-chip.you em {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'JetBrains Mono', monospace;
+  font-style: normal;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #00e5ff;
+  background: rgba(10, 10, 20, 0.92);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+
+/* Eliminated: grey out + sink (stays visible so you can read the attrition) */
+.surv-chip.out {
+  filter: grayscale(1) brightness(0.5);
+  opacity: 0.4;
+  transform: scale(0.86);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: none;
+}
+
 .vs-showcase {
   display: flex;
   align-items: center;
@@ -730,17 +969,28 @@ body {
   transform: translate(-50%, 0);
 }
 
+/* Pulsing glow — LIGHT: animate opacity of a duplicate shadow layer instead of
+   re-computing box-shadow every frame (the old box-shadow keyframes forced a
+   repaint each frame on macOS and could make the button feel "dead" to clicks).
+   We keep the pulse but drive it with a transform-free opacity on ::before. */
 .btn-pulse {
-  animation: pulseGlow 2.5s infinite;
+  position: relative;
+}
+.btn-pulse::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.65), 0 0 6px rgba(0, 229, 255, 0.6);
+  opacity: 0.5;
+  animation: pulseGlow 2.5s ease-in-out infinite;
+  will-change: opacity;
 }
 
 @keyframes pulseGlow {
-  0%, 100% {
-    box-shadow: 0 0 0 1px #00e5ff, 0 6px 20px rgba(0, 0, 0, 0.6), 0 0 16px rgba(0, 229, 255, 0.35);
-  }
-  50% {
-    box-shadow: 0 0 0 1.5px #00e5ff, 0 8px 28px rgba(0, 0, 0, 0.7), 0 0 26px rgba(0, 229, 255, 0.65);
-  }
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.8; }
 }
 
 .btn-icon {
@@ -1639,56 +1889,95 @@ body {
    (left: identity + actions + guide,
     right: fighter/map/difficulty selectors)
    ========================================= */
-@media (min-width: 1024px) {
+/* Two-column start menu. The threshold was 1024px — but between 768–1023px the
+   single-column layout stacked all panels into ~1275px of content, pushing the
+   INITIALIZE BATTLE / ONLINE buttons below the fold (they sat at y≈900 while
+   the window was 720 tall → looked "unclickable"). Switch to two columns from
+   768px so the whole card fits one screen and every button stays visible. */
+@media (min-width: 768px) {
   .start-card {
     max-width: 1120px;
     display: grid;
-    grid-template-columns: minmax(340px, 1.05fr) minmax(380px, 1fr);
+    grid-template-columns: minmax(300px, 1.15fr) minmax(330px, 1fr);
     grid-template-areas:
       "header   fighters"
       "showcase fighters"
       "actions  maps"
-      "guide    diffs";
-    column-gap: 28px;
-    row-gap: 16px;
+      "guide    difbots";
+    column-gap: 22px;
+    row-gap: 13px;
     align-items: start;
-    padding: 30px 36px;
+    padding: 22px 26px;
   }
   .start-card .menu-header { grid-area: header; align-self: center; }
   .start-card .fighter-select-panel,
-  .start-card .map-select-panel,
-  .start-card .diff-select-panel {
+  .start-card .map-select-panel {
     align-self: stretch; /* fill the full row height — no dead space below */
   }
   .start-card .fighter-select-panel { grid-area: fighters; margin-top: 0; }
   .start-card .map-select-panel { grid-area: maps; margin-top: 0; }
-  .start-card .diff-select-panel { grid-area: diffs; margin-top: 0; }
+  /* CPU DIFFICULTY + MATCH SIZE live in ONE flex column, stacked directly
+     under each other in the right column — MATCH SIZE can never fall below
+     the fold because the group shares difficulty's grid row. */
+  .start-card .difficulty-group {
+    grid-area: difbots;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    align-self: start; /* don't stretch — keeps the group tight so MATCH SIZE clears the fold */
+    margin-top: 0;
+    min-width: 0;
+  }
+  .start-card .difficulty-group .diff-select-panel,
+  .start-card .difficulty-group .bot-select-panel { margin-top: 0; }
   .start-card .vs-showcase { grid-area: showcase; margin: 0; }
   .start-card .menu-actions { grid-area: actions; }
   .start-card .menu-controls-guide { grid-area: guide; margin-top: 0; }
 
-  /* Balance the right column: tab rows stretch to fill their panels so no
-     dead space is left under the selectors. */
-  .start-card .fighter-tabs {
-    flex: 1;
-    grid-auto-rows: 1fr;
-  }
-  .start-card .map-tabs {
-    flex: 1;
-    grid-auto-rows: 1fr;
+  /* Balance the right column: tabs size to CONTENT instead of stretching to
+     fill their panel — the panels were inflating ~40px each and pushing
+     MATCH SIZE below the fold on 720px-tall windows. */
+  .start-card .fighter-tabs,
+  .start-card .map-tabs,
+  .start-card .diff-tabs {
+    flex: 0 0 auto;
+    grid-auto-rows: auto;
+    align-content: start;
   }
   .start-card .map-thumb {
     width: 46px;
     height: 46px;
   }
-  .start-card .diff-tabs {
-    flex: 1;
-    align-content: center; /* single row: center instead of stretching */
+
+  /* Short windows (≤ 780px tall): the right column's content
+     (fighters + maps + difficulty + match) exceeds the viewport and MATCH SIZE
+     falls below the fold. Fit it by laying the 6 fighter cards / 4 map cards in
+     THREE columns (2 rows instead of 3) and tightening gaps — content only,
+     component sizes stay recognisable. */
+  @media (max-height: 780px) {
+    .start-card .fighter-tabs,
+    .start-card .map-tabs {
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+    }
+    .start-card .difficulty-group { gap: 9px; }
+    .start-card .char-tab-btn,
+    .start-card .map-tab-btn {
+      padding: 6px 7px;
+      gap: 7px;
+    }
+    .start-card .char-tab-btn .tab-thumb,
+    .start-card .map-tab-btn .map-thumb {
+      width: 34px;
+      height: 34px;
+    }
+    .start-card .tab-name { font-size: 10px; }
+    .start-card .tab-sub { font-size: 8px; }
   }
 
   .start-card .menu-title {
-    font-size: 54px;
-    letter-spacing: 4px;
+    font-size: clamp(30px, 4.2vw, 54px);
+    letter-spacing: clamp(2px, 0.4vw, 4px);
   }
 
   /* Actions as a 2x2 grid: INITIALIZE spans the full row */
@@ -1705,7 +1994,20 @@ body {
   .t3d-oo,
   .t3d-word,
   .menu-aurora,
+  .menu-grid,
+  .menu-scanlines,
   .start-card::before {
+    animation: none;
+  }
+  /* Panels should appear immediately, without the entrance slide. */
+  #start-menu .menu-header,
+  #start-menu .fighter-select-panel,
+  #start-menu .map-select-panel,
+  #start-menu .diff-select-panel,
+  #start-menu .bot-select-panel,
+  #start-menu .vs-showcase,
+  #start-menu .menu-actions,
+  #start-menu .menu-controls-guide {
     animation: none;
   }
 }

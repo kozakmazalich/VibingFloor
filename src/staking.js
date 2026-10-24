@@ -111,6 +111,19 @@ export function claimReward() {
 }
 
 /**
+ * Replace the free $VIB with the balance read from the player's Privy wallet.
+ * Only the logged-in Privy flow calls this; guest mode never touches the
+ * existing profile state.
+ */
+export function setSyncedVibBalance(amount) {
+  const next = Number(amount);
+  if (!Number.isFinite(next) || next < 0) return false;
+  state.vib = next;
+  save();
+  return true;
+}
+
+/**
  * Open the one active vault. Refuses a second position, anything under 1M,
  * anything over 10M, or more than the free balance. The 24h lock starts at 0.
  */

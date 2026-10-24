@@ -84,7 +84,13 @@ let bgGroup = null;
 let reactorGroup = null;
 let cardGroup = null;
 
-// Multi-layer Plasma Sphere Core
+// PLANET → MAGMA → SUN core (procedural GLSL) replaces the old 3-layer plasma
+// sphere. uEvolution is driven by the effective hold (0.0 = 24h exoplanet,
+// 0.5 = 72h magma crust, 1.0 = 168h/7d boiling sun). coreHaloSprite remains as
+// the Fresnel-style corona sprite (the shader has its own in-fragment Fresnel).
+let coreMesh = null; // PLANET_SUN ShaderMaterial mesh
+let coreUniforms = null; // { uTime, uEvolution, uLightDir }
+let coreAtmoMesh = null; // Fresnel corona shell (ATMOSPHERE_SHADER)
 let coreInnerMesh = null;
 let corePlasmaMesh = null;
 let coreWireMesh = null;
@@ -127,6 +133,14 @@ let pureUpfront = true;
 let walletVib = 0;
 let forcedTicker = 'RANDOM';
 let selectedStock = RWA_STOCKS[2]; // NVDA default
+
+// Smooth satellite show/hide (game-feel): satellites no longer pop on/off
+// instantly when the stake changes. Each fades in from the reactor core with a
+// comet streak, staggers by orbit cluster, and fades out before hiding.
+const SAT_SPAWN_DURATION = 0.55; // seconds for one satellite to fully materialize
+const SAT_DESPAWN_DURATION = 0.4;
+const SAT_STAGGER = 0.06; // per-satellite delay within its orbit cluster
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 // Mouse / Orbit Parallax
 let pointerX = 0;
@@ -339,15 +353,45 @@ export function updateStakingVault(now = performance.now()) {
     reactorGroup.rotation.y = dragRotationY + smoothPointerX * 0.35;
     reactorGroup.rotation.x = dragRotationX - smoothPointerY * 0.25;
 
-    // Pulse central sphere layers. The wire cage stays off; orbits stay.
-    const pulse = 1.0 + Math.sin(now * 0.0045 * chargeMultiplier) * 0.055;
-    corePlasmaMesh.scale.setScalar(pulse);
-    corePlasmaMesh.material.color.copy(dynamicCoreColor);
-    corePlasmaMesh.material.emissive.copy(dynamicCoreColor);
+    // Drive the PLANET → SUN shader: time always ticks, evolution comes from
+    // the orbit charge (1d planet → 3d magma → 7d sun) and eases smoothly.
+    if (coreUniforms) {
+      coreUniforms.uTime.value = now * 0.001;
+      const evoTarget = evolutionFromDays(chargeMultiplier);
+      const evo = coreUniforms.uEvolution.value;
+      coreUniforms.uEvolution.value = evo + (evoTarget - evo) * Math.min(1, dt * 6);
+    }
 
+    // Gentle breathing pulse of the sphere (scale only — shader drives color).
+    const pulse = 1.0 + Math.sin(now * 0.0045 * chargeMultiplier) * 0.055;
+    coreMesh.scale.setScalar(pulse);
+
+    // Corona (ATMOSPHERE Fresnel) tint: cyan planet → magenta magma → gold sun.
+    if (coreAtmoMesh) {
+      const au = coreAtmoMesh.userData.uniforms;
+      const ev = coreUniforms.uEvolution.value;
+      const cPlanet = new THREE.Color(0x00d8ff);
+      const cMagma = new THREE.Color(0xff2d75);
+      const cSun = new THREE.Color(0xff8800);
+      const coronaCol = ev < 0.5
+        ? cPlanet.clone().lerp(cMagma, ev * 2.0)
+        : cMagma.clone().lerp(cSun, (ev - 0.5) * 2.0);
+      au.uAtmoColor.value.copy(coronaCol);
+      au.uIntensity.value = 0.55 + ev * 0.65;
+      coreAtmoMesh.rotation.y += dt * 0.05;
+    }
+
+    // Halo sprite follows the same stage colour + charge, soft breathing scale.
     if (coreHaloSprite) {
       coreHaloSprite.scale.setScalar(5.2 + Math.sin(now * 0.006) * 0.45 + chargeNorm * 1.1);
-      coreHaloSprite.material.color.copy(dynamicCoreColor);
+      const ev = coreUniforms ? coreUniforms.uEvolution.value : chargeNorm;
+      const cPlanet = new THREE.Color(0x00d8ff);
+      const cMagma = new THREE.Color(0xff2d75);
+      const cSun = new THREE.Color(0xff8800);
+      const haloCol = ev < 0.5
+        ? cPlanet.clone().lerp(cMagma, ev * 2.0)
+        : cMagma.clone().lerp(cSun, (ev - 0.5) * 2.0);
+      coreHaloSprite.material.color.copy(haloCol);
     }
 
     // Rotate gyroscopic orbit rings
@@ -375,11 +419,19 @@ export function updateStakingVault(now = performance.now()) {
     const coreScale = t < 0.75
       ? 1.0 - t * 0.55
       : 0.58 + (t - 0.75) * 4.2;
-    corePlasmaMesh.scale.setScalar(coreScale);
+    if (coreMesh) coreMesh.scale.setScalar(coreScale);
 
-    // Cycle teases of tier colors during compression
+    // Flash: push the shader toward full sun while the corona flares colour.
+    if (coreUniforms) {
+      coreUniforms.uEvolution.value = Math.min(1.0, coreUniforms.uEvolution.value + dt * 2.5);
+      coreUniforms.uTime.value = now * 0.001;
+    }
+    if (coreAtmoMesh) {
+      const au = coreAtmoMesh.userData.uniforms;
+      au.uAtmoColor.value.setHSL((now * 0.003) % 1.0, 1.0, 0.6);
+      au.uIntensity.value = 0.9 + t * 0.6;
+    }
     const flashColor = new THREE.Color().setHSL((now * 0.003) % 1.0, 1.0, 0.6);
-    corePlasmaMesh.material.emissive.copy(flashColor);
     if (coreHaloSprite) {
       coreHaloSprite.material.color.copy(flashColor);
       coreHaloSprite.scale.setScalar(4.5 + t * 4.5);
@@ -511,31 +563,43 @@ function initVaultScene() {
   reactorGroup = new THREE.Group();
   rootGroup.add(reactorGroup);
 
-  // Layer 1: Deep Dark Inner Singularity Sphere
-  const innerGeo = new THREE.SphereGeometry(1.12, 48, 48);
-  const innerMat = new THREE.MeshStandardMaterial({
-    color: 0x040714,
-    roughness: 0.15,
-    metalness: 0.9,
+  // PLANET → MAGMA → SUN core (procedural GLSL). Replaces the old dark inner +
+  // plasma shell spheres: a single high-res sphere shaded by the shader, whose
+  // uEvolution is driven by the effective hold (evolutionFromHoldHours).
+  coreUniforms = {
+    uTime: { value: 0 },
+    uEvolution: { value: 0 }, // set from currentHoldHours in update + show
+    uLightDir: { value: new THREE.Vector3(1.0, 0.45, 0.85).normalize() },
+  };
+  const coreGeo = new THREE.SphereGeometry(1.28, 96, 96);
+  const coreMat = new THREE.ShaderMaterial({
+    vertexShader: PLANET_SUN_VERTEX,
+    fragmentShader: PLANET_SUN_FRAGMENT,
+    uniforms: coreUniforms,
   });
-  coreInnerMesh = new THREE.Mesh(innerGeo, innerMat);
-  reactorGroup.add(coreInnerMesh);
+  coreMesh = new THREE.Mesh(coreGeo, coreMat);
+  reactorGroup.add(coreMesh);
 
-  // Layer 2: Glowing Translucent Plasma Shell Sphere
-  const plasmaGeo = new THREE.SphereGeometry(1.28, 48, 48);
-  const plasmaMat = new THREE.MeshStandardMaterial({
-    color: 0x00e5ff,
-    emissive: 0x00e5ff,
-    emissiveIntensity: 0.75,
-    roughness: 0.2,
-    metalness: 0.3,
-    transparent: true,
-    opacity: 0.68,
-  });
-  corePlasmaMesh = new THREE.Mesh(plasmaGeo, plasmaMat);
-  reactorGroup.add(corePlasmaMesh);
+  // Fresnel corona shell (ATMOSPHERE shader) — colored by evolution stage.
+  const atmoUniforms = {
+    uAtmoColor: { value: new THREE.Color(0x00d8ff) },
+    uIntensity: { value: 0.9 },
+  };
+  coreAtmoMesh = new THREE.Mesh(
+    new THREE.SphereGeometry(1.5, 64, 64),
+    new THREE.ShaderMaterial({
+      vertexShader: ATMOSPHERE_VERTEX,
+      fragmentShader: ATMOSPHERE_FRAGMENT,
+      uniforms: atmoUniforms,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  coreAtmoMesh.userData.uniforms = atmoUniforms;
+  reactorGroup.add(coreAtmoMesh);
 
-  // Outer glow. The geodesic wire cage is intentionally not built.
+  // Soft corona glow sprite behind the sphere (kept from the old core glow).
   const haloMat = new THREE.SpriteMaterial({
     map: glowSpriteTexture,
     color: 0x00e5ff,
@@ -585,6 +649,8 @@ function initVaultScene() {
         emissive: cfg.color,
         emissiveIntensity: 1.2,
         roughness: 0.1,
+        transparent: true, // fade in/out with the spawn alpha (game-feel)
+        opacity: 0,
       });
       const satMesh = new THREE.Mesh(satSphereGeo, satMat);
       satMesh.visible = false;
@@ -630,7 +696,10 @@ function initVaultScene() {
         tiltZ: cfg.tiltZ,
         color: cfg.color,
         orbitIndex: ringIdx,
+        clusterIndex: 0, // stagger index within its orbit (set in applyStakeSatellites)
         active: false,
+        visible: false, // current render state (lerps toward active)
+        t: 0, // transition clock (counts up while spawning, down while despawning)
       });
     });
   }
@@ -752,12 +821,38 @@ function updateSatellites(dt, speedMult, radiusFactor) {
 
   for (let i = 0; i < satellites.length; i++) {
     const sat = satellites[i];
-    if (!sat.active) {
+
+    // Desired visibility comes from `sat.active` (set by applyStakeSatellites).
+    // A state machine lerps between hidden <-> visible so nothing pops.
+    if (sat.visible && !sat.active) {
+      sat.visible = false; // begin despawn
+      sat.t = SAT_DESPAWN_DURATION; // counts down
+    }
+    if (!sat.visible && sat.active && sat.t <= 0) {
+      sat.visible = true; // begin spawn
+      sat.t = 0; // counts up
+    }
+
+    if (!sat.visible && sat.t <= 0) {
+      // Fully hidden: park it out of sight, no cost.
       sat.mesh.visible = false;
       sat.trails.forEach((tr) => { tr.visible = false; });
       continue;
     }
-    sat.mesh.visible = true;
+
+    // Advance the transition clock.
+    let alpha; // 0 = invisible, 1 = fully on orbit
+    if (sat.visible) {
+      sat.t = Math.min(SAT_SPAWN_DURATION, sat.t + dt);
+      // Clustered stagger: satellites later in their orbit lag slightly.
+      const delay = SAT_STAGGER * (sat.clusterIndex || 0);
+      alpha = easeOutCubic(Math.max(0, Math.min(1, (sat.t - delay) / SAT_SPAWN_DURATION)));
+    } else {
+      sat.t = Math.max(0, sat.t - dt);
+      alpha = easeOutCubic(Math.max(0, Math.min(1, sat.t / SAT_DESPAWN_DURATION)));
+    }
+
+    // Keep orbiting while materializing so it flows outward along its path.
     sat.angle += dt * sat.speed * speedMult;
     sat.orbitRadius = sat.baseRadius * radiusFactor;
 
@@ -768,8 +863,12 @@ function updateSatellites(dt, speedMult, radiusFactor) {
       0
     ).applyEuler(euler);
 
+    // Spawn: slide out from the reactor core (radius 0) to the full orbit.
+    sat.mesh.visible = true;
     sat.mesh.position.copy(vec);
-    sat.mesh.scale.setScalar(Math.max(0.2, radiusFactor));
+    const s = Math.max(0.2, radiusFactor) * alpha;
+    sat.mesh.scale.setScalar(s);
+    if (sat.mesh.material) sat.mesh.material.opacity = alpha;
 
     // Update trailing comet spheres along the same orbital curve
     for (let tr = 0; tr < sat.trails.length; tr++) {
@@ -780,7 +879,7 @@ function updateSatellites(dt, speedMult, radiusFactor) {
         0
       ).applyEuler(euler);
       sat.trails[tr].position.copy(vec);
-      sat.trails[tr].visible = radiusFactor > 0.25;
+      sat.trails[tr].visible = alpha > 0.25;
     }
   }
 }
@@ -1235,6 +1334,200 @@ function chargeFromHoldHours(hours) {
   return Math.min(7, Math.max(1, days));
 }
 
+// Orbit charge (days) → evolution 0.0/0.5/1.0 (1d planet, 3d magma, 7d sun).
+function evolutionFromDays(days) {
+  if (days <= 1) return 0.0; // 1d → Exoplanet
+  if (days <= 3) return ((days - 1) / 2) * 0.5; // 1–3d → ramp to Magma (3d = 0.5)
+  return 0.5 + Math.min(1, (days - 3) / 4) * 0.5; // 3–7d → ramp to Sun (7d = 1.0)
+}
+
+// Effective hold hours → days (kept for callers that pass hours, mirrors
+// chargeFromHoldHours' day axis).
+function evolutionFromHoldHours(hours) {
+  return evolutionFromDays(hours / 24);
+}
+
+// ============================================================================
+// PLANET → MAGMA → SUN PROCEDURAL SHADER (ported from the VIB VAULT demo)
+// uEvolution: 0.0 = cyber exoplanet, 0.5 = tectonic magma, 1.0 = boiling sun
+// ============================================================================
+const PLANET_SUN_VERTEX = `
+  uniform float uTime;
+  uniform float uEvolution;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+  varying vec3 vWorldPos;
+  varying vec3 vViewDir;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i + vec3(0,0,0)), hash(i + vec3(1,0,0)), f.x),
+          mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+          mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vPosition = position;
+
+    float n = noise(position * 2.8 + vec3(uTime * 0.55));
+    float n2 = noise(position * 6.0 - vec3(uTime * 0.9));
+    float solarDisp = (n * 0.65 + n2 * 0.35 - 0.5) * 0.11 * smoothstep(0.25, 1.0, uEvolution);
+
+    vec3 displaced = position + normal * solarDisp;
+    vec4 worldPosition = modelMatrix * vec4(displaced, 1.0);
+    vWorldPos = worldPosition.xyz;
+    vViewDir = normalize(cameraPosition - worldPosition.xyz);
+
+    gl_Position = projectionMatrix * viewMatrix * worldPosition;
+  }
+`;
+
+const PLANET_SUN_FRAGMENT = `
+  uniform float uTime;
+  uniform float uEvolution;
+  uniform vec3 uLightDir;
+  varying vec3 vNormal;
+  varying vec3 vPosition;
+  varying vec3 vWorldPos;
+  varying vec3 vViewDir;
+
+  float hash(vec3 p) {
+    p = fract(p * 0.3183099 + 0.1);
+    p *= 17.0;
+    return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+  }
+
+  float noise(vec3 x) {
+    vec3 i = floor(x);
+    vec3 f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(mix(hash(i + vec3(0,0,0)), hash(i + vec3(1,0,0)), f.x),
+          mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+      mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+          mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
+  }
+
+  float fbm(vec3 p) {
+    float v = 0.0;
+    float amp = 0.5;
+    for (int i = 0; i < 5; i++) {
+      v += amp * noise(p);
+      p = p * 2.07 + vec3(0.13, 0.29, 0.17);
+      amp *= 0.5;
+    }
+    return v;
+  }
+
+  void main() {
+    vec3 norm = normalize(vNormal);
+    vec3 viewDir = normalize(vViewDir);
+    float fresnel = pow(1.0 - max(dot(norm, viewDir), 0.0), 2.6);
+
+    float diff = max(dot(norm, normalize(uLightDir)), 0.0);
+    float dayLight = smoothstep(-0.25, 0.65, dot(norm, normalize(uLightDir)));
+
+    vec3 p = normalize(vPosition);
+    vec3 warp = vec3(
+      fbm(p * 2.2 + vec3(uTime * 0.08, 0.0, 0.0)),
+      fbm(p * 2.2 + vec3(0.0, uTime * 0.08, 0.0)),
+      fbm(p * 2.2 + vec3(0.0, 0.0, uTime * 0.08))
+    );
+
+    float continentNoise = fbm(p * 2.6 + warp * 0.85);
+    float detailNoise = fbm(p * 7.5 - warp * 1.4 + vec3(uTime * 0.18));
+
+    // STAGE 1: CYBER EXOPLANET (0.0)
+    vec3 deepOcean = vec3(0.02, 0.09, 0.24);
+    vec3 shallowSea = vec3(0.0, 0.48, 0.72);
+    vec3 landLow = vec3(0.08, 0.26, 0.28);
+    vec3 landHigh = vec3(0.22, 0.35, 0.42);
+    vec3 iceCap = vec3(0.75, 0.92, 1.0);
+
+    float seaMask = smoothstep(0.47, 0.51, continentNoise);
+    vec3 oceanCol = mix(deepOcean, shallowSea, smoothstep(0.28, 0.48, continentNoise));
+    vec3 landCol = mix(landLow, landHigh, smoothstep(0.5, 0.75, continentNoise + detailNoise * 0.2));
+    landCol = mix(landCol, iceCap, smoothstep(0.76, 0.88, abs(p.y) + detailNoise * 0.15));
+    vec3 planetSurface = mix(oceanCol, landCol, seaMask);
+
+    vec3 halfVec = normalize(normalize(uLightDir) + viewDir);
+    float spec = pow(max(dot(norm, halfVec), 0.0), 36.0) * (1.0 - seaMask) * 0.7;
+    float clouds = smoothstep(0.52, 0.76, fbm(p * 3.4 + vec3(uTime * 0.06, -uTime * 0.03, 0.0)));
+    planetSurface = mix(planetSurface, vec3(0.82, 0.96, 1.0), clouds * 0.55);
+
+    float nightCities = smoothstep(0.64, 0.72, detailNoise) * seaMask * (1.0 - dayLight);
+    vec3 planetFinal = planetSurface * (0.14 + 0.86 * dayLight) + vec3(spec * dayLight);
+    planetFinal += vec3(0.0, 0.85, 1.0) * nightCities * 0.75;
+    planetFinal += vec3(0.0, 0.85, 1.0) * fresnel * (0.45 + 0.45 * dayLight);
+
+    // STAGE 2: TECTONIC MAGMA CRUST (0.5)
+    float crackPattern = 1.0 - abs(continentNoise - 0.50) * 11.0;
+    crackPattern = clamp(crackPattern + (detailNoise - 0.5) * 0.65, 0.0, 1.0);
+    float magmaVein = smoothstep(0.42, 0.88, crackPattern);
+    vec3 darkCrust = vec3(0.06, 0.05, 0.10) * (0.4 + 0.6 * diff);
+    vec3 magmaGlow = mix(vec3(1.0, 0.12, 0.45), vec3(1.0, 0.78, 0.1), smoothstep(0.55, 0.95, crackPattern));
+    vec3 lavaPlanetFinal = mix(darkCrust, magmaGlow * 1.6, magmaVein);
+    lavaPlanetFinal += vec3(1.0, 0.25, 0.55) * fresnel * 0.85;
+
+    // STAGE 3: BOILING SUN (1.0)
+    vec3 sunCoord = p * 3.2 + warp * 1.35 + vec3(uTime * 0.16, -uTime * 0.12, uTime * 0.1);
+    float solarCells = fbm(sunCoord);
+    float solarFlares = fbm(p * 8.5 - warp * 2.2 + vec3(uTime * 0.35));
+    float plasmaIntensity = clamp(solarCells * 0.65 + solarFlares * 0.45, 0.0, 1.0);
+
+    vec3 sunFinal = mix(vec3(0.32, 0.04, 0.01), vec3(0.88, 0.16, 0.02), smoothstep(0.18, 0.36, plasmaIntensity));
+    sunFinal = mix(sunFinal, vec3(1.00, 0.48, 0.04), smoothstep(0.36, 0.56, plasmaIntensity));
+    sunFinal = mix(sunFinal, vec3(1.00, 0.84, 0.22), smoothstep(0.56, 0.76, plasmaIntensity));
+    sunFinal = mix(sunFinal, vec3(1.00, 0.99, 0.88) * 1.35, smoothstep(0.76, 0.95, plasmaIntensity));
+    sunFinal += vec3(1.0, 0.65, 0.12) * fresnel * 1.45;
+    sunFinal += vec3(1.0, 0.95, 0.7) * pow(fresnel, 4.0) * 1.2;
+
+    vec3 color;
+    if (uEvolution < 0.5) {
+      color = mix(planetFinal, lavaPlanetFinal, smoothstep(0.0, 0.5, uEvolution));
+    } else {
+      color = mix(lavaPlanetFinal, sunFinal, smoothstep(0.5, 1.0, uEvolution));
+    }
+
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
+// Fresnel corona / atmosphere shell (ATMOSPHERE shader from the demo)
+const ATMOSPHERE_VERTEX = `
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    vNormal = normalize(normalMatrix * normal);
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vViewDir = normalize(cameraPosition - worldPos.xyz);
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const ATMOSPHERE_FRAGMENT = `
+  uniform vec3 uAtmoColor;
+  uniform float uIntensity;
+  varying vec3 vNormal;
+  varying vec3 vViewDir;
+  void main() {
+    float rim = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewDir)), 0.0), 2.2);
+    gl_FragColor = vec4(uAtmoColor, rim * uIntensity);
+  }
+`;
+
+
 // ============================================================================
 // 8. EMBEDDED CYBERPUNK UI HUD (Matches Interactive Demo Controls)
 // ============================================================================
@@ -1653,17 +1946,29 @@ function stakeSatelliteCount(amount) {
 
 function applyStakeSatellites() {
   const count = Math.min(satellites.length, stakeSatelliteCount(currentStakeAmount));
-  const groups = [[], [], []];
+  // Only set the DESIRED state (`active`); updateSatellites() eases each
+  // satellite's real visibility toward it, so staking fades spheres in (and
+  // out) smoothly instead of popping them on/off.
+  //
+  // CRITICAL: never recompute existing satellites' angles when the stake
+  // changes — the old code did `sat.angle = i / group.length * 2PI`, and since
+  // group.length changed with the count, EVERY existing sphere re-spaced (the
+  // whole orbit "jumped"). Now each satellite owns a FIXED evenly-spaced angle
+  // for its global index (assigned once, never touched), and a newly-activated
+  // satellite simply eases in at its own fixed slot. Existing spheres keep
+  // orbiting exactly where they were — only new ones are added.
   satellites.forEach((sat, i) => {
     sat.active = i < count;
-    sat.mesh.visible = sat.active;
-    sat.trails.forEach((tr) => { tr.visible = sat.active; });
-    if (sat.active) groups[sat.orbitIndex].push(sat);
-  });
-  groups.forEach((group, orbitIndex) => {
-    group.forEach((sat, i) => {
-      sat.angle = (i / group.length) * Math.PI * 2 + orbitIndex * 0.35;
-    });
+    // Fixed slot angle — assign ONCE (angle starts at 0 at build time) and
+    // never touch it again, so an already-orbiting sphere keeps its exact
+    // position when the stake changes; it just keeps orbiting from here.
+    if (!sat.angleInit) {
+      sat.angle = (i / satellites.length) * Math.PI * 2 + sat.orbitIndex * 0.35;
+      sat.angleInit = true;
+    }
+    // Deterministic stagger so materialization ripples around the orbit and is
+    // stable across re-applications (new satellites appear; old ones never move).
+    sat.clusterIndex = i % 6;
   });
   if (embedCanvas) embedCanvas.dataset.orbitSpheres = String(count);
 }

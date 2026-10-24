@@ -54,15 +54,22 @@ export class Robot {
   constructor(id, name, texturePath, startX, startZ, teamColor, isPlayer, scene) {
     this.id = id;
     this.name = name;
-    this.portraitPath = `assets/robot${id}_portrait.png`;
+    // Portrait: honour the explicitly passed texturePath when it looks like a
+    // real asset (multi-bot rosters reuse the five robot portraits for ids > 5,
+    // which don't exist as robot{id}_portrait.png). Fall back to the id-based
+    // path for legacy callers that pass a matching filename.
+    const hasAsset = typeof texturePath === "string" && texturePath.startsWith("assets/");
+    this.portraitPath = hasAsset ? texturePath : `assets/robot${id}_portrait.png`;
     this.startX = startX;
     this.startZ = startZ;
     this.teamColor = teamColor;
     this.isPlayer = isPlayer;
     this.scene = scene;
 
-    // Which Viber body this robot wears (0 = Crimson Miner, 2 = Volt Viber)
-    this.charIndex = id === 1 ? 0 : 2;
+    // Which Viber body this robot wears. Player = Crimson Miner; bots default
+    // to Volt but the roster body is set right after construction via
+    // switchCharacter(...) when a specific portrait/name is assigned.
+    this.charIndex = isPlayer ? 0 : 2;
 
     // State: "alive" | "falling" | "eliminated"
     this.state = "alive";
@@ -342,6 +349,29 @@ export class Robot {
     audio.playImpact(Math.hypot(ix, iz) / 5);
   }
 
+  // Normalize the `opponent` argument (a single Robot OR an array of enemies)
+  // into the list of valid, living enemies — and return the nearest one.
+  // Used so one Robot class serves 1v1, N-bot battles and free-for-all AI:
+  // bots target whoever is closest (usually, but not always, the player).
+  // Returns { target, enemies } where `enemies` is every living foe (for
+  // area-effect abilities like push/spear) and `target` is the nearest.
+  pickEnemies(opponent) {
+    if (!opponent) return { target: null, enemies: [] };
+    const list = Array.isArray(opponent) ? opponent : [opponent];
+    let target = null;
+    let best = Infinity;
+    for (const r of list) {
+      if (!r || r === this || r.state !== "alive") continue;
+      const d = Math.hypot(r.pos.x - this.pos.x, r.pos.z - this.pos.z);
+      if (d < best) {
+        best = d;
+        target = r;
+      }
+    }
+    const enemies = list.filter((r) => r && r !== this && r.state === "alive");
+    return { target, enemies };
+  }
+
   startFalling() {
     if (this.state !== "alive") return;
     this.state = "falling";
@@ -389,6 +419,8 @@ export class Robot {
   }
 
   // --- ABILITY 2: FORCE PUSH (KEY P) ---
+  // `target` may be a single Robot or an array of enemies — every living foe
+  // inside the push radius gets knocked back (multi-bot free-for-all ready).
   triggerPush(target, fxManager) {
     if (this.state !== "alive" || this.pushCooldown > 0) return false;
 
@@ -400,9 +432,11 @@ export class Robot {
     this.playPushWaveVisual();
     this.spawnSpikeBurst(fxManager); // CHOG: quills scatter with the push
 
-    if (target && target.state === "alive") {
-      const dx = target.pos.x - this.pos.x;
-      const dz = target.pos.z - this.pos.z;
+    const list = Array.isArray(target) ? target : target ? [target] : [];
+    for (const t of list) {
+      if (!t || t.state !== "alive") continue;
+      const dx = t.pos.x - this.pos.x;
+      const dz = t.pos.z - this.pos.z;
       const dist = Math.hypot(dx, dz);
 
       if (dist <= PUSH_RADIUS) {
@@ -423,10 +457,10 @@ export class Robot {
         const distBonus = 1.0 + (1.0 - dist / PUSH_RADIUS) * 0.35;
         const impulse = PUSH_IMPULSE * distBonus * (this.pushMult || 1);
 
-        target.applyImpulse(dirX * impulse, dirZ * impulse);
+        t.applyImpulse(dirX * impulse, dirZ * impulse);
 
         if (fxManager) {
-          fxManager.spawnSparkBurst(target.pos.x, 0.4, target.pos.z, 24, this.teamColor, 1.4);
+          fxManager.spawnSparkBurst(t.pos.x, 0.4, t.pos.z, 24, this.teamColor, 1.4);
         }
       }
     }
@@ -552,7 +586,9 @@ export class Robot {
   // --- ABILITY 3: CYBER SPEAR (KEY E) — FLIES IN FACING DIRECTION ---
   // META VIBER (hasLaser) replaces the spear with an instant green laser
   // hitscan: 35% further reach, same impulse/cooldown, #39ff14 beam.
-  triggerSpear(target, fxManager, onScreenShake) {
+  // `target` is the nearest living foe (the spear's lock); `enemies` is every
+  // living foe (used by the laser hitscan to hit whatever crosses the beam).
+  triggerSpear(target, enemies, fxManager, onScreenShake) {
     if (this.state !== "alive" || this.spearCooldown > 0) return false;
 
     this.spearCooldown = SPEAR_COOLDOWN;
@@ -563,7 +599,7 @@ export class Robot {
     const dirZ = -Math.cos(this.facingAngle);
 
     if (this.hasLaser) {
-      this.fireLaser(target, dirX, dirZ, fxManager, onScreenShake);
+      this.fireLaser(enemies || target, dirX, dirZ, fxManager, onScreenShake);
       return true;
     }
 
@@ -596,8 +632,10 @@ export class Robot {
 
   // META VIBER: instant green laser — a straight beam along the facing
   // direction (the spear's line of fire). Hits whatever is in front of the
-  // robot, within reach and close to the beam line.
-  fireLaser(target, dirX, dirZ, fxManager, onScreenShake) {
+  // robot, within reach and close to the beam line. `targets` may be a single
+  // Robot or an array — in a multi-bot battle the beam damages EVERY foe it
+  // crosses (not just the nearest).
+  fireLaser(targets, dirX, dirZ, fxManager, onScreenShake) {
     const reach = LASER_REACH;
     const aimX = dirX;
     const aimZ = dirZ;
@@ -623,7 +661,9 @@ export class Robot {
 
       // Line hit: the beam is a straight ray in the facing direction, so a
       // target is hit when it is ahead and within ~0.7 units of the line.
-      if (target && target.state === "alive") {
+      const list = Array.isArray(targets) ? targets : targets ? [targets] : [];
+      for (const target of list) {
+        if (!target || target.state !== "alive") continue;
         const dx = target.pos.x - this.pos.x;
         const dz = target.pos.z - this.pos.z;
         const dist = Math.hypot(dx, dz);
@@ -721,9 +761,13 @@ export class Robot {
   }
 
   updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake) {
-    // 1. J = Force Push (knockback wave)
+    // Normalize enemies (array or single) and pick the nearest living foe for
+    // aimed shots; area abilities (push/spear/laser) apply to every foe.
+    const { target, enemies } = this.pickEnemies(opponent);
+
+    // 1. J = Force Push (knockback wave) — hits ALL foes in radius
     if (keys["KeyJ"] && this.pushCooldown <= 0) {
-      this.triggerPush(opponent, fxManager);
+      this.triggerPush(enemies, fxManager);
     }
 
     // 2. SPACE = Jet Jump
@@ -731,14 +775,14 @@ export class Robot {
       this.triggerJump(fxManager);
     }
 
-    // 3. E = Spear Thrust / Throw
+    // 3. E = Spear Thrust / Throw — flies toward/through the nearest foe
     if (keys["KeyE"] && this.spearCooldown <= 0) {
-      this.triggerSpear(opponent, fxManager, onScreenShake);
+      this.triggerSpear(target, enemies, fxManager, onScreenShake);
     }
 
-    // 4. G = Grenade Throw
+    // 4. G = Grenade Throw (knockback hits everyone in the blast by radius)
     if (keys["KeyG"] && this.grenadeCooldown <= 0) {
-      this.triggerGrenade(opponent, island, fxManager, onScreenShake);
+      this.triggerGrenade(target, island, fxManager, onScreenShake);
     }
 
     // Movement: WASD / Arrow keys -> CAMERA-RELATIVE world direction.
@@ -810,15 +854,18 @@ export class Robot {
     }
   }
 
-  updateAI(opponent, island, dt, fxManager, onScreenShake) {
+  updateAI(enemySource, island, dt, fxManager, onScreenShake) {
+    // Resolve the nearest living enemy (works in 1v1 AND multi-bot free-for-all).
+    // `enemySource` may be a single Robot or an array of all enemies.
+    const { target: opponent, enemies } = this.pickEnemies(enemySource);
     const aiDesired = new THREE.Vector2(0, 0);
     const center = island.getActiveCenter();
 
-    const toPlayer = new THREE.Vector2(
-      opponent.pos.x - this.pos.x,
-      opponent.pos.z - this.pos.z
-    );
-    const distToPlayer = toPlayer.length();
+    // toPlayer / opponent now refer to the nearest foe for the whole routine.
+    const toPlayer = opponent
+      ? new THREE.Vector2(opponent.pos.x - this.pos.x, opponent.pos.z - this.pos.z)
+      : new THREE.Vector2(0, 0);
+    const distToPlayer = opponent ? toPlayer.length() : Infinity;
 
     // Edge sensing: look ahead along the movement (or facing) direction
     const speed = this.vel.length();
@@ -879,8 +926,8 @@ export class Robot {
           this.aiWanderDir.set(0, 0);
         } else {
           // Drift toward the opponent (or the arena center) when safe
-          const tx = opponent.state === "alive" ? opponent.pos.x : center.x;
-          const tz = opponent.state === "alive" ? opponent.pos.z : center.z;
+          const tx = opponent ? opponent.pos.x : center.x;
+          const tz = opponent ? opponent.pos.z : center.z;
           const toTarget = new THREE.Vector2(tx - this.pos.x, tz - this.pos.z);
           if (toTarget.length() > 4.0) {
             const blend = new THREE.Vector2().copy(this.aiWanderDir).add(toTarget.normalize()).normalize();
@@ -901,7 +948,7 @@ export class Robot {
     if (this.isGrounded && this.jumpCooldown <= 0 && this.hitShakeTimer <= 0) {
       let dirX = speed > 0.1 ? this.vel.x / speed : 0;
       let dirZ = speed > 0.1 ? this.vel.y / speed : 0;
-      const towardOpponent = opponent.state === "alive" && distToPlayer > 2.0 && distToPlayer < this.ai.aggro;
+      const towardOpponent = !!opponent && distToPlayer > 2.0 && distToPlayer < this.ai.aggro;
       if (towardOpponent) {
         dirX = toPlayer.x / (distToPlayer || 1);
         dirZ = toPlayer.y / (distToPlayer || 1);
@@ -928,7 +975,9 @@ export class Robot {
 
     // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
     // (no counter-attacks mid-knockback — stunned bots just slide)
-    if (opponent.state === "alive" && this.hitShakeTimer <= 0) {
+    // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
+    // (no counter-attacks mid-knockback — stunned bots just slide)
+    if (opponent && this.hitShakeTimer <= 0) {
       const angleToOpponent = Math.atan2(-toPlayer.x, -toPlayer.y);
       const aimAt = (error) => {
         this.facingAngle = angleToOpponent + error;
@@ -953,7 +1002,7 @@ export class Robot {
             roll < (acc += this.ai.pushChance)
           ) {
             aimAt(aimError);
-            this.triggerPush(opponent, fxManager);
+            this.triggerPush(enemies, fxManager);
           } else if (
             distToPlayer >= 2.0 &&
             distToPlayer <= 5.5 &&
@@ -961,7 +1010,7 @@ export class Robot {
             roll < (acc += this.ai.spearChance)
           ) {
             aimAt(aimError);
-            this.triggerSpear(opponent, fxManager, onScreenShake);
+            this.triggerSpear(opponent, enemies, fxManager, onScreenShake);
           } else if (
             distToPlayer >= 3.2 &&
             distToPlayer <= 6.2 &&
@@ -981,7 +1030,7 @@ export class Robot {
           Math.random() < this.ai.pushChance
         ) {
           aimAt(0);
-          this.triggerPush(opponent, fxManager);
+          this.triggerPush(enemies, fxManager);
         }
         // 2. Cyber Spear (E): straight line javelin thrust at mid-range (2.2 - 5.5 units)
         else if (
@@ -991,7 +1040,7 @@ export class Robot {
           Math.random() < this.ai.spearChance
         ) {
           aimAt(0);
-          this.triggerSpear(opponent, fxManager, onScreenShake);
+          this.triggerSpear(opponent, enemies, fxManager, onScreenShake);
         }
         // 3. Cyber Grenade (G): tactical floor explosion at medium-far distance (3.5 - 6.2 units)
         else if (
@@ -1057,7 +1106,7 @@ export class Robot {
         // Narrow ledge with void on both sides — reverse course
         aiDesired.set(-moveDirX, -moveDirZ);
       }
-    } else if (opponent.state === "alive") {
+    } else if (opponent) {
       // Hunt the player whenever the direct path is safe (or jumpable).
       // Timid bots (EASY) only hunt up close — beyond aggro they wander.
       const huntDir = toPlayer.clone().normalize();
@@ -1166,17 +1215,19 @@ export class Robot {
   // where (mx, mz) is the guest's camera-relative move vector in WORLD space
   // (already transformed on the guest side with its own camera).
   updateRemoteInput(input, dt, opponent, island, fxManager, onScreenShake) {
+    // Online is strictly 1v1 — `opponent` is the single local player (p1).
+    const { target, enemies } = this.pickEnemies(opponent);
     if (input.push && this.pushCooldown <= 0) {
-      this.triggerPush(opponent, fxManager);
+      this.triggerPush(enemies, fxManager);
     }
     if (input.jump && this.jumpCooldown <= 0 && this.isGrounded) {
       this.triggerJump(fxManager);
     }
     if (input.spear && this.spearCooldown <= 0) {
-      this.triggerSpear(opponent, fxManager, onScreenShake);
+      this.triggerSpear(target, enemies, fxManager, onScreenShake);
     }
     if (input.grenade && this.grenadeCooldown <= 0) {
-      this.triggerGrenade(opponent, island, fxManager, onScreenShake);
+      this.triggerGrenade(target, island, fxManager, onScreenShake);
     }
 
     const mx = input.mx || 0;

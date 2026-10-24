@@ -26,6 +26,7 @@ const URL = args.find((a) => a.startsWith("http")) || null;
 const WAIT_MS = Number(args.find((a) => /^\d+$/.test(a)) ?? 8000);
 const CHECK_FILE = args.find((a) => a.endsWith(".js") && !a.startsWith("--")) || null;
 const MOBILE = args.find((a) => a.startsWith("--mobile="))?.slice(9) || null;
+const MOUSECLICK = args.find((a) => a.startsWith("--mouseclick="))?.slice(13) || null;
 const SHOT = args.find((a) => a.startsWith("--shot="))?.slice(7) || null;
 const SHOT2 = args.find((a) => a.startsWith("--shot2="))?.slice(8) || null;
 
@@ -165,6 +166,32 @@ async function main() {
       console.log(res.result && res.result.value !== undefined ? String(res.result.value) : "(check done)");
     }
   } else {
+    // --mouseclick=selector : perform a REAL mouse click (mousemove, down, up)
+    // at the element's center — the only way to catch overlays / pointer
+    // interception that JS .click() would silently bypass.
+    if (MOUSECLICK) {
+      const box = await send("Runtime.evaluate", {
+        expression: `(() => { const el = document.querySelector(${JSON.stringify(MOUSECLICK)}); if (!el) return null; const r = el.getBoundingClientRect(); return JSON.stringify({x: r.left + r.width/2, y: r.top + r.height/2}); })()`,
+        returnByValue: true,
+      });
+      const pt = box.result.value ? JSON.parse(box.result.value) : null;
+      if (pt) {
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: pt.x, y: pt.y });
+        await sleep(60);
+        await send("Input.dispatchMouseEvent", { type: "mousePressed", x: pt.x, y: pt.y, button: "left", clickCount: 1 });
+        await sleep(30);
+        await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: pt.x, y: pt.y, button: "left", clickCount: 1 });
+        console.log(`real mouse click dispatched at ${Math.round(pt.x)},${Math.round(pt.y)} on ${MOUSECLICK}`);
+      } else {
+        console.log("MOUSECLICK target not found: " + MOUSECLICK);
+      }
+      await sleep(700);
+      const after = await send("Runtime.evaluate", {
+        expression: `JSON.stringify({state: window.game && window.game.state, menuHidden: document.getElementById('start-menu').classList.contains('hidden')})`,
+        returnByValue: true,
+      });
+      console.log("after click: " + (after.result.value || "?"));
+    }
     const logRes = await send("Runtime.evaluate", {
       expression:
         "document.getElementById('log') ? document.getElementById('log').textContent : null",

@@ -3,6 +3,14 @@ www/
 .vercel/
 .DS_Store
 
+# Local secrets (treasury key, RPC credentials)
+.env
+.env.*
+!.env.example
+
+# Relayer payout ledger (contains Privy user IDs)
+relayer/data/
+
 # Android / Capacitor build outputs
 android/.gradle/
 android/build/

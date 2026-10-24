@@ -205,3 +205,79 @@ export const MAPS = [
     },
   },
 ];
+
+/**
+ * Scale a base map's playfield to fit N fighters (+20% linear size per extra
+ * fighter → area grows proportionally) and add variety so BIG arenas feel
+ * interesting rather than just "more of the same":
+ *
+ *  - grid grows by ~sqrt(1 + 0.2*(N-1)) (area scales with the roster: 2→20,
+ *    5→29, 10→38 tiles), capped for the 8GB-M1 frame budget;
+ *  - the base map's shape (islands/bridges/ring) is REPLAYED across the bigger
+ *    grid by projecting coordinates back into normalized [0,1] space, so the
+ *    layout stays coherent instead of tearing;
+ *  - every 3rd ring from the middle becomes a broken "shelf" band — alternating
+ *    tiles drop away, giving each fighter its own risky perches to fight over
+ *    once the roster is larger;
+ *  - decor density scales with the area so big arenas stay lively.
+ *
+ * Returns a NEW map def (the base MAPS entry is never mutated).
+ */
+export function scaledMap(mapDef, fighters) {
+  const n = Math.max(2, fighters | 0);
+  const base = mapDef.gridSize || 10;
+
+  // +20% linear size per extra fighter, area ~ fighters (sqrt keeps tiles/area
+  // proportional to roster, not squared). Capped so huge rosters stay playable.
+  const factor = Math.sqrt(1 + 0.2 * (n - 1));
+  const size = Math.max(base, Math.min(40, Math.round(base * factor)));
+
+  const isBaseActive = mapDef.isTileActive || (() => true);
+  const baseElev = mapDef.elevationAt || (() => 0);
+  const baseDecor = mapDef.decorAt || (() => null);
+  const scale = base / size;
+
+  // Project a big-grid coordinate back into base-grid space (center-out), so
+  // base patterns tile onto the larger arena without tearing.
+  const project = (v) => Math.max(0, Math.min(base - 1, Math.round(v * scale)));
+  const nearSpawn = (x, z) => Math.min(x, z, size - 1 - x, size - 1 - z) < 3;
+
+  return {
+    ...mapDef,
+    gridSize: size,
+    scaledFor: n,
+    p1Spawn: [1, 1],
+    p2Spawn: [size - 2, size - 2],
+    isTileActive(x, z) {
+      if (!isBaseActive(project(x), project(z))) return false;
+      // Broken shelf band for bigger arenas: every 3rd ring from the middle is
+      // missing ~every other tile — risky perches to fight over (skip spawn nooks).
+      if (n >= 4) {
+        const cx = (size - 1) / 2;
+        const ring = Math.max(Math.abs(x - cx), Math.abs(z - cx));
+        const fromMid = Math.round(ring);
+        if (fromMid >= 4 && fromMid % 3 === 2 && (x + z) % 2 === 0 && !nearSpawn(x, z)) {
+          return false;
+        }
+      }
+      return true;
+    },
+    elevationAt(x, z) {
+      return baseElev(project(x), project(z));
+    },
+    decorAt(x, z) {
+      const d = baseDecor(project(x), project(z));
+      if (d) return d;
+      // Sprinkle extra decor across the added outer rings so big arenas aren't
+      // empty. Skip the shelf gaps (inactive tiles) and spawn nooks.
+      if (n >= 4 && (x + z) % 7 === 0 && !nearSpawn(x, z)) {
+        const h = ((x * 73856093) ^ (z * 19349663)) >>> 0;
+        const f = (h % 1000) / 1000;
+        const accent = mapDef.theme ? mapDef.theme.edge : 0x00e5ff;
+        if (f < 0.06) return { type: "lamp", color: accent };
+        if (f < 0.1) return { type: "rock" };
+      }
+      return null;
+    },
+  };
+}

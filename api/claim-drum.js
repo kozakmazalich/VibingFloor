@@ -1,0 +1,321 @@
+/**
+ * VERCEL SERVERLESS — Prize Drum payout ($VIB on Robinhood Testnet).
+ *
+ * Serverless port of `relayer/server.js` so payouts run 24/7 on Vercel
+ * (free Hobby) WITHOUT a local process. Same security model:
+ *   - Every payout requires a valid Privy access token (Bearer JWT).
+ *   - The recipient must be an Ethereum wallet linked to that Privy user.
+ *   - claimId dedup + per-user / global limits.
+ *   - Chain ID + token contract verified on init.
+ *   - Secrets come ONLY from process.env (set in Vercel -> Settings -> Env).
+ *
+ * State (dedupe + limits) lives in Upstash Redis (free) instead of the
+ * `claims.json` file, because serverless instances have no persistent disk.
+ * Set UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN in Vercel.
+ */
+
+const crypto = require("node:crypto");
+const { ethers } = require("ethers");
+const { PrivyClient } = require("@privy-io/node");
+
+// --- ENV (from Vercel dashboard - never hard-coded) ---
+const RPC_URL = process.env.RPC_URL || "https://rpc.testnet.chain.robinhood.com";
+const TREASURY_PRIVATE_KEY = normalizePrivateKey(process.env.TREASURY_PRIVATE_KEY || "");
+const TOKEN_ADDRESS =
+  process.env.TOKEN_ADDRESS || "0x462cE9fA227aB2CA44C66323B8fD4c3e078072ED";
+const PRIVY_APP_ID = process.env.PRIVY_APP_ID || "";
+const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET || "";
+const EXPECTED_CHAIN_ID = Number(process.env.EXPECTED_CHAIN_ID || 46630);
+
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || "";
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
+
+const MAX_AMOUNT = 1_000_000;
+const MIN_CLAIM_INTERVAL_MS = Number(process.env.RELAYER_COOLDOWN_MS || 3000);
+const MAX_CLAIMS_PER_HOUR = Number(process.env.RELAYER_MAX_CLAIMS_PER_HOUR || 12);
+const MAX_DAILY_VIB = Number(process.env.RELAYER_MAX_DAILY_VIB || 10_000_000);
+const MAX_GLOBAL_CLAIMS_PER_HOUR = Number(
+  process.env.RELAYER_MAX_GLOBAL_CLAIMS_PER_HOUR || 60
+);
+const MAX_GLOBAL_DAILY_VIB = Number(process.env.RELAYER_MAX_GLOBAL_DAILY_VIB || 25_000_000);
+
+// Serverless budget is ~60s on Hobby; cap the on-chain confirmation wait.
+const TX_WAIT_TIMEOUT_MS = Number(process.env.RELAYER_TX_WAIT_MS || 45000);
+
+const ERC20_ABI = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address owner) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
+
+// Lazy per-instance singletons (reused across warm invocations).
+let provider = null;
+let treasury = null;
+let token = null;
+let tokenDecimals = 18;
+let chainReady = false;
+let initPromise = null;
+let initError = null;
+let privy = null;
+let privyError = null;
+
+const userCache = new Map(); // userId -> { user, expiresAt }
+const tokenCache = new Map(); // sha256 -> { claims, expiresAt }
+
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+function normalizePrivateKey(key) {
+  if (!key) return "";
+  return key.startsWith("0x") ? key : `0x${key}`;
+}
+
+// --- UPSTASH REDIS (REST) - minimal client, no extra dependency ---
+async function redis(cmd, args = []) {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) {
+    throw new HttpError(503, "Relayer state store not configured (Upstash Redis)");
+  }
+  const res = await fetch(UPSTASH_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, "Content-Type": "application/json" },
+    body: JSON.stringify([cmd, ...args]),
+  });
+  if (!res.ok) throw new HttpError(502, `State store error (HTTP ${res.status})`);
+  const data = await res.json();
+  return data.result;
+}
+
+// --- LAZY INIT - chain + Privy on first use (cached for warm invocations) ---
+async function ensureInit() {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    try {
+      provider = new ethers.JsonRpcProvider(RPC_URL, EXPECTED_CHAIN_ID);
+      const net = await provider.getNetwork();
+      if (Number(net.chainId) !== EXPECTED_CHAIN_ID) {
+        throw new Error(`RPC chain id ${net.chainId} != expected ${EXPECTED_CHAIN_ID}`);
+      }
+      if (!TREASURY_PRIVATE_KEY) throw new Error("TREASURY_PRIVATE_KEY not set");
+      treasury = new ethers.Wallet(TREASURY_PRIVATE_KEY, provider);
+      token = new ethers.Contract(TOKEN_ADDRESS, ERC20_ABI, treasury);
+      tokenDecimals = Number(await token.decimals());
+      chainReady = true;
+    } catch (err) {
+      initError = err.message || "chain init failed";
+      chainReady = false;
+    }
+    try {
+      if (PRIVY_APP_ID && PRIVY_APP_SECRET) {
+        privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET);
+      } else {
+        privyError = "PRIVY_APP_ID / PRIVY_APP_SECRET not set";
+      }
+    } catch (err) {
+      privyError = err.message || "privy init failed";
+      privy = null;
+    }
+    return { initError, privyError };
+  })();
+  return initPromise;
+}
+
+// --- PRIVY VERIFICATION ---
+async function verifyPrivyToken(tokenString) {
+  const key = crypto.createHash("sha256").update(tokenString).digest("hex");
+  const hit = tokenCache.get(key);
+  const now = Date.now();
+  if (hit && hit.expiresAt > now) return hit.claims;
+  const claims = await privy.verifyAuthToken(tokenString);
+  const expiresAt = (claims.exp ? claims.exp * 1000 : now + 300000) - 30000;
+  tokenCache.set(key, { claims, expiresAt });
+  if (tokenCache.size > 500) {
+    for (const [k, v] of tokenCache) if (v.expiresAt <= now) tokenCache.delete(k);
+  }
+  return claims;
+}
+
+async function getPrivyUser(userId) {
+  const hit = userCache.get(userId);
+  const now = Date.now();
+  if (hit && hit.expiresAt > now) return hit.user;
+  const user = await privy.getUser(userId);
+  userCache.set(userId, { user, expiresAt: now + 300000 });
+  if (userCache.size > 500) {
+    for (const [k, v] of userCache) if (v.expiresAt <= now) userCache.delete(k);
+  }
+  return user;
+}
+
+function assertWalletOwned(user, address) {
+  const target = address.toLowerCase();
+  const linked =
+    (user.linkedAccounts || []).some(
+      (a) =>
+        (a.type === "ethereum" || a.type === "wallet") &&
+        String(a.address || "").toLowerCase() === target
+    ) ||
+    (user.wallet ? String(user.wallet.address || "").toLowerCase() === target : false);
+  if (!linked) throw new HttpError(403, "Wallet is not linked to this Privy user");
+}
+
+// --- LIMITS + DEDUPE (Redis) ---
+function dayKey(now) {
+  return new Date(now).toISOString().slice(0, 10);
+}
+function hourKey(now) {
+  return Math.floor(now / 3600000);
+}
+
+async function checkLimits(userId, amount) {
+  const now = Date.now();
+  const day = dayKey(now);
+  const hour = hourKey(now);
+  const ukey = `claim:user:${userId}`;
+  const gkey = `claim:global`;
+  const rawUser = await redis("HGETALL", [ukey]);
+  const user = rawUser && typeof rawUser === "object" && !Array.isArray(rawUser) ? rawUser : {};
+  const gRaw = await redis("HGETALL", [gkey]);
+  const global = gRaw && typeof gRaw === "object" && !Array.isArray(gRaw) ? gRaw : {};
+
+  const lastClaimAt = Number(user.lastClaimAt || 0);
+  const uDay = user.day || day;
+  const uDailyVib = Number(user.dailyVib || 0);
+  const uHour = Number(user.hour || hour);
+  const uHourlyClaims = Number(user.hourlyClaims || 0);
+  const gDay = global.day || day;
+  const gDailyVib = Number(global.dailyVib || 0);
+  const gHour = Number(global.hour || hour);
+  const gHourlyClaims = Number(global.hourlyClaims || 0);
+
+  if (now - lastClaimAt < MIN_CLAIM_INTERVAL_MS) throw new HttpError(429, "Claim cooldown: try again in a moment");
+  if (uHourlyClaims >= MAX_CLAIMS_PER_HOUR) throw new HttpError(429, "Hourly claim limit reached for this account");
+  if ((uDay === day ? uDailyVib : 0) + amount > MAX_DAILY_VIB) throw new HttpError(429, "Daily $VIB limit reached for this account");
+  if ((gHour === hour ? gHourlyClaims : 0) >= MAX_GLOBAL_CLAIMS_PER_HOUR) throw new HttpError(429, "Global hourly claim limit reached");
+  if ((gDay === day ? gDailyVib : 0) + amount > MAX_GLOBAL_DAILY_VIB) throw new HttpError(429, "Global daily payout limit reached");
+
+  return { uDay, uHour, gDay, gHour };
+}
+
+async function recordClaim(userId, amount, claimId, keys) {
+  const now = Date.now();
+  const day = dayKey(now);
+  const hour = hourKey(now);
+  const dedup = await redis("SET", [`claim:id:${claimId}`, String(now), "EX", 86400, "NX"]);
+  if (dedup !== "OK") throw new HttpError(409, "This win was already paid");
+
+  const ukey = `claim:user:${userId}`;
+  const gkey = `claim:global`;
+  const uDailyBase = keys.uDay === day ? Number((await redis("HGET", [ukey, "dailyVib"])) || 0) : 0;
+  const uHourlyBase = keys.uHour === hour ? Number((await redis("HGET", [ukey, "hourlyClaims"])) || 0) : 0;
+  const gDailyBase = keys.gDay === day ? Number((await redis("HGET", [gkey, "dailyVib"])) || 0) : 0;
+  const gHourlyBase = keys.gHour === hour ? Number((await redis("HGET", [gkey, "hourlyClaims"])) || 0) : 0;
+
+  await redis("HSET", [ukey, "day", day, "dailyVib", String(uDailyBase + amount),
+    "hour", String(hour), "hourlyClaims", String(uHourlyBase + 1), "lastClaimAt", String(now)]);
+  await redis("EXPIRE", [ukey, 172800]);
+  await redis("HSET", [gkey, "day", day, "dailyVib", String(gDailyBase + amount),
+    "hour", String(hour), "hourlyClaims", String(gHourlyBase + 1)]);
+  await redis("EXPIRE", [gkey, 172800]);
+}
+
+// --- PAYOUT - ERC-20 transfer with a bounded confirmation wait ---
+async function payPlayer(playerAddress, amount) {
+  const amountWei = ethers.parseUnits(String(amount), tokenDecimals);
+  const treasuryBalance = await token.balanceOf(treasury.address);
+  if (treasuryBalance < amountWei) throw new HttpError(502, "Treasury $VIB balance is too low for this payout");
+
+  const tx = await token.transfer(playerAddress, amountWei);
+  const receipt = await Promise.race([
+    tx.wait(1),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new HttpError(502, "Transaction confirmation timed out")), TX_WAIT_TIMEOUT_MS)
+    ),
+  ]);
+  if (!receipt) throw new HttpError(502, "Transaction was dropped before confirmation");
+  return { txHash: tx.hash, blockNumber: receipt.blockNumber };
+}
+
+// --- IP RATE LIMIT (best-effort; per-instance) ---
+async function checkIpRate(req) {
+  const ip = (req.headers["cf-connecting-ip"] || req.headers["x-forwarded-for"] || "unknown")
+    .split(",")[0].trim() || "unknown";
+  const bkey = `claim:ip:${ip}`;
+  const count = Number((await redis("INCR", [bkey])) || 0);
+  if (count === 1) await redis("EXPIRE", [bkey, 60]);
+  if (count > 40) throw new HttpError(429, "Too many requests from this IP");
+}
+
+// --- HANDLER ---
+module.exports = async function handler(req, res) {
+  const origin = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "*";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+
+  if (req.method === "OPTIONS") { res.status(204).end(); return; }
+
+  if (req.method === "GET") {
+    await ensureInit();
+    res.status(200).json({
+      success: true,
+      keyConfigured: Boolean(TREASURY_PRIVATE_KEY),
+      authConfigured: Boolean(privy),
+      chainReady,
+      chainId: EXPECTED_CHAIN_ID,
+      tokenAddress: TOKEN_ADDRESS,
+      stateStore: UPSTASH_URL ? "upstash" : "unconfigured",
+      ...(initError ? { error: initError } : {}),
+      ...(privyError ? { authError: privyError } : {}),
+    });
+    return;
+  }
+
+  if (req.method !== "POST") { res.status(405).json({ error: "Method not allowed" }); return; }
+
+  try {
+    await ensureInit();
+    if (initError || !chainReady) throw new HttpError(503, initError || "Relayer chain is not ready");
+    if (!privy) throw new HttpError(503, privyError || "Privy auth not configured");
+
+    await checkIpRate(req);
+
+    const authHeader = req.headers.authorization || "";
+    const accessToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
+    if (!accessToken) throw new HttpError(401, "Missing Privy access token");
+
+    const claims = await verifyPrivyToken(accessToken);
+    const userId = claims.user_id;
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const { playerAddress, amount, claimId } = payload;
+
+    if (typeof playerAddress !== "string" || !ethers.isAddress(playerAddress))
+      throw new HttpError(400, "Invalid playerAddress");
+    const numericAmount = Number(amount);
+    if (!Number.isInteger(numericAmount) || numericAmount <= 0 || numericAmount > MAX_AMOUNT)
+      throw new HttpError(400, `amount must be a whole number between 1 and ${MAX_AMOUNT}`);
+    if (typeof claimId !== "string" || !/^[A-Za-z0-9_-]{8,128}$/.test(claimId))
+      throw new HttpError(400, "Invalid claimId");
+
+    const user = await getPrivyUser(userId);
+    assertWalletOwned(user, playerAddress);
+
+    const existing = await redis("GET", [`claim:id:${claimId}`]);
+    if (existing) throw new HttpError(409, "This win was already paid");
+
+    const keys = await checkLimits(userId, numericAmount);
+    const payout = await payPlayer(playerAddress, numericAmount);
+    await recordClaim(userId, numericAmount, claimId, keys);
+
+    console.log(`[relayer] paid ${numericAmount} VIB to ${playerAddress} (user ${userId}) in ${payout.txHash}`);
+    res.status(200).json({ success: true, txHash: payout.txHash, blockNumber: payout.blockNumber });
+  } catch (err) {
+    const status = err instanceof HttpError ? err.status : 500;
+    const message = err && err.message ? err.message : "Relayer error";
+    console.error(`[relayer] ${status}: ${message}`);
+    res.status(status).json({ success: false, error: message });
+  }
+};

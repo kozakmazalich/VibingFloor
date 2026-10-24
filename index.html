@@ -35,9 +35,11 @@
 
     <!-- 1. START / MAIN MENU SCREEN -->
     <div id="start-menu" class="menu-screen">
-      <!-- Shining aurora background (huly-style hero glow, CSS-only) -->
+      <!-- Shining aurora background (huly-style hero glow, CSS-only) + cyber grid -->
       <div class="menu-aurora-wrap" aria-hidden="true">
         <div class="menu-aurora"></div>
+        <div class="menu-grid"></div>
+        <div class="menu-scanlines"></div>
       </div>
       <div class="menu-card start-card">
         <div class="menu-header">
@@ -114,27 +116,27 @@
         <div class="map-select-panel">
           <div class="select-label">SELECT ARENA:</div>
           <div class="map-tabs">
-            <button class="map-tab-btn active" title="Solid 10x10 cyber platform">
+            <button class="map-tab-btn active" title="Solid cyber platform with jumpable corner towers">
               <img src="assets/map_classic.png" alt="" class="tab-thumb map-thumb" />
               <span class="map-tab-info">
                 <span class="tab-name">CYBER ARENA</span>
-                <span class="tab-sub">10x10 · BALANCED</span>
+                <span class="tab-sub"><span class="map-size">20x20</span> · BALANCED</span>
               </span>
               <span class="tab-status-badge">ACTIVE</span>
             </button>
-            <button class="map-tab-btn" title="4 floating islets connected by stone bridges">
+            <button class="map-tab-btn" title="Floating islets connected by glowing bridges">
               <img src="assets/map_archipelago.png" alt="" class="tab-thumb map-thumb" />
               <span class="map-tab-info">
                 <span class="tab-name">ISLAND ARCHIPELAGO</span>
-                <span class="tab-sub">12x12 · TACTICAL</span>
+                <span class="tab-sub"><span class="map-size">20x20</span> · TACTICAL</span>
               </span>
               <span class="tab-status-badge">SELECT</span>
             </button>
-            <button class="map-tab-btn" title="Two fortified towers joined by narrow bridges">
+            <button class="map-tab-btn" title="Two fortified citadels joined by narrow bridges">
               <img src="assets/map_twin_citadels.png" alt="" class="tab-thumb map-thumb" />
               <span class="map-tab-info">
                 <span class="tab-name">TWIN CITADELS</span>
-                <span class="tab-sub">12x12 · ADVANCED</span>
+                <span class="tab-sub"><span class="map-size">20x20</span> · ADVANCED</span>
               </span>
               <span class="tab-status-badge">SELECT</span>
             </button>
@@ -142,38 +144,69 @@
               <img src="assets/map_chasm_ring.png" alt="" class="tab-thumb map-thumb" />
               <span class="map-tab-info">
                 <span class="tab-name">HONEYCOMB CHASM</span>
-                <span class="tab-sub">11x11 · HARDCORE</span>
+                <span class="tab-sub"><span class="map-size">20x20</span> · HARDCORE</span>
               </span>
               <span class="tab-status-badge">SELECT</span>
             </button>
           </div>
         </div>
 
-        <!-- CPU Difficulty Selector -->
-        <div class="diff-select-panel">
-          <div class="select-label">CPU DIFFICULTY:</div>
-          <div class="diff-tabs">
-            <button class="diff-tab-btn" title="Relaxed CPU opponent">
-              <span class="map-tab-info">
-                <span class="tab-name">EASY</span>
-                <span class="tab-sub">RELAXED CPU</span>
-              </span>
-              <span class="tab-status-badge">SELECT</span>
-            </button>
-            <button class="diff-tab-btn active" title="Balanced CPU opponent">
-              <span class="map-tab-info">
-                <span class="tab-name">NORMAL</span>
-                <span class="tab-sub">BALANCED CPU</span>
-              </span>
-              <span class="tab-status-badge">ACTIVE</span>
-            </button>
-            <button class="diff-tab-btn" title="Aggressive CPU opponent">
-              <span class="map-tab-info">
-                <span class="tab-name">HARD</span>
-                <span class="tab-sub">AGGRESSIVE CPU</span>
-              </span>
-              <span class="tab-status-badge">SELECT</span>
-            </button>
+        <!-- RIGHT COLUMN GROUP: CPU difficulty + match size, stacked together -->
+        <div class="difficulty-group">
+          <!-- CPU Difficulty Selector -->
+          <div class="diff-select-panel">
+            <div class="select-label">CPU DIFFICULTY:</div>
+            <div class="diff-tabs">
+              <button class="diff-tab-btn" title="Relaxed CPU opponent">
+                <span class="map-tab-info">
+                  <span class="tab-name">EASY</span>
+                  <span class="tab-sub">RELAXED CPU</span>
+                </span>
+                <span class="tab-status-badge">SELECT</span>
+              </button>
+              <button class="diff-tab-btn active" title="Balanced CPU opponent">
+                <span class="map-tab-info">
+                  <span class="tab-name">NORMAL</span>
+                  <span class="tab-sub">BALANCED CPU</span>
+                </span>
+                <span class="tab-status-badge">ACTIVE</span>
+              </button>
+              <button class="diff-tab-btn" title="Aggressive CPU opponent">
+                <span class="map-tab-info">
+                  <span class="tab-name">HARD</span>
+                  <span class="tab-sub">AGGRESSIVE CPU</span>
+                </span>
+                <span class="tab-status-badge">SELECT</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Match Size Selector (1 / 4 / 9 CPU bots) -->
+          <div class="bot-select-panel">
+            <div class="select-label">MATCH SIZE:</div>
+            <div class="bot-tabs">
+              <button class="bot-tab-btn active" data-bots="1" title="Classic 1v1 duel">
+                <span class="map-tab-info">
+                  <span class="tab-name">DUEL 1V1</span>
+                  <span class="tab-sub">2 FIGHTERS</span>
+                </span>
+                <span class="tab-status-badge">ACTIVE</span>
+              </button>
+              <button class="bot-tab-btn" data-bots="4" title="Squad battle: you vs 4 bots">
+                <span class="map-tab-info">
+                  <span class="tab-name">SQUAD</span>
+                  <span class="tab-sub">5 FIGHTERS</span>
+                </span>
+                <span class="tab-status-badge">SELECT</span>
+              </button>
+              <button class="bot-tab-btn" data-bots="9" title="Battle royale: you vs 9 bots">
+                <span class="map-tab-info">
+                  <span class="tab-name">ROYALE</span>
+                  <span class="tab-sub">10 FIGHTERS</span>
+                </span>
+                <span class="tab-status-badge">SELECT</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -458,6 +491,9 @@
             </div>
             <img src="assets/robot2_portrait.png" alt="Player 2" class="team-avatar" />
           </div>
+
+          <!-- Survivors strip: one chip per fighter; fades when eliminated -->
+          <div id="survivors-strip" class="survivors-strip" aria-label="Fighters remaining"></div>
         </div>
 
         <div class="quick-actions">

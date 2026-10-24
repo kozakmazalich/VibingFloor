@@ -3,14 +3,15 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { COLORS } from "./constants.js";
 import { Game } from "./game.js";
 import { CHAR_TYPES } from "./robot.js";
-import { MAPS } from "./maps.js";
+import { MAPS, scaledMap } from "./maps.js";
 import { audio } from "./audio.js";
 import { isTouchDevice, setupTouchControls } from "./touch.js";
 import { walletState, signWinMessage } from "./wallet.js";
 import { Net } from "./net.js";
 import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
 import { openProfile, wireProfileButtons } from "./profile.js";
-import { addWin } from "./staking.js";
+import { addWin, setSyncedVibBalance } from "./staking.js";
+import { initPrivyAuth, creditWinToPrivyWallet } from "./privyAuth.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -402,11 +403,19 @@ const game = new Game(scene, camera, {
     winOverlayEl.classList.add("hidden");
     inGameHudEl.classList.remove("hidden");
 
+    // Rebuild the survivors strip for this match's roster
+    renderSurvivors(game.robots);
+
     if (info && info.online) {
       updateOnlineHud();
     }
 
     controls.autoRotate = false;
+  },
+
+  // Fired whenever the fighter roster changes (bot count / map rebuild)
+  onRosterChange: (robots) => {
+    renderSurvivors(robots);
   },
 
   onPause: (isPaused) => {
@@ -511,6 +520,9 @@ const game = new Game(scene, camera, {
 
     scoreP1El.textContent = status.scores.p1;
     scoreP2El.textContent = status.scores.p2;
+
+    // Dim eliminated fighters in the survivors strip (cheap class toggle)
+    if (status.robots) updateSurvivors(status.robots);
   },
 
   onRoundEnd: (outcome) => {
@@ -561,6 +573,9 @@ const game = new Game(scene, camera, {
           winSubtitleEl.textContent =
             (outcome.subText || "") + "  ·  +" + wonAmount.toLocaleString() + " $VIB";
           winOverlayEl.classList.remove("hidden");
+          // Guest mode: no-op. Logged in: treasury pays testnet $VIB to the
+          // Privy embedded wallet and syncs the on-chain balance to the profile.
+          creditWinToPrivyWallet(wonAmount);
         },
         { renderer, manualLoop: true }
       );
@@ -577,6 +592,9 @@ const game = new Game(scene, camera, {
   onRoundStart: () => {
     winOverlayEl.classList.add("hidden");
     pauseMenuEl.classList.add("hidden");
+
+    // Everyone is alive again — reset the survivors strip
+    renderSurvivors(game.robots);
 
     // Snap the camera onto the player's spawn — follow takes over from here
     frameCameraOnPlayer();
@@ -703,9 +721,27 @@ function selectMap(index) {
   controls.update();
 }
 
+// Keep each map tab's size label in sync with the SCALED grid for the current
+// match size (DUEL→22, SQUAD→27, ROYALE→33 on a base-20 map), so the label
+// always reflects what will actually build.
+function refreshMapSizeLabels() {
+  mapTabEls.forEach((btn, i) => {
+    const sizeEl = btn.querySelector(".map-size");
+    if (sizeEl && MAPS[i]) {
+      const fighters = game.botCount + 1; // player + bots
+      const g = scaledMap(MAPS[i], fighters).gridSize || MAPS[i].gridSize || 10;
+      sizeEl.textContent = `${g}x${g}`;
+    }
+  });
+}
+
 mapTabEls.forEach((btn, i) => {
   btn.addEventListener("click", () => selectMap(i));
 });
+
+// Initial labels + refresh whenever the arena is re-scaled (match size change).
+refreshMapSizeLabels();
+if (game.ui) game.ui.onMapScaled = refreshMapSizeLabels;
 
 // Reflect the default arena in the HUD without rebuilding the island
 if (arenaNameEl && MAPS.length > 0) {
@@ -714,6 +750,42 @@ if (arenaNameEl && MAPS.length > 0) {
 
 // 11. CPU Difficulty Logic
 const DIFF_ORDER = ["easy", "normal", "hard"];
+
+// Hover spotlight: track cursor position on menu tabs/buttons so the CSS
+// radial glow (::after) follows the mouse. Delegated, PASSIVE, and throttled
+// to one rAF per frame — an unthrottled pointermove + getBoundingClientRect()
+// runs layout on every mousemove (hundreds/s on macOS trackpads) and can stall
+// the UI. We cache rects and only refresh them on scroll/resize.
+const spotlightSelector = ".char-tab-btn, .map-tab-btn, .diff-tab-btn, .bot-tab-btn, .cyber-btn";
+let spotlightEl = null;
+let spotlightRect = null;
+let spotlightQueued = false;
+
+const refreshSpotlightRect = () => {
+  if (spotlightEl) spotlightRect = spotlightEl.getBoundingClientRect();
+};
+window.addEventListener("scroll", refreshSpotlightRect, { passive: true, capture: true });
+window.addEventListener("resize", refreshSpotlightRect, { passive: true });
+
+document.addEventListener("pointermove", (e) => {
+  const el = e.target.closest ? e.target.closest(spotlightSelector) : null;
+  if (el !== spotlightEl) {
+    spotlightEl = el;
+    spotlightRect = el ? el.getBoundingClientRect() : null;
+  }
+  if (!spotlightEl || !spotlightRect) return;
+  // Write coords relative to the cached rect (no layout read this frame)
+  const x = e.clientX - spotlightRect.left;
+  const y = e.clientY - spotlightRect.top;
+  if (spotlightQueued) return;
+  spotlightQueued = true;
+  requestAnimationFrame(() => {
+    spotlightQueued = false;
+    if (!spotlightEl) return;
+    spotlightEl.style.setProperty("--mx", `${x}px`);
+    spotlightEl.style.setProperty("--my", `${y}px`);
+  });
+}, { passive: true });
 
 function selectDifficulty(level, silent = false) {
   if (!DIFF_ORDER.includes(level)) return;
@@ -736,12 +808,94 @@ diffTabEls.forEach((btn, i) => {
 
 selectDifficulty("normal", true);
 
+// 11b. Match-size (bot count) selector: 1 / 4 / 9 CPU bots
+const botTabEls = Array.from(document.querySelectorAll(".bot-tab-btn"));
+const survivorsStripEl = document.getElementById("survivors-strip");
+
+function selectBotCount(n, silent = false) {
+  if (!silent) audio.playClick();
+  game.setBotCount(n);
+  botTabEls.forEach((btn) => {
+    const on = Number(btn.dataset.bots) === n;
+    btn.classList.toggle("active", on);
+    const badge = btn.querySelector(".tab-status-badge");
+    if (badge) badge.textContent = on ? "ACTIVE" : "SELECT";
+  });
+  // Arena re-scaled for the new roster — refresh the map size labels (NxN).
+  refreshMapSizeLabels();
+}
+
+botTabEls.forEach((btn) => {
+  btn.addEventListener("click", () => selectBotCount(Number(btn.dataset.bots)));
+});
+
+// Survivors HUD: render one chip per fighter; dim the eliminated ones.
+// Rebuilt only when the roster changes (onRosterChange); onStatusUpdate just
+// toggles the `out` class — event-driven, not a full rebuild every frame.
+function renderSurvivors(robots) {
+  if (!survivorsStripEl) return;
+  survivorsStripEl.innerHTML = "";
+  robots.forEach((r) => {
+    const chip = document.createElement("span");
+    chip.className = "surv-chip" + (r.isPlayer ? " you" : "");
+    chip.dataset.id = String(r.id);
+    const img = document.createElement("img");
+    img.src = r.portraitPath;
+    img.alt = r.name;
+    chip.appendChild(img);
+    if (r.isPlayer) {
+      const tag = document.createElement("em");
+      tag.textContent = "YOU";
+      chip.appendChild(tag);
+    }
+    survivorsStripEl.appendChild(chip);
+  });
+}
+
+function updateSurvivors(robots) {
+  if (!survivorsStripEl) return;
+  robots.forEach((r) => {
+    const chip = survivorsStripEl.querySelector(`.surv-chip[data-id="${r.id}"]`);
+    if (!chip) return;
+    const out = r.state === "eliminated" || r.pos.y < -3.5;
+    chip.classList.toggle("out", out);
+  });
+}
+
+// Initial strip (covers the case where a round starts before onRosterChange)
+if (survivorsStripEl) renderSurvivors(game.robots);
+
 // UI Event Listeners: Start Menu
 // INITIALIZE BATTLE starts a match and never opens the profile.
-btnMenuPlayEl.addEventListener("click", () => {
-  audio.playClick();
-  game.startGame();
+// INITIALIZE BATTLE — start a match and never open the profile.
+// Guarded: if the WebAudio click throws (autoplay/Safari can block the AudioContext
+// on first gesture) we must NOT lose the game start — startGame() runs regardless.
+// A second delegated listener on the actions block is a safety net in case the
+// primary button's click is ever intercepted by an overlay.
+function startMatch() {
+  try {
+    audio.playClick();
+  } catch (e) {
+    /* audio blocked — not fatal */
+  }
+  try {
+    game.startGame();
+  } catch (e) {
+    console.error("startGame failed:", e);
+  }
+}
+btnMenuPlayEl.addEventListener("click", (e) => {
+  e.preventDefault();
+  startMatch();
 });
+// Safety net: clicking anywhere on the primary action (icon / text / key tag)
+// still starts the match even if the event target isn't the button itself.
+const menuActionsEl = document.querySelector("#start-menu .menu-actions");
+if (menuActionsEl) {
+  menuActionsEl.addEventListener("click", (e) => {
+    if (e.target && e.target.closest("#btn-menu-play")) startMatch();
+  });
+}
 
 // UI Event Listeners: Online 1v1 panel
 btnMenuOnlineEl.addEventListener("click", () => {
@@ -779,6 +933,69 @@ if (onlineCodeInputEl) {
   });
 }
 
+// ---------------------------------------------------------------------------
+// GUARANTEED BUTTON ACTIVATION (macOS trackpad fix).
+//
+// `.cyber-btn` uses clip-path + a transform transition + overflow:hidden. On
+// some Mac trackpads/browsers the native `click` event never fires for it
+// (pointer events land, click is swallowed) — while the clip-path-free menu
+// tabs kept working. That mismatch is exactly what made the big buttons feel
+// dead.
+//
+// Fix: activate every menu button from `pointerup` (which ALWAYS fires) by
+// dispatching a real `click`, and CANCEL any native `click` that arrives in
+// the same gesture so each press runs exactly once. This works whether the
+// browser emits `click` or not, and regardless of where the button's own
+// listener was attached.
+// ---------------------------------------------------------------------------
+{
+  const SELECTOR =
+    "#btn-menu-play, #btn-menu-online, #btn-menu-profile, #btn-menu-sound, " +
+    ".char-tab-btn, .map-tab-btn, .diff-tab-btn, .bot-tab-btn, " +
+    "#btn-online-host, #btn-online-join, #btn-online-back, " +
+    "#btn-pause-resume, #btn-pause-restart, #btn-pause-menu, " +
+    "#btn-hud-pause, #btn-hud-restart, #btn-win-restart";
+  const handledAt = new Map(); // element -> last pointerup activation (ms)
+  let synthClick = false; // true only while OUR synthesized click is dispatching
+  const findBtn = (t) => (t && t.closest ? t.closest(SELECTOR) : null);
+
+  // NATIVE click arriving right after we already activated this SAME button on
+  // pointerup -> swallow it so the action runs once. Our OWN synthesized click
+  // (synthClick === true) must pass through, or the button never fires.
+  document.addEventListener(
+    "click",
+    (e) => {
+      if (synthClick) return; // let our own activation through
+      const el = findBtn(e.target);
+      if (el && performance.now() - (handledAt.get(el) || 0) < 400) {
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    },
+    true
+  );
+
+  // Activate on pointerup — fires on every mouse / trackpad / touch release.
+  document.addEventListener(
+    "pointerup",
+    (e) => {
+      const el = findBtn(e.target);
+      if (!el) return;
+      const now = performance.now();
+      if (now - (handledAt.get(el) || 0) < 400) return; // THIS button already activated
+      handledAt.set(el, now);
+      // Re-dispatch a real click so the button's OWN listener runs unchanged.
+      synthClick = true;
+      try {
+        el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+      } finally {
+        synthClick = false;
+      }
+    },
+    { passive: true }
+  );
+}
+
 btnMenuSoundEl.addEventListener("click", () => {
   handleSoundToggle();
 });
@@ -808,6 +1025,12 @@ if (btnProfileCloseEl) {
   });
 }
 wireProfileButtons();
+
+// Optional Privy email login. When logged in, the wallet's on-chain balance
+// replaces the profile's free $VIB. Guests keep the demo state untouched.
+initPrivyAuth((balance) => {
+  setSyncedVibBalance(balance);
+});
 
 // UI Event Listeners: Pause Menu
 btnPauseResumeEl.addEventListener("click", () => {

@@ -84,7 +84,13 @@ export const PUSH_COOLDOWN = 1.2; // Seconds between pushes
 export const PUSH_IMPULSE = 14.5; // Strong impulse to knock opponent into void
 
 // Active Jump Ability (J)
-export const JUMP_FORCE = 10.5; // Upward velocity on jump
+// Tuned for FEEL (physics-tuning / game-feel): slower, floatier arc.
+// Peak height = JUMP_FORCE^2 / (2 * GRAVITY) — both changed TOGETHER to keep
+// the same reachable height (~2.19 units clears the 2.2-unit gaps) while
+// stretching hang time from ~0.88s to ~1.19s (+35%). The longer float makes
+// precise landings on shrinking tiles much easier to read and aim.
+export const JUMP_FORCE = 8.0; // Upward velocity on jump (was 10.5 — lowered)
+export const GRAVITY = 16.0; // Gravity (was 24.0 — lowered for a floatier arc)
 export const JUMP_COOLDOWN = 0.75; // Seconds between jumps
 export const JUMP_FORWARD_BOOST = 1.2; // Bonus forward leap speed if moving (kept low for precise platform landings)
 
@@ -113,8 +119,7 @@ export const GRENADE_THROW_DISTANCE = 4.8; // Thrown forward in facing direction
 export const GRENADE_IMPULSE = 20.0; // Blast knockback if caught in shockwave
 
 // Falling / Void
-export const GRAVITY = 24.0;
-export const VOID_KILL_Y = -15.0;
+export const VOID_KILL_Y = -15.0; // GRAVITY is defined in the Jump block above (tuned for jump feel)
 
 // Visual Colors - Neon Cyberpunk Arena Palette
 export const COLORS = {
