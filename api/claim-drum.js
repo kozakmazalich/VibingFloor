@@ -188,7 +188,14 @@ async function getPrivyUser(userId) {
     headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/json" },
   });
   if (!res.ok) {
-    throw new HttpError(502, `Could not load the Privy user (HTTP ${res.status})`);
+    // Surface Privy's own error body so we can see WHY (bad id, bad auth, ...)
+    let detail = "";
+    try {
+      detail = JSON.stringify(await res.json());
+    } catch {
+      /* ignore */
+    }
+    throw new HttpError(502, `Could not load the Privy user (HTTP ${res.status}) ${detail}`);
   }
   const user = await res.json();
   userCache.set(userId, { user, expiresAt: now + 300000 });
