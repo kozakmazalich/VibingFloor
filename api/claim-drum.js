@@ -119,7 +119,8 @@ async function ensureInit() {
       if (PRIVY_APP_ID && PRIVY_APP_SECRET) {
         privyReady = true;
         // Remote JWKS from Privy (same URL the SDK uses). ES256 + issuer privy.io.
-        const { createRemoteJWKSet } = require("jose");
+        // jose@6 is ESM-only -> must use dynamic import() from this CJS module.
+        const { createRemoteJWKSet } = await import("jose");
         privyJwks = createRemoteJWKSet(
           new URL(`${PRIVY_API_URL}/v1/apps/${PRIVY_APP_ID}/jwks.json`),
           { cacheMaxAge: 60 * 60 * 1000, cooldownDuration: 10 * 60 * 1000 }
@@ -143,7 +144,8 @@ async function verifyPrivyToken(tokenString) {
   const now = Date.now();
   if (hit && hit.expiresAt > now) return hit.claims;
 
-  const { jwtVerify } = require("jose");
+  // jose@6 is ESM-only -> dynamic import() from this CJS module.
+  const { jwtVerify } = await import("jose");
   let payload;
   try {
     ({ payload } = await jwtVerify(tokenString, privyJwks, {
