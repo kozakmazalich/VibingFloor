@@ -315,7 +315,17 @@ module.exports = async function handler(req, res) {
       chainReady,
       chainId: EXPECTED_CHAIN_ID,
       tokenAddress: TOKEN_ADDRESS,
-      stateStore: UPSTASH_URL ? "upstash" : "unconfigured",
+      stateStore:
+        UPSTASH_URL && UPSTASH_TOKEN ? "upstash" : "unconfigured",
+      ...(UPSTASH_URL && !UPSTASH_TOKEN
+        ? { stateStoreError: "UPSTASH_REDIS_REST_TOKEN missing" }
+        : {}),
+      ...(!UPSTASH_URL && UPSTASH_TOKEN
+        ? { stateStoreError: "UPSTASH_REDIS_REST_URL missing" }
+        : {}),
+      ...(!UPSTASH_URL && !UPSTASH_TOKEN
+        ? { stateStoreError: "both Upstash env vars missing" }
+        : {}),
       ...(initError ? { error: initError } : {}),
       ...(privyError ? { authError: privyError } : {}),
     });
