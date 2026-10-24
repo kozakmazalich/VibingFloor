@@ -210,16 +210,31 @@ async function getPrivyUser(userId) {
   return user;
 }
 
+// Mirrors the proven logic from relayer/server.js: Privy's REST user object
+// exposes wallets as linked_accounts (snake_case) with type "wallet" and
+// chain_type "ethereum" — NOT linkedAccounts / type "ethereum".
 function assertWalletOwned(user, address) {
   const target = address.toLowerCase();
-  const linked =
-    (user.linkedAccounts || []).some(
-      (a) =>
-        (a.type === "ethereum" || a.type === "wallet") &&
-        String(a.address || "").toLowerCase() === target
-    ) ||
-    (user.wallet ? String(user.wallet.address || "").toLowerCase() === target : false);
-  if (!linked) throw new HttpError(403, "Wallet is not linked to this Privy user");
+
+  const wallets = (user.linked_accounts || [])
+    .filter(
+      (account) =>
+        account &&
+        account.type === "wallet" &&
+        account.chain_type === "ethereum" &&
+        typeof account.address === "string"
+    )
+    .map((account) => account.address.toLowerCase());
+
+  // Some accounts expose a single embedded wallet under `wallet`.
+  const embedded =
+    user.wallet && typeof user.wallet.address === "string"
+      ? user.wallet.address.toLowerCase()
+      : null;
+
+  if (!wallets.includes(target) && embedded !== target) {
+    throw new HttpError(403, "Wallet is not linked to this Privy account");
+  }
 }
 
 // --- LIMITS + DEDUPE (Redis) ---
