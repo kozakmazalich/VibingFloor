@@ -17,10 +17,19 @@
   out.push(`actions: top=${Math.round(actions.top)} bottom=${Math.round(actions.bottom)} right=${Math.round(actions.right)}`);
   out.push(`joystick: top=${Math.round(joy.top)} bottom=${Math.round(joy.bottom)} left=${Math.round(joy.left)}`);
 
-  const panelOverlap = panel.bottom > actions.top;
-  const actionsOverflow = actions.right > vw + 1;
-  out.push(panelOverlap ? "FAIL: panel overlaps touch actions" : "OK: panel clears touch actions");
-  out.push(actionsOverflow ? "FAIL: touch actions overflow right" : "OK: touch actions inside viewport");
+  // Touch controls only exist in touch-device mode (cdp-test --mobile). Without
+  // touch emulation .touch-actions has a 0x0 rect, which would be a false FAIL.
+  const touchMode = document.documentElement.classList.contains("touch-device");
+  const actionsVisible = touchMode && actions.width > 0 && actions.height > 0;
+
+  const panelOverlap = actionsVisible && panel.bottom > actions.top;
+  const actionsOverflow = actionsVisible && actions.right > vw + 1;
+  if (!actionsVisible) {
+    out.push("SKIP: not in touch mode (run with --mobile=WxH) — skipping touch-action overlap");
+  } else {
+    out.push(panelOverlap ? "FAIL: panel overlaps touch actions" : "OK: panel clears touch actions");
+    out.push(actionsOverflow ? "FAIL: touch actions overflow right" : "OK: touch actions inside viewport");
+  }
   out.push(joy.left >= 0 ? "OK: joystick inside viewport" : "FAIL: joystick clipped left");
   return out.join("\n");
 })();
