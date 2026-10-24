@@ -185,7 +185,12 @@ async function getPrivyUser(userId) {
 
   const basic = Buffer.from(`${PRIVY_APP_ID}:${PRIVY_APP_SECRET}`).toString("base64");
   const res = await fetch(`${PRIVY_API_URL}/v1/users/${encodeURIComponent(userId)}`, {
-    headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Basic ${basic}`,
+      "Content-Type": "application/json",
+      // Privy requires the app id in its own header alongside Basic auth.
+      "privy-app-id": PRIVY_APP_ID,
+    },
   });
   if (!res.ok) {
     // Surface Privy's own error body so we can see WHY (bad id, bad auth, ...)
