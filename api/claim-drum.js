@@ -16,7 +16,12 @@
 
 const crypto = require("node:crypto");
 const { ethers } = require("ethers");
-const { PrivyClient } = require("@privy-io/node");
+// NOTE: we intentionally do NOT require("@privy-io/node") here. Its dependency
+// chain pulls in @hpke/chacha20poly1305 -> @hpke/common, whose CJS build
+// `require("./src/errors.js")` fails to install on Vercel ("Cannot find module
+// './src/errors.js'") and crashes the function. We only need two Privy
+// operations — JWT verification and a user lookup — which we do directly with
+// `jose` (JWT ES256 via Privy's remote JWKS) and a plain REST call.
 
 // --- ENV (from Vercel dashboard - never hard-coded) ---
 const RPC_URL = process.env.RPC_URL || "https://rpc.testnet.chain.robinhood.com";
@@ -25,6 +30,7 @@ const TOKEN_ADDRESS =
   process.env.TOKEN_ADDRESS || "0x462cE9fA227aB2CA44C66323B8fD4c3e078072ED";
 const PRIVY_APP_ID = process.env.PRIVY_APP_ID || "";
 const PRIVY_APP_SECRET = process.env.PRIVY_APP_SECRET || "";
+const PRIVY_API_URL = process.env.PRIVY_API_URL || "https://api.privy.io";
 const EXPECTED_CHAIN_ID = Number(process.env.EXPECTED_CHAIN_ID || 46630);
 
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL || "";
@@ -56,7 +62,8 @@ let tokenDecimals = 18;
 let chainReady = false;
 let initPromise = null;
 let initError = null;
-let privy = null;
+let privyReady = false;
+let privyJwks = null;
 let privyError = null;
 
 const userCache = new Map(); // userId -> { user, expiresAt }
@@ -110,27 +117,57 @@ async function ensureInit() {
     }
     try {
       if (PRIVY_APP_ID && PRIVY_APP_SECRET) {
-        privy = new PrivyClient(PRIVY_APP_ID, PRIVY_APP_SECRET);
+        privyReady = true;
+        // Remote JWKS from Privy (same URL the SDK uses). ES256 + issuer privy.io.
+        const { createRemoteJWKSet } = require("jose");
+        privyJwks = createRemoteJWKSet(
+          new URL(`${PRIVY_API_URL}/v1/apps/${PRIVY_APP_ID}/jwks.json`),
+          { cacheMaxAge: 60 * 60 * 1000, cooldownDuration: 10 * 60 * 1000 }
+        );
       } else {
         privyError = "PRIVY_APP_ID / PRIVY_APP_SECRET not set";
       }
     } catch (err) {
       privyError = err.message || "privy init failed";
-      privy = null;
+      privyReady = false;
     }
     return { initError, privyError };
   })();
   return initPromise;
 }
 
-// --- PRIVY VERIFICATION ---
+// --- PRIVY VERIFICATION (jose + remote JWKS, no @privy-io/node) ---
 async function verifyPrivyToken(tokenString) {
   const key = crypto.createHash("sha256").update(tokenString).digest("hex");
   const hit = tokenCache.get(key);
   const now = Date.now();
   if (hit && hit.expiresAt > now) return hit.claims;
-  const claims = await privy.verifyAuthToken(tokenString);
-  const expiresAt = (claims.exp ? claims.exp * 1000 : now + 300000) - 30000;
+
+  const { jwtVerify } = require("jose");
+  let payload;
+  try {
+    ({ payload } = await jwtVerify(tokenString, privyJwks, {
+      typ: "JWT",
+      algorithms: ["ES256"],
+      issuer: "privy.io",
+      audience: PRIVY_APP_ID,
+    }));
+  } catch (err) {
+    throw new HttpError(401, `Invalid Privy token: ${err.message}`);
+  }
+
+  const claims = {
+    app_id: payload.aud,
+    issuer: payload.iss,
+    issued_at: payload.iat,
+    expiration: payload.exp,
+    session_id: payload.sid,
+    user_id: payload.sub,
+  };
+  if (claims.app_id !== PRIVY_APP_ID) {
+    throw new HttpError(401, "Token audience does not match this app");
+  }
+  const expiresAt = (claims.expiration > 1e12 ? claims.expiration : claims.expiration * 1000) - 30000;
   tokenCache.set(key, { claims, expiresAt });
   if (tokenCache.size > 500) {
     for (const [k, v] of tokenCache) if (v.expiresAt <= now) tokenCache.delete(k);
@@ -138,11 +175,20 @@ async function verifyPrivyToken(tokenString) {
   return claims;
 }
 
+// Fetch a Privy user by id via the REST API (basic auth with the app secret).
 async function getPrivyUser(userId) {
   const hit = userCache.get(userId);
   const now = Date.now();
   if (hit && hit.expiresAt > now) return hit.user;
-  const user = await privy.getUser(userId);
+
+  const basic = Buffer.from(`${PRIVY_APP_ID}:${PRIVY_APP_SECRET}`).toString("base64");
+  const res = await fetch(`${PRIVY_API_URL}/v1/users/${encodeURIComponent(userId)}`, {
+    headers: { Authorization: `Basic ${basic}`, "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    throw new HttpError(502, `Could not load the Privy user (HTTP ${res.status})`);
+  }
+  const user = await res.json();
   userCache.set(userId, { user, expiresAt: now + 300000 });
   if (userCache.size > 500) {
     for (const [k, v] of userCache) if (v.expiresAt <= now) userCache.delete(k);
@@ -263,7 +309,7 @@ module.exports = async function handler(req, res) {
     res.status(200).json({
       success: true,
       keyConfigured: Boolean(TREASURY_PRIVATE_KEY),
-      authConfigured: Boolean(privy),
+      authConfigured: Boolean(privyReady),
       chainReady,
       chainId: EXPECTED_CHAIN_ID,
       tokenAddress: TOKEN_ADDRESS,
@@ -279,7 +325,7 @@ module.exports = async function handler(req, res) {
   try {
     await ensureInit();
     if (initError || !chainReady) throw new HttpError(503, initError || "Relayer chain is not ready");
-    if (!privy) throw new HttpError(503, privyError || "Privy auth not configured");
+    if (!privyReady) throw new HttpError(503, privyError || "Privy auth not configured");
 
     await checkIpRate(req);
 
