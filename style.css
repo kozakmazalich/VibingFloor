@@ -945,6 +945,22 @@ body {
 }
 
 /* Solana wallet connect button (green accent) */
+/* Profile · Staking Demo button (yellow accent, same cyber-btn style) */
+.cyber-btn-profile {
+  background: linear-gradient(135deg, rgba(80, 62, 8, 0.9) 0%, rgba(38, 30, 6, 0.95) 100%);
+  box-shadow: 0 0 0 1px rgba(255, 215, 0, 0.55), 0 6px 20px rgba(0, 0, 0, 0.6),
+              0 0 18px rgba(255, 215, 0, 0.25);
+  color: #ffe27a;
+}
+
+.cyber-btn-profile:hover {
+  background: linear-gradient(135deg, rgba(112, 88, 12, 0.95) 0%, rgba(52, 42, 8, 0.98) 100%);
+  box-shadow: 0 0 0 1.5px #ffd700, 0 8px 30px rgba(0, 0, 0, 0.7),
+              0 0 30px rgba(255, 215, 0, 0.6);
+  transform: translateY(-2px);
+  color: #fff3b0;
+}
+
 .cyber-btn-wallet {
   background: linear-gradient(135deg, rgba(20, 40, 32, 0.9) 0%, rgba(10, 18, 14, 0.95) 100%);
   box-shadow: 0 0 0 1px rgba(20, 241, 149, 0.4), 0 6px 20px rgba(0, 0, 0, 0.6);
