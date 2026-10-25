@@ -65,7 +65,7 @@ body {
 /* Generic Cyber Card Container */
 .menu-card {
   background: linear-gradient(180deg, rgba(16, 22, 46, 0.94) 0%, rgba(10, 12, 24, 0.98) 100%);
-  border: 1px solid rgba(0, 229, 255, 0.35);
+  border: none;
   border-radius: 20px;
   padding: 24px 30px;
   text-align: center;
@@ -84,15 +84,7 @@ body {
   position: relative;
 }
 
-.menu-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #00e5ff 50%, transparent);
-}
+/* D variant: the top shimmer line removed (was reading as a frame). */
 
 /* =========================================
    START MENU — shining aurora background
@@ -306,14 +298,14 @@ body {
 .neon-badge.cyan {
   background: rgba(0, 229, 255, 0.15);
   color: #00e5ff;
-  border: 1px solid rgba(0, 229, 255, 0.4);
+  border: none;
   box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
 }
 
 .neon-badge.warning {
   background: rgba(255, 92, 26, 0.15);
   color: #ff5c1a;
-  border: 1px solid rgba(255, 92, 26, 0.4);
+  border: none;
   box-shadow: 0 0 10px rgba(255, 92, 26, 0.2);
 }
 
@@ -345,7 +337,7 @@ body {
 .fighter-select-panel {
   width: 100%;
   background: rgba(12, 16, 32, 0.75);
-  border: 1px solid rgba(0, 229, 255, 0.2);
+  border: none;
   border-radius: 14px;
   padding: 10px 14px;
   margin-top: 4px;
@@ -371,7 +363,7 @@ body {
 
 .char-tab-btn {
   background: rgba(16, 24, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: none;
   border-radius: 10px;
   padding: 8px 10px;
   display: flex;
@@ -401,7 +393,7 @@ body {
   border-radius: 6px;
   object-fit: contain;
   background: rgba(10, 14, 28, 0.9);
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  border: none;
 }
 
 .char-tab-btn.active .tab-thumb {
@@ -455,7 +447,7 @@ body {
 .map-select-panel {
   width: 100%;
   background: rgba(12, 16, 32, 0.75);
-  border: 1px solid rgba(255, 45, 149, 0.2);
+  border: none;
   border-radius: 14px;
   padding: 10px 14px;
   margin-top: 4px;
@@ -472,7 +464,7 @@ body {
 
 .map-tab-btn {
   background: rgba(16, 24, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: none;
   border-radius: 10px;
   padding: 7px 10px;
   display: flex;
@@ -525,7 +517,7 @@ body {
 .diff-select-panel {
   width: 100%;
   background: rgba(12, 16, 32, 0.75);
-  border: 1px solid rgba(255, 92, 26, 0.2);
+  border: none;
   border-radius: 14px;
   padding: 10px 14px;
   margin-top: 4px;
@@ -542,7 +534,7 @@ body {
 
 .diff-tab-btn {
   background: rgba(16, 24, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: none;
   border-radius: 10px;
   padding: 7px 10px;
   display: flex;
@@ -578,6 +570,48 @@ body {
 }
 
 /* =========================================
+   MENU FOOTER — $VIB testnet token info
+   ========================================= */
+.menu-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 229, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+}
+.footer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  flex-wrap: wrap;
+}
+.footer-label {
+  color: #00e5ff;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(0, 229, 255, 0.12);
+  border: none;
+}
+.footer-addr,
+.footer-link {
+  color: #9fb0d8;
+  text-decoration: none;
+  word-break: break-all;
+  transition: color 0.15s ease;
+}
+.footer-addr:hover,
+.footer-link:hover {
+  color: #00e5ff;
+  text-decoration: underline;
+}
+
+/* =========================================
    VERSUS SHOWCASE
    ========================================= */
 .start-card {
@@ -590,7 +624,7 @@ body {
 .bot-select-panel {
   width: 100%;
   background: rgba(12, 16, 32, 0.75);
-  border: 1px solid rgba(0, 229, 255, 0.2);
+  border: none;
   border-radius: 14px;
   padding: 10px 14px;
   margin-top: 4px;
@@ -607,7 +641,7 @@ body {
 
 .bot-tab-btn {
   background: rgba(16, 24, 48, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: none;
   border-radius: 10px;
   padding: 7px 10px;
   display: flex;
@@ -795,7 +829,7 @@ body {
   color: #475569;
   padding: 5px 10px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
   background: rgba(15, 23, 42, 0.6);
 }
 
@@ -1019,7 +1053,7 @@ body {
 .menu-controls-guide {
   width: 100%;
   background: rgba(10, 14, 28, 0.7);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
   border-radius: 12px;
   padding: 12px 16px;
   margin-top: 4px;
@@ -1154,7 +1188,7 @@ body {
   border-radius: 4px;
   background: rgba(0, 229, 255, 0.15);
   color: #00e5ff;
-  border: 1px solid rgba(0, 229, 255, 0.4);
+  border: none;
   -webkit-text-fill-color: #00e5ff;
 }
 
@@ -1902,8 +1936,30 @@ body {
    the window was 720 tall → looked "unclickable"). Switch to two columns from
    768px so the whole card fits one screen and every button stays visible. */
 @media (min-width: 768px) {
+  /* FULLSCREEN menu: the card fills the viewport instead of a centred box.
+     Removes the max-width card look — menu spreads across the whole screen. */
+  #start-menu {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+  #start-menu .start-card {
+    max-width: none;
+    width: 100%;
+    height: 100%;
+    max-height: 100vh;
+    margin: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    overflow-y: auto;
+    padding: clamp(16px, 2.5vh, 30px) clamp(20px, 3vw, 56px);
+    grid-template-columns: minmax(300px, 1.15fr) minmax(330px, 1fr);
+    column-gap: clamp(24px, 3vw, 56px);
+    row-gap: clamp(12px, 1.8vh, 22px);
+  }
   .start-card {
-    max-width: 1120px;
+    max-width: none;
     display: grid;
     grid-template-columns: minmax(300px, 1.15fr) minmax(330px, 1fr);
     grid-template-areas:
@@ -1917,6 +1973,24 @@ body {
     padding: 22px 26px;
   }
   .start-card .menu-header { grid-area: header; align-self: center; }
+
+  /* VS showcase: the two fighter boxes 30% bigger (74 -> 96). */
+  .start-card .avatar-frame {
+    width: 96px;
+    height: 96px;
+    border-radius: 14px;
+  }
+  .start-card .showcase-avatar {
+    width: 83px;
+    height: 83px;
+  }
+  .start-card .combatant-name { font-size: 14px; }
+  .start-card .vs-emblem { font-size: 19px; padding: 7px 13px; }
+
+  /* Fighters panel: kill the dead space at the bottom by letting the tabs
+     (grid) stretch to fill the panel instead of hugging their content. */
+  .start-card .fighter-select-panel { display: flex; flex-direction: column; }
+  .start-card .fighter-tabs { flex: 1 1 auto; align-content: stretch; grid-auto-rows: 1fr; }
   .start-card .fighter-select-panel,
   .start-card .map-select-panel {
     align-self: stretch; /* fill the full row height — no dead space below */
@@ -1941,15 +2015,20 @@ body {
   .start-card .menu-actions { grid-area: actions; }
   .start-card .menu-controls-guide { grid-area: guide; margin-top: 0; }
 
-  /* Balance the right column: tabs size to CONTENT instead of stretching to
-     fill their panel — the panels were inflating ~40px each and pushing
-     MATCH SIZE below the fold on 720px-tall windows. */
-  .start-card .fighter-tabs,
+  /* Balance the right column: map/difficulty tabs size to CONTENT (prevents the
+     panels inflating and pushing MATCH SIZE below the fold on 720px windows).
+     NOTE: .fighter-tabs is NOT here on purpose — its panel is tall and would
+     show dead space, so the fighter tabs stretch to fill it instead (below). */
   .start-card .map-tabs,
   .start-card .diff-tabs {
     flex: 0 0 auto;
     grid-auto-rows: auto;
     align-content: start;
+  }
+  .start-card .fighter-tabs {
+    flex: 1 1 auto;
+    align-content: stretch;
+    grid-auto-rows: 1fr;
   }
   .start-card .map-thumb {
     width: 46px;
@@ -1994,6 +2073,68 @@ body {
     gap: 10px 12px;
   }
   .start-card .menu-actions .cyber-btn-primary { grid-column: 1 / -1; }
+
+  /* =================== VARIANT D (borderless refresh) ===================
+     Applied only to the desktop two-column layout. Removes hard borders in
+     favour of soft glow / subtle fills; selector rows act like a list. */
+  /* Card: drop the cyan border, keep depth with a glow-shadow instead. */
+  #start-menu .menu-card.start-card,
+  .start-card.start-card,
+  .start-card {
+    border: none !important;
+    border-top: none !important;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 46px rgba(0, 229, 255, 0.1);
+    background: linear-gradient(160deg, rgba(12, 15, 30, 0.72), rgba(8, 10, 22, 0.82));
+  }
+  /* Panels: no border -> subtle fill. */
+  .start-card .fighter-select-panel,
+  .start-card .map-select-panel,
+  .start-card .difficulty-group .diff-select-panel,
+  .start-card .difficulty-group .bot-select-panel,
+  .start-card .menu-controls-guide {
+    border: none;
+    background: rgba(255, 255, 255, 0.035);
+  }
+  /* Selector rows read like a list: active = cyan left rail + fill. */
+  .start-card .char-tab-btn,
+  .start-card .map-tab-btn,
+  .start-card .diff-tab-btn,
+  .start-card .bot-tab-btn {
+    border-radius: 0;
+    border: none;
+    border-left: 3px solid transparent;
+    background: rgba(255, 255, 255, 0.03);
+    transition: background 0.16s ease, border-color 0.16s ease;
+  }
+  .start-card .char-tab-btn:hover,
+  .start-card .map-tab-btn:hover,
+  .start-card .diff-tab-btn:hover,
+  .start-card .bot-tab-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  .start-card .char-tab-btn.active {
+    border-left-color: #00e5ff; /* SELECT PLAYER — cyan (matches its accent) */
+    background: rgba(0, 229, 255, 0.12);
+    box-shadow: none;
+  }
+  .start-card .map-tab-btn.active {
+    border-left-color: #ff2d95; /* SELECT ARENA — magenta */
+    background: rgba(255, 45, 149, 0.12);
+    box-shadow: none;
+  }
+  .start-card .diff-tab-btn.active {
+    border-left-color: #ff5c1a; /* CPU DIFFICULTY — orange */
+    background: rgba(255, 92, 26, 0.12);
+    box-shadow: none;
+  }
+  .start-card .bot-tab-btn.active {
+    border-left-color: #ffd700; /* MATCH SIZE — yellow */
+    background: rgba(255, 215, 0, 0.12);
+    box-shadow: none;
+  }
+  /* NOTE: do NOT clip-path .cyber-btn — it breaks click hit-testing on macOS. */
+  /* Footer sits under the guide within its grid cell. */
+  .start-card .menu-footer { grid-area: guide; }
 }
 
 @media (prefers-reduced-motion: reduce) {

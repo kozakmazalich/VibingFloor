@@ -9,13 +9,16 @@ class SoundSystem {
     this.muted = false;
     this.initialized = false;
 
-    // Background music state (electro-techno loop)
+    // Background music state (mp3 loop: assets/1025.mp3)
     this.musicRunning = false;
     this.musicTimer = null;
     this.musicStep = 0;
     this.musicNextTime = 0;
     this.musicBus = null;
     this.musicBassGain = null;
+    this.musicBuffer = null; // decoded AudioBuffer of 1025.mp3
+    this.musicLoadPromise = null; // in-flight fetch+decode
+    this.musicSrc = null; // active looping BufferSource
     this._noiseBuf = null;
   }
 
@@ -533,38 +536,70 @@ class SoundSystem {
   }
 
   // =====================================================================
-  // BACKGROUND MUSIC — electro-techno arena loop (A minor, 128 BPM).
-  // Fully synthesized: four-on-the-floor kick, offbeat hats, claps,
-  // rolling bassline with sidechain-style duck, echo arpeggio lead.
-  // Scheduled with a 25ms lookahead interval — cheap on a fanless M1.
-  // =====================================================================
-
+  // BACKGROUND MUSIC — the game's techno track (assets/1025.mp3), looped.
+  // Decoded into an AudioBuffer and played with a looping source so it wraps
+  // seamlessly; the previous synthesized loop is kept below but unused.
   startMusic() {
     if (this.musicRunning) return;
     if (!this.ctx) this.init(); // do NOT call ensureContext here (it calls us back)
     if (!this.ctx || this.muted) return;
 
     this.musicRunning = true;
-    this.musicStep = 0;
-    this.musicNextTime = this.ctx.currentTime + 0.1;
 
-    this.musicBus = this.ctx.createGain();
-    this.musicBus.gain.value = 0.4;
-    this.musicBus.connect(this.ctx.destination);
-
-    // Bassline sits on its own gain so the kick can duck it (techno pump)
-    this.musicBassGain = this.ctx.createGain();
-    this.musicBassGain.gain.value = 1.0;
-    this.musicBassGain.connect(this.musicBus);
-
-    this.musicTimer = setInterval(() => this._musicTick(), 25);
+    // Lazily fetch + decode the mp3 once, then start the loop.
+    if (!this.musicBuffer) {
+      if (!this.musicLoadPromise) {
+        this.musicLoadPromise = fetch("assets/1025.mp3")
+          .then((r) => {
+            if (!r.ok) throw new Error(`mp3 fetch ${r.status}`);
+            return r.arrayBuffer();
+          })
+          .then((buf) => this.ctx.decodeAudioData(buf))
+          .then((decoded) => {
+            this.musicBuffer = decoded;
+            // Start only if music is still supposed to be running.
+            if (this.musicRunning) this._startMusicLoop();
+          })
+          .catch((err) => {
+            console.warn("[audio] music track failed to load:", err);
+            this.musicRunning = false;
+          });
+      }
+      return;
+    }
+    this._startMusicLoop();
   }
 
-  stopMusic() {
-    if (!this.musicRunning) return;
-    this.musicRunning = false;
-    clearInterval(this.musicTimer);
-    this.musicTimer = null;
+  _startMusicLoop() {
+    if (!this.ctx || !this.musicBuffer) return;
+    this.stopMusicNodes(); // clear any previous source
+    this.musicBus = this.ctx.createGain();
+    this.musicBus.gain.value = 0.5; // track volume
+    this.musicBus.connect(this.ctx.destination);
+
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.musicBuffer;
+    src.loop = true; // seamless techno loop
+    src.connect(this.musicBus);
+    try {
+      src.start(0);
+    } catch (e) {
+      /* already started */
+    }
+    this.musicSrc = src;
+  }
+
+  // Tear down the looping source + bus (safe to call anytime).
+  stopMusicNodes() {
+    if (this.musicSrc) {
+      try {
+        this.musicSrc.stop();
+        this.musicSrc.disconnect();
+      } catch (e) {
+        /* noop */
+      }
+      this.musicSrc = null;
+    }
     if (this.musicBus) {
       try {
         this.musicBus.disconnect();
@@ -574,6 +609,16 @@ class SoundSystem {
       this.musicBus = null;
     }
     this.musicBassGain = null;
+  }
+
+  stopMusic() {
+    if (!this.musicRunning && !this.musicSrc) return;
+    this.musicRunning = false;
+    if (this.musicTimer) {
+      clearInterval(this.musicTimer); // legacy synthesized loop
+      this.musicTimer = null;
+    }
+    this.stopMusicNodes();
   }
 
   _musicTick() {

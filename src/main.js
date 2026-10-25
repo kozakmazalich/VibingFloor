@@ -721,15 +721,14 @@ function selectMap(index) {
   controls.update();
 }
 
-// Keep each map tab's size label in sync with the SCALED grid for the current
-// match size (DUEL→22, SQUAD→27, ROYALE→33 on a base-20 map), so the label
-// always reflects what will actually build.
+// Keep each map tab's size label in sync with the grid. Scaled arenas are
+// temporarily disabled (scaledMap scrambled layouts at 10 players), so show
+// the real BASE grid size until the scale is fixed.
 function refreshMapSizeLabels() {
   mapTabEls.forEach((btn, i) => {
     const sizeEl = btn.querySelector(".map-size");
     if (sizeEl && MAPS[i]) {
-      const fighters = game.botCount + 1; // player + bots
-      const g = scaledMap(MAPS[i], fighters).gridSize || MAPS[i].gridSize || 10;
+      const g = MAPS[i].gridSize || 10;
       sizeEl.textContent = `${g}x${g}`;
     }
   });
