@@ -535,6 +535,117 @@ class SoundSystem {
     whiteNoise.stop(t + 0.15);
   }
 
+  // Weapon pickup chime — a bright ascending arpeggio confirming an equip
+  playPickup() {
+    if (this.muted) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+
+    const t = this.ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = "sine";
+      const start = t + i * 0.07;
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.22);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.24);
+    });
+
+    // Soft shimmer overtone for a "holo" texture
+    const shimmer = this.ctx.createOscillator();
+    const shimGain = this.ctx.createGain();
+    shimmer.type = "triangle";
+    shimmer.frequency.setValueAtTime(2093, t + 0.22);
+    shimGain.gain.setValueAtTime(0.0001, t + 0.22);
+    shimGain.gain.exponentialRampToValueAtTime(0.12, t + 0.24);
+    shimGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    shimmer.connect(shimGain);
+    shimGain.connect(this.ctx.destination);
+    shimmer.start(t + 0.22);
+    shimmer.stop(t + 0.42);
+  }
+
+  // Jetpack ignition — a rising whoosh + low rumble (Key Q)
+  playJetpack() {
+    if (this.muted) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // Filtered noise whoosh (thrust)
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.4);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const outN = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) outN[i] = Math.random() * 2 - 1;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.setValueAtTime(400, t);
+    filter.frequency.exponentialRampToValueAtTime(1600, t + 0.35);
+    filter.Q.setValueAtTime(1.2, t);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.0001, t);
+    nGain.gain.exponentialRampToValueAtTime(0.35, t + 0.05);
+    nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+    noise.connect(filter); filter.connect(nGain); nGain.connect(this.ctx.destination);
+    noise.start(t); noise.stop(t + 0.42);
+
+    // Rising tone
+    const osc = this.ctx.createOscillator();
+    const oGain = this.ctx.createGain();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(110, t);
+    osc.frequency.exponentialRampToValueAtTime(420, t + 0.4);
+    oGain.gain.setValueAtTime(0.12, t);
+    oGain.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+    osc.connect(oGain); oGain.connect(this.ctx.destination);
+    osc.start(t); osc.stop(t + 0.44);
+  }
+
+  // Quake ground slam — a deep rumble + cracking thud (Key Q)
+  playQuake() {
+    if (this.muted) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+
+    // Sub-bass detonation
+    const sub = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(90, t);
+    sub.frequency.exponentialRampToValueAtTime(28, t + 0.7);
+    subGain.gain.setValueAtTime(0.7, t);
+    subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
+    sub.connect(subGain); subGain.connect(this.ctx.destination);
+    sub.start(t); sub.stop(t + 0.8);
+
+    // Crackle / rumble noise
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.6);
+    const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const outN = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) outN[i] = Math.random() * 2 - 1;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = noiseBuffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(700, t);
+    filter.frequency.exponentialRampToValueAtTime(90, t + 0.5);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.5, t);
+    nGain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+    noise.connect(filter); filter.connect(nGain); nGain.connect(this.ctx.destination);
+    noise.start(t); noise.stop(t + 0.62);
+  }
+
   // =====================================================================
   // BACKGROUND MUSIC — the game's techno track (assets/1025.mp3), looped.
   // Decoded into an AudioBuffer and played with a looping source so it wraps

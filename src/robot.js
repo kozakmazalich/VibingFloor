@@ -27,6 +27,9 @@ import {
   GRENADE_RADIUS,
   GRENADE_THROW_DISTANCE,
   GRENADE_IMPULSE,
+  JETPACK_THRUST,
+  JETPACK_FORWARD,
+  QUAKE_RADIUS,
   GRAVITY,
   VOID_KILL_Y,
   TILE_HEIGHT,
@@ -110,6 +113,9 @@ export class Robot {
     this.isMetaLaser = false; // character trait; effective laser = hasSpear && isMetaLaser
     this.hasLaser = false; // effective: true only after picking up a spear as META
 
+    // Consumable power-up slot (single-use; Q activates it)
+    this.heldItem = null; // null | "jetpack" | "quake"
+
     // Dash ability (SHIFT): burst + afterimage trail
     this.dashCooldown = 0;
     this.dashTimer = 0; // remaining burst time (>0 = dashing)
@@ -133,6 +139,9 @@ export class Robot {
     this.aiWanderTimer = 0;
     this.aiWanderDir = new THREE.Vector2(0, 0);
     this.aiDecisionTimer = 0; // EASY bots: time until the next combat decision
+    this.aiSeekTimer = 0; // pickup-seeking steering re-eval cadence
+    this.aiSeekTarget = null; // world position of the pod being chased
+    this.aiSeekPickup = null; // the Pickup object being chased
 
     // Online multiplayer
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
@@ -313,6 +322,7 @@ export class Robot {
     this.hasSpear = false;
     this.hasGrenade = false;
     this.hasLaser = this.isMetaLaser && this.hasSpear; // = false when unarmed
+    this.heldItem = null; // consumables are re-scattered every round
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
     this.aiWanderTimer = 0;
@@ -611,6 +621,64 @@ export class Robot {
     return true;
   }
 
+  // Pick up a single-use consumable into the item slot (replaces whatever is held).
+  equipConsumable(kind) {
+    if (kind !== "jetpack" && kind !== "quake") return false;
+    this.heldItem = kind;
+    return true;
+  }
+
+  // Use the held consumable (if any). Returns true on a successful use.
+  // - jetpack: strong up+forward thrust (escape a fall / reach a platform)
+  // - quake:   ground slam that collapses tiles around the user via onQuake
+  useItem(fxManager, onScreenShake, onQuake) {
+    if (!this.heldItem) return false;
+    if (this.state !== "alive") return false;
+
+    const kind = this.heldItem;
+    this.heldItem = null; // single use — consumed immediately
+
+    if (kind === "jetpack") {
+      // Strong thrust UP + FORWARD along facing, usable airborne (escape a fall)
+      const dirX = -Math.sin(this.facingAngle);
+      const dirZ = -Math.cos(this.facingAngle);
+      this.vy = JETPACK_THRUST;
+      this.vel.x += dirX * JETPACK_FORWARD;
+      this.vel.y += dirZ * JETPACK_FORWARD;
+      this.isGrounded = false;
+      this.fxJetpackCount = (this.fxJetpackCount || 0) + 1;
+      audio.playJetpack();
+      if (fxManager) {
+        fxManager.spawnJumpThruster(this.pos.x, this.pos.y + 0.15, this.pos.z, 0x00e5ff);
+        fxManager.spawnSparkBurst(this.pos.x, this.pos.y + 0.3, this.pos.z, 20, 0x00e5ff, 1.3);
+      }
+      if (onScreenShake) onScreenShake(0.3);
+      return true;
+    }
+
+    if (kind === "quake") {
+      // Only usable while grounded. Collapses a FORWARD WAVE along the facing
+      // direction — the tiles under/behind the caster stay solid.
+      if (!this.isGrounded) {
+        this.heldItem = "quake"; // refund if airborne (keep it simple)
+        return false;
+      }
+      this.fxQuakeCount = (this.fxQuakeCount || 0) + 1;
+      audio.playQuake();
+      const qdirX = -Math.sin(this.facingAngle);
+      const qdirZ = -Math.cos(this.facingAngle);
+      if (onQuake) onQuake(this.pos.x, this.pos.z, QUAKE_RADIUS, qdirX, qdirZ);
+      if (fxManager) {
+        fxManager.spawnExplosionShockwave(this.pos.x + qdirX * 1.2, this.pos.y + 0.1, this.pos.z + qdirZ * 1.2, 0xff2d95, QUAKE_RADIUS * 1.4);
+        fxManager.spawnSparkBurst(this.pos.x + qdirX * 1.2, this.pos.y + 0.1, this.pos.z + qdirZ * 1.2, 30, 0xff2d95, 1.5);
+      }
+      if (onScreenShake) onScreenShake(0.85);
+      return true;
+    }
+
+    return false;
+  }
+
   // --- ABILITY 3: CYBER SPEAR (KEY E) — FLIES IN FACING DIRECTION ---
   // META VIBER (hasLaser) replaces the spear with an instant green laser
   // hitscan: 35% further reach, same impulse/cooldown, #39ff14 beam.
@@ -792,7 +860,7 @@ export class Robot {
     return true;
   }
 
-  updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake) {
+  updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake, onQuake = null) {
     // Normalize enemies (array or single) and pick the nearest living foe for
     // aimed shots; area abilities (push/spear/laser) apply to every foe.
     const { target, enemies } = this.pickEnemies(opponent);
@@ -815,6 +883,12 @@ export class Robot {
     // 4. G = Grenade Throw (knockback hits everyone in the blast by radius)
     if (keys["KeyG"] && this.grenadeCooldown <= 0) {
       this.triggerGrenade(target, island, fxManager, onScreenShake);
+    }
+
+    // 5. Q = Use held consumable (jetpack / quake) — single use
+    if (keys["KeyQ"]) {
+      this.useItem(fxManager, onScreenShake, onQuake);
+      keys["KeyQ"] = false; // one-shot: consume the key edge so it's a press not a hold
     }
 
     // Movement: WASD / Arrow keys -> CAMERA-RELATIVE world direction.
@@ -886,12 +960,64 @@ export class Robot {
     }
   }
 
-  updateAI(enemySource, island, dt, fxManager, onScreenShake) {
+  updateAI(enemySource, island, dt, fxManager, onScreenShake, pickups = null, onQuake = null) {
     // Resolve the nearest living enemy (works in 1v1 AND multi-bot free-for-all).
     // `enemySource` may be a single Robot or an array of all enemies.
     const { target: opponent, enemies } = this.pickEnemies(enemySource);
     const aiDesired = new THREE.Vector2(0, 0);
     const center = island.getActiveCenter();
+
+    // Consumable usage: jetpack to escape a fall, quake when enemies are close.
+    if (this.heldItem) {
+      if (this.heldItem === "jetpack" && !this.isGrounded && this.vy < 0 && this.pos.y < 0.5) {
+        // Falling into the void — burn the jetpack to boost back up.
+        this.useItem(fxManager, onScreenShake, onQuake);
+      } else if (this.heldItem === "quake" && this.isGrounded && opponent) {
+        const dq = opponent && Math.hypot(opponent.pos.x - this.pos.x, opponent.pos.z - this.pos.z);
+        if (dq != null && dq <= 3.2) {
+          this.useItem(fxManager, onScreenShake, onQuake);
+        }
+      }
+    }
+
+    // PICKUP SEEKING: an unarmed bot homes in on the nearest unclaimed weapon
+    // pod (prefers the spear, falls back to the grenade). While actively
+    // closing in on a pickup it skips combat so it reliably reaches the pod.
+    let seekingPickup = false;
+    if (pickups && (!this.hasSpear || !this.hasGrenade)) {
+      const target = pickups.nearest(this.pos.x, this.pos.z);
+      if (target) {
+        // Any unclaimed pod is worth a cross-map dash — arming a weapon is
+        // strictly better than staying unarmed in combat.
+        const dx = target.pos.x - this.pos.x;
+        const dz = target.pos.z - this.pos.z;
+        const distPickup = Math.hypot(dx, dz);
+        seekingPickup = true;
+        this.aiSeekTimer -= dt;
+        if (this.aiSeekTimer <= 0 || !this.aiSeekTarget || this.aiSeekPickup !== target) {
+          this.aiSeekTimer = 0.25 + Math.random() * 0.3;
+          this.aiSeekTarget = new THREE.Vector2(target.pos.x, target.pos.z);
+          this.aiSeekPickup = target;
+        }
+        // Steer straight at the pod (already normalized downstream)
+        if (distPickup > 0.01) {
+          aiDesired.set(dx / distPickup, dz / distPickup);
+        }
+        // Jump over gaps on the way to the pickup
+        if (this.isGrounded && this.jumpCooldown <= 0) {
+          const nx = dx / (distPickup || 1);
+          const nz = dz / (distPickup || 1);
+          const nearAhead = island.hasGroundUnder(this.pos.x + nx * 0.9, this.pos.z + nz * 0.9);
+          const landX = this.pos.x + nx * 2.2;
+          const landZ = this.pos.z + nz * 2.2;
+          if (!nearAhead && island.hasGroundUnder(landX, landZ)) {
+            this.vel.x += nx * 1.5;
+            this.vel.y += nz * 1.5;
+            this.triggerJump(fxManager);
+          }
+        }
+      }
+    }
 
     // toPlayer / opponent now refer to the nearest foe for the whole routine.
     const toPlayer = opponent
@@ -977,7 +1103,7 @@ export class Robot {
 
     // AI JUMP DECISION: leap over gaps (following motion, or toward the opponent)
     // (stunned bots can't jump: knockback carries them freely)
-    if (this.isGrounded && this.jumpCooldown <= 0 && this.hitShakeTimer <= 0) {
+    if (!seekingPickup && this.isGrounded && this.jumpCooldown <= 0 && this.hitShakeTimer <= 0) {
       let dirX = speed > 0.1 ? this.vel.x / speed : 0;
       let dirZ = speed > 0.1 ? this.vel.y / speed : 0;
       const towardOpponent = !!opponent && distToPlayer > 2.0 && distToPlayer < this.ai.aggro;
@@ -1007,9 +1133,7 @@ export class Robot {
 
     // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
     // (no counter-attacks mid-knockback — stunned bots just slide)
-    // AI COMBAT ABILITIES: Opponent has full arsenal (Push, Spear, Grenade)
-    // (no counter-attacks mid-knockback — stunned bots just slide)
-    if (opponent && this.hitShakeTimer <= 0) {
+    if (!seekingPickup && opponent && this.hitShakeTimer <= 0) {
       const angleToOpponent = Math.atan2(-toPlayer.x, -toPlayer.y);
       const aimAt = (error) => {
         this.facingAngle = angleToOpponent + error;
@@ -1121,6 +1245,11 @@ export class Robot {
           this.triggerJump(fxManager);
         }
       }
+    } else if (seekingPickup) {
+      // Arming up takes priority over edge-avoidance and hunting: keep heading
+      // straight at the pod. The jump-inline in the seek block above already
+      // leaps gaps toward it, so we must NOT let isEdgeAhead steer us sideways.
+      // (aiDesired is already pointing at the nearest pickup.)
     } else if (isEdgeAhead) {
       // Walk along the edge: pick the perpendicular with safe ground (probed from tile centers)
       const perpA = new THREE.Vector2(-moveDirZ, moveDirX);
@@ -1138,9 +1267,10 @@ export class Robot {
         // Narrow ledge with void on both sides — reverse course
         aiDesired.set(-moveDirX, -moveDirZ);
       }
-    } else if (opponent) {
+    } else if (!seekingPickup && opponent) {
       // Hunt the player whenever the direct path is safe (or jumpable).
       // Timid bots (EASY) only hunt up close — beyond aggro they wander.
+      // (skipped while seeking a weapon pod: arming up takes priority over combat)
       const huntDir = toPlayer.clone().normalize();
       const safeDirect =
         island.hasGroundUnder(this.pos.x + huntDir.x * 1.6, this.pos.z + huntDir.y * 1.6) ||
@@ -1246,7 +1376,7 @@ export class Robot {
   // the guest's input to its p2). `input` = { mx, mz, jump, push, spear, grenade, dash }
   // where (mx, mz) is the guest's camera-relative move vector in WORLD space
   // (already transformed on the guest side with its own camera).
-  updateRemoteInput(input, dt, opponent, island, fxManager, onScreenShake) {
+  updateRemoteInput(input, dt, opponent, island, fxManager, onScreenShake, onQuake = null) {
     // Online is strictly 1v1 — `opponent` is the single local player (p1).
     const { target, enemies } = this.pickEnemies(opponent);
     if (input.push && this.pushCooldown <= 0) {
@@ -1260,6 +1390,10 @@ export class Robot {
     }
     if (input.grenade && this.grenadeCooldown <= 0) {
       this.triggerGrenade(target, island, fxManager, onScreenShake);
+    }
+    if (input.useItem) {
+      this.useItem(fxManager, onScreenShake, onQuake);
+      input.useItem = false;
     }
 
     const mx = input.mx || 0;
@@ -1426,7 +1560,7 @@ export class Robot {
     }
   }
 
-  update(dt, camera, island, opponent, keys, fxManager, onScreenShake, remoteInput = null) {
+  update(dt, camera, island, opponent, keys, fxManager, onScreenShake, remoteInput = null, pickups = null, onQuake = null) {
     // Tick cooldowns
     if (this.jumpCooldown > 0) {
       this.jumpCooldown = Math.max(0, this.jumpCooldown - dt);
@@ -1476,11 +1610,11 @@ export class Robot {
 
     if (this.state === "alive") {
       if (this.isPlayer) {
-        this.updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake);
+        this.updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake, onQuake);
       } else if (remoteInput) {
-        this.updateRemoteInput(remoteInput, dt, opponent, island, fxManager, onScreenShake);
+        this.updateRemoteInput(remoteInput, dt, opponent, island, fxManager, onScreenShake, onQuake);
       } else {
-        this.updateAI(opponent, island, dt, fxManager, onScreenShake);
+        this.updateAI(opponent, island, dt, fxManager, onScreenShake, pickups, onQuake);
       }
 
       // Horizontal movement with per-axis ledge/wall blocking
@@ -1667,6 +1801,9 @@ export class Robot {
         remaining: this.dashCooldown,
         max: DASH_COOLDOWN,
         progress: Math.min(1.0, Math.max(0, 1.0 - this.dashCooldown / DASH_COOLDOWN)),
+      },
+      item: {
+        kind: this.heldItem, // null | "jetpack" | "quake"
       },
     };
   }

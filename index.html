@@ -544,6 +544,16 @@
           <div id="fall-progress-bar" class="progress-fill"></div>
         </div>
 
+        <!-- Live standings: fighters left + the player's current placement -->
+        <div class="status-row">
+          <span>Alive</span>
+          <span id="alive-count" class="status-value tabular">2 / 2</span>
+        </div>
+        <div class="status-row">
+          <span>Your Place</span>
+          <span id="placement-label" class="status-value tabular">—</span>
+        </div>
+
         <!-- Ability 1: Push (J) -->
         <div class="ability-block">
           <div class="status-row">
@@ -587,6 +597,18 @@
             <div id="dash-progress-bar" class="progress-fill dash-fill ready"></div>
           </div>
         </div>
+
+        <!-- Consumable Item Slot (Q — USE) -->
+        <div class="ability-block" id="item-slot-block">
+          <div class="status-row">
+            <span class="ability-label"><span class="key-badge mini">Q</span> ITEM</span>
+            <span id="item-status-text" class="status-value locked tabular">EMPTY</span>
+          </div>
+          <div class="item-slot-row">
+            <img id="item-slot-icon" class="item-slot-icon" alt="item" style="display:none" />
+            <span id="item-slot-hint" class="item-slot-hint">Q — USE</span>
+          </div>
+        </div>
       </div>
 
       <!-- Bottom Bar: Controls hint -->
@@ -612,12 +634,17 @@
           <span class="hint-sep">•</span>
           <div class="hint-pill">
             <span class="key-badge">E</span>
-            <span>Spear (Flies where looking)</span>
+            <span>Spear (Grab ⚡ pod)</span>
           </div>
           <span class="hint-sep">•</span>
           <div class="hint-pill">
             <span class="key-badge">G</span>
-            <span>Grenade (Blows up floor)</span>
+            <span>Grenade (Grab ⚠ pod)</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">Q</span>
+            <span>Use Item</span>
           </div>
           <span class="hint-sep">•</span>
           <div class="hint-pill">

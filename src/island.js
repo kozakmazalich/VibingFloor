@@ -232,6 +232,60 @@ export class Island {
     return destroyed;
   }
 
+  // QUAKE: collapse tiles in a TRIANGULAR forward wave. Rows extend away from
+  // the caster along their facing direction, widening 1 → 2 → 3 → 4 → 5 tiles,
+  // so the first tile directly ahead drops, then two, three… forming a wedge.
+  // The caster's own tile (row 0) and anything behind are NEVER touched.
+  destroyTilesWave(worldX, worldZ, dirX, dirZ, range = 5, safeRadius = 0) {
+    const destroyed = [];
+    const len = Math.hypot(dirX, dirZ) || 1;
+    const fx = dirX / len; // facing unit vector
+    const fz = dirZ / len;
+    // Perpendicular (for widening the row)
+    const px = -fz;
+    const pz = fx;
+
+    // Grid resolution from the existing tiles (assume uniform TILE_SPACING)
+    const tileSpacing = this.allTiles.length
+      ? Math.hypot(
+          this.allTiles[0].worldX - (this.allTiles[1]?.worldX ?? 0),
+          this.allTiles[0].worldZ - (this.allTiles[1]?.worldZ ?? 0)
+        ) || 1.08
+      : 1.08;
+
+    const indexOf = (tx, tz) => {
+      let best = -1;
+      let bd = Infinity;
+      for (let i = 0; i < this.allTiles.length; i++) {
+        const t = this.allTiles[i];
+        const d = Math.hypot(t.worldX - tx, t.worldZ - tz);
+        if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    };
+
+    // Walk triangle rows: row r (1..range) has width r tiles centered on the
+    // facing line, offset perpendicular by (k - (r-1)/2).
+    for (let r = 1; r <= range; r++) {
+      const forward = r * tileSpacing; // approx distance of this row
+      const centerX = worldX + fx * forward;
+      const centerZ = worldZ + fz * forward;
+      for (let k = 0; k < r; k++) {
+        const offset = k - (r - 1) / 2; // symmetric perpendicular offset
+        const tx = centerX + px * offset * tileSpacing;
+        const tz = centerZ + pz * offset * tileSpacing;
+        const idx = indexOf(tx, tz);
+        if (idx < 0) continue;
+        const tile = this.allTiles[idx];
+        if (tile && (tile.state === "idle" || tile.state === "warning")) {
+          tile.collapseInstantly();
+          if (!destroyed.includes(tile)) destroyed.push(tile);
+        }
+      }
+    }
+    return destroyed;
+  }
+
   // Check if a 3D coordinate (rx, rz) has solid ground underneath
   hasGroundUnder(rx, rz) {
     return !!this.getSurfaceAt(rx, rz);

@@ -22,14 +22,24 @@ import {
   JUMP_FORCE,
   GRAVITY,
   STEP_UP_MAX,
+  QUAKE_WAVE_ROWS,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
 import { FXManager } from "./particles.js";
+import { PickupManager } from "./pickups.js";
+import { ConsumableManager } from "./consumables.js";
 import { audio } from "./audio.js";
 import { MAPS, scaledMap } from "./maps.js";
 
 const round2 = (v) => Math.round(v * 100) / 100;
+
+// How many fighters win a round? 1v1 (2 fighters) crowns the single survivor;
+// a 5-fighter brawl crowns 2 winners; a 10-fighter royale crowns 3.
+export function winnerCount(totalFighters) {
+  if (totalFighters <= 2) return 1; // 1v1 = exactly one winner
+  return totalFighters <= 6 ? 2 : 3;
+}
 
 export class Game {
   constructor(scene, camera, uiCallbacks) {
@@ -42,6 +52,11 @@ export class Game {
     this.scores = { p1: 0, p2: 0 };
     this.roundNumber = 1;
     this.currentMapIndex = 0;
+
+    // Placement tracking (top-N win). Every fighter's elimination order is
+    // recorded so the round can award multiple winners (see winnerCount()).
+    this.totalFightersAtRoundStart = 0;
+    this.eliminationOrder = []; // robots in the order they were eliminated
 
     // Keys pressed state
     this.keys = {};
@@ -72,6 +87,14 @@ export class Game {
 
     // FX & Projectiles Manager
     this.fx = new FXManager(this.scene);
+
+    // Weapon pickups (spear + grenade) — spawned on round start, collected by
+    // any fighter walking over them. Shared with robots so CPU bots can path
+    // toward unclaimed pickups.
+    this.pickups = new PickupManager(this.scene);
+
+    // Consumable power-ups (jetpack + quake) — single item slot, Q to use.
+    this.consumables = new ConsumableManager(this.scene);
 
     // Roster size must be known BEFORE building the arena (activeMap scales the
     // grid to the roster). 1 CPU bot = classic 1v1 to start. Online stays 1v1.
@@ -227,6 +250,8 @@ export class Game {
     // Reflect spawns immediately if we're sitting in the menu
     if (this.state === "menu") {
       this.fx.clear();
+      this.pickups.clear();
+      this.consumables.clear();
       this.island.reset();
       this.resetFighters();
       this.island.isPaused = true;
@@ -253,6 +278,10 @@ export class Game {
   // per extra fighter). Online stays 1v1 (fighters = 2).
   activeMap() {
     const fighters = this.mode === "online" ? 2 : this.botCount + 1;
+    // 1v1 (2 fighters) uses the UNSCALED base map — preserving its landmark
+    // decor (corner lamps, crystals, citadels, palms). Scaling only kicks in
+    // for 3+ fighters, where the arena must grow and re-decoration is safe.
+    if (fighters <= 2) return MAPS[this.currentMapIndex];
     return scaledMap(MAPS[this.currentMapIndex], fighters);
   }
 
@@ -300,6 +329,115 @@ export class Game {
       r.isGrounded = true;
       r.vy = 0;
     }
+  }
+
+  // Respawn the weapon pickups on random walkable tiles. The NUMBER of pods
+  // scales with the roster so bigger free-for-alls stay armed: roughly one
+  // spear and one grenade per ~3 fighters (minimum 1 each). Skipped in online
+  // 1v1 (pickups aren't synced over the PeerJS snapshot channel).
+  spawnPickups() {
+    if (this.mode === "online") {
+      this.pickups.clear();
+      this.consumables.clear();
+      return;
+    }
+    const fighters = this.robots.length;
+    // More fighters → more weapons on the map: 2 fighters = 1+1, 5 = 2+2,
+    // 10 = 4+4 (capped to keep the arena readable).
+    this.pickups.spearCount = Math.min(5, Math.max(1, Math.ceil(fighters / 3)));
+    this.pickups.grenadeCount = Math.min(5, Math.max(1, Math.ceil(fighters / 3)));
+    const avoid = this.robots.map((r) => ({ x: r.startX, z: r.startZ }));
+    this.pickups.spawn(this.island, avoid);
+
+    // Consumable power-ups (jetpack / quake) — a small fixed count per round.
+    this.consumables.spawn(this.island, avoid);
+  }
+
+  // Handle an armed fighter walking over a consumable pod (single item slot).
+  collectConsumables() {
+    if (this.mode === "online") return;
+    for (const r of this.robots) {
+      if (r.state !== "alive") continue;
+      const pod = this.consumables.at(r.pos.x, r.pos.z);
+      if (!pod) continue;
+      const equipped = r.equipConsumable(pod.kind);
+      if (!equipped) continue;
+      pod.collect();
+      audio.playPickup();
+      this.fx.spawnSparkBurst(r.pos.x, r.pos.y + 0.6, r.pos.z, 20, pod.kind === "jetpack" ? 0x00e5ff : 0xff2d95, 1.1);
+      if (this.ui.onConsumablePickup) {
+        this.ui.onConsumablePickup({ name: r.name, isPlayer: r === this.p1, kind: pod.kind });
+      }
+    }
+  }
+
+  // Walk each living fighter over the pickup pods; equip whatever it overlaps.
+  // A fighter can hold both weapons, but a second overlap of the same kind is
+  // a no-op (the pod only disappears once someone claims it).
+  collectPickups() {
+    if (this.mode === "online") return;
+    for (const r of this.robots) {
+      if (r.state !== "alive") continue;
+      const p = this.pickups.pickupAt(r.pos.x, r.pos.z);
+      if (!p) continue;
+      const equipped = r.equip(p.kind);
+      if (!equipped) continue;
+      p.collect();
+      audio.playPickup();
+      this.fx.spawnSparkBurst(r.pos.x, r.pos.y + 0.6, r.pos.z, 20, p.kind === "spear" ? 0xc0c0c0 : 0xff5c1a, 1.1);
+      if (this.ui.onPickup) {
+        this.ui.onPickup({
+          name: r.name,
+          isPlayer: r === this.p1,
+          kind: p.kind,
+        });
+      }
+    }
+  }
+
+  // Reset placement tracking for a fresh round.
+  resetPlacement() {
+    for (const r of this.robots) r.placement = null;
+    this.eliminationOrder = [];
+    this.totalFightersAtRoundStart = this.robots.length;
+  }
+
+  // A fighter has fallen out of the round: stamp its placement as
+  // (number of fighters still in-play at the moment of elimination). The last
+  // one standing is therefore 1st.
+  recordElimination(robot) {
+    if (robot.placement != null) return; // already recorded
+    const aliveNow = this.robots.filter((r) => !this.isOutRobot(r)).length;
+    robot.placement = aliveNow + 1;
+    this.eliminationOrder.push(robot);
+  }
+
+  // Scan for fighters that just left play this frame and stamp their placement.
+  // Called every tick while playing. Uses isOutRobot() so a fighter is placed as
+  // soon as it starts falling — keeping elimination order correct.
+  recordNewEliminations() {
+    for (const r of this.robots) {
+      if (this.isOutRobot(r) && r.placement == null) {
+        this.recordElimination(r);
+      }
+    }
+  }
+
+  // Quake ground slam collapses tiles in a TRIANGULAR WAVE along the caster's
+  // facing direction (1 → 2 → 3 → 4 → 5 tiles wide). The caster's tile and
+  // everything behind are spared.
+  handleQuake(x, z, radius, dirX, dirZ) {
+    this.island.destroyTilesWave(x, z, dirX, dirZ, QUAKE_WAVE_ROWS);
+  }
+
+  // How many winners this round crowns (2 for ≤6 fighters, 3 for bigger).
+  winnerCountThisRound() {
+    return winnerCount(this.totalFightersAtRoundStart || this.robots.length);
+  }
+
+  // The player's placement index this round (1-based), or null if unplaced.
+  playerPlacement() {
+    return this.p1.placement;
   }
 
   // Nearest walkable WORLD position to (wx, wz) — resolves the spawn cell for a
@@ -376,6 +514,7 @@ export class Game {
       if (
         e.code === "KeyE" ||
         e.code === "KeyG" ||
+        e.code === "KeyQ" ||
         e.code === "KeyJ" ||
         e.code === "ShiftLeft" ||
         e.code === "ShiftRight"
@@ -504,6 +643,8 @@ export class Game {
     this.island.remoteAuthoritative = false;
     this.island.isPaused = true;
     this.fx.clear();
+    this.pickups.clear();
+    this.consumables.clear();
     this.island.reset();
     this.resetFighters();
 
@@ -574,6 +715,8 @@ export class Game {
     this.fx.clear();
     this.island.reset();
     this.resetFighters();
+    this.resetPlacement();
+    this.spawnPickups();
 
     audio.playReset();
 
@@ -628,13 +771,24 @@ export class Game {
     }
   }
 
+  // Refresh the shared "is this fighter out of the round?" predicate used by
+  // BOTH round-end detection and placement recording. A fighter is out as soon
+  // as it starts falling into the abyss (state becomes "falling", or its
+  // position sinks below the arena floor). Placement must be stamped at *this*
+  // moment — NOT when it finally reaches VOID_KILL_Y and flips to "eliminated"
+  // (which happens seconds later and would scramble the elimination order).
+  isOutRobot(r) {
+    return r.state === "eliminated" || r.state === "falling" || r.pos.y < -3.5;
+  }
+
   // Round ends when at most ONE fighter is still in play (last one standing).
-  // Handles 1v1, squad and 10-player royale alike.
+  // Handles 1v1, squad and 10-player royale alike. At the end we crown the top
+  // `winnerCount()` fighters by placement — a ~5-fighter brawl has 2 winners,
+  // a ~10-fighter royale has 3.
   checkRoundEnd() {
     if (this.state !== "playing") return;
 
-    const isOut = (r) => r.state === "eliminated" || r.pos.y < -3.5;
-    const remaining = this.robots.filter((r) => !isOut(r));
+    const remaining = this.robots.filter((r) => !this.isOutRobot(r));
 
     if (remaining.length > 1) return;
 
@@ -655,47 +809,99 @@ export class Game {
       return;
     }
 
+    // The survivor is 1st. Then rank everyone and pick the top-N winners.
     const winner = remaining[0];
-    const online = this.mode === "online";
+    if (winner.placement == null) {
+      // Last one standing is always 1st. (recordElimination's generic
+      // alive+1 formula would count the survivor themselves, giving 2.)
+      winner.placement = 1;
+      this.eliminationOrder.push(winner);
+    }
 
-    if (winner === this.p1) {
+    // Build final ranking by placement (unplaced = beaten but not in playback)
+    const ranked = this.robots
+      .slice()
+      .sort((a, b) => (a.placement ?? 999) - (b.placement ?? 999));
+    const topN = this.winnerCountThisRound();
+    const winners = ranked.slice(0, topN);
+
+    const online = this.mode === "online";
+    const isPlayerAmongWinners = winners.includes(this.p1);
+    const pPlacement = this.p1.placement ?? (this.robots.length);
+
+    if (online) {
+      // Online 1v1 keeps the classic binary win/lose wording but still reports
+      // placement.
+      const playerWon = winner === this.p1;
+      if (playerWon) {
+        this.lastWinner = "host";
+        this.scores.p1++;
+        audio.playWin();
+      } else {
+        this.lastWinner = "guest";
+        this.scores.p2++;
+      }
+      this.ui.onRoundEnd &&
+        this.ui.onRoundEnd({
+          winnerId: playerWon ? 1 : 2,
+          winnerText: playerWon
+            ? `${winner.name.toUpperCase()} WINS!`
+            : `${winner.name.toUpperCase()} WINS!`,
+          subText: playerWon
+            ? "You knocked your opponent into the void!"
+            : "Your opponent pushed you off the edge!",
+          winnerColor: playerWon ? "#00e5ff" : "#ff2d95",
+          winnerAvatar: winner.portraitPath,
+          scores: this.scores,
+          placement: pPlacement,
+          totalFighters: this.totalFightersAtRoundStart,
+          winners: winners.map((w) => w.id),
+          isPlayerWinner: playerWon,
+        });
+      return;
+    }
+
+    // CPU free-for-all: report the player's placement + winner crown status.
+    if (isPlayerAmongWinners) {
       this.lastWinner = "host";
       this.scores.p1++;
       audio.playWin();
-      if (this.ui.onRoundEnd) {
-        this.ui.onRoundEnd({
-          winnerId: 1,
-          winnerText: `${winner.name.toUpperCase()} WINS!`,
-          subText: online
-            ? "You knocked your opponent into the void!"
-            : this.robots.length > 2
-              ? `Last one standing out of ${this.robots.length}!`
-              : "Player knocked the CPU into the void!",
-          winnerColor: "#00e5ff",
-          winnerAvatar: winner.portraitPath,
-          scores: this.scores,
-        });
-      }
     } else {
-      // A bot (or the online rival) outlasted everyone
       this.lastWinner = "guest";
       this.scores.p2++;
-      if (this.ui.onRoundEnd) {
-        this.ui.onRoundEnd({
-          winnerId: 2,
-          winnerText: `${winner.name.toUpperCase()} WINS!`,
-          subText: online
-            ? "Your opponent pushed you off the edge!"
-            : this.robots.length > 2
-              ? `A bot outlasted all ${this.robots.length - 1} rivals!`
-              : "Enemy pushed you off the edge!",
-          winnerColor: "#ff2d95",
-          winnerAvatar: winner.portraitPath,
-          scores: this.scores,
-        });
-      }
     }
+
+    // Subtext: name the crown winners when there are several.
+    const winnerNames = winners.map((w) => w.name.toUpperCase()).join(", ");
+    const crownedText =
+      winners.length > 1 ? `${winnerNames} TOP ${topN}!` : `${winnerNames} WINS!`;
+
+    // The player's headline: always surface their placement, and only attach
+    // the WINNER crown when they're inside the top-N cut.
+    const playerHeadline = isPlayerAmongWinners
+      ? `${this.p1.name.toUpperCase()} PLACED #${pPlacement} / ${this.totalFightersAtRoundStart} — WINNER!`
+      : `${this.p1.name.toUpperCase()} PLACED #${pPlacement} / ${this.totalFightersAtRoundStart}`;
+
+    this.ui.onRoundEnd &&
+      this.ui.onRoundEnd({
+        winnerId: isPlayerAmongWinners ? 1 : 2,
+        winnerText: playerHeadline,
+        subText:
+          this.robots.length > 2
+            ? `Top ${topN} survive: ${crownedText}`
+            : isPlayerAmongWinners
+              ? "Player knocked the CPU into the void!"
+              : "The CPU outlasted you!",
+        winnerColor: isPlayerAmongWinners ? "#00e5ff" : "#ff2d95",
+        winnerAvatar: isPlayerAmongWinners ? this.p1.portraitPath : winners[0].portraitPath,
+        scores: this.scores,
+        placement: pPlacement,
+        totalFighters: this.totalFightersAtRoundStart,
+        winners: winners.map((w) => w.id),
+        isPlayerWinner: isPlayerAmongWinners,
+      });
   }
+
 
   // ----------------------------------------------------------------
   // Online 1v1 (host-authoritative PeerJS sync)
@@ -1367,25 +1573,42 @@ export class Game {
     // 2. Update particle FX and projectiles
     this.fx.update(dt);
 
+    // 2b. Animate weapon pickups (bob/spin/beacon pulse)
+    this.pickups.update(dt, performance.now());
+
+    // 2c. Animate consumable power-up pods (bob/glow pulse)
+    this.consumables.update(dt, performance.now());
+
     // 3. Update robots with weapons and FX support
     const shakeCb = this.handleScreenShake.bind(this);
+    const quakeCb = this.handleQuake.bind(this);
     if (this.mode === "online") {
       // Online stays strictly 1v1: p1 (player) vs p2 (the single rival)
-      this.p1.update(dt, this.camera, this.island, this.p2, this.keys, this.fx, shakeCb);
+      this.p1.update(dt, this.camera, this.island, this.p2, this.keys, this.fx, shakeCb, null, null, quakeCb);
       if (this.netRole === "host") {
         // ONLINE HOST: the opponent robot is driven by the guest's input
-        this.p2.update(dt, this.camera, this.island, this.p1, null, this.fx, shakeCb, this.remoteInput);
+        this.p2.update(dt, this.camera, this.island, this.p1, null, this.fx, shakeCb, this.remoteInput, null, quakeCb);
       } else {
-        this.p2.update(dt, this.camera, this.island, this.p1, this.keys, this.fx, shakeCb);
+        this.p2.update(dt, this.camera, this.island, this.p1, this.keys, this.fx, shakeCb, null, null, quakeCb);
       }
     } else {
       // LOCAL vs CPU (N bots): every robot gets the full living-enemy list —
       // AI targets the nearest foe, area abilities hit them all.
       for (const r of this.robots) {
         const enemies = this.allEnemiesOf(r);
-        r.update(dt, this.camera, this.island, enemies, this.keys, this.fx, shakeCb);
+        r.update(dt, this.camera, this.island, enemies, this.keys, this.fx, shakeCb, null, this.pickups, quakeCb);
       }
     }
+
+    // 3b. Collect pickups: any living fighter overlapping a drop pod equips it
+    this.collectPickups();
+
+    // 3bc. Collect consumables: jetpack / quake into the item slot
+    this.collectConsumables();
+
+    // 3c. Record eliminations: a fighter that just transitioned to eliminated
+    // gets a placement stamped (alive count + 1) — feeds the top-N win logic.
+    this.recordNewEliminations();
 
     // 4. Check and resolve collisions
     this.resolveRobotCollision();
@@ -1413,6 +1636,8 @@ export class Game {
         gameState: this.state,
         survivors: this.robots.length, // total fighters this round
         alive: this.robots.filter((r) => r.state === "alive").length,
+        placement: this.p1.placement, // null while still alive (last standing = 1)
+        totalFighters: this.totalFightersAtRoundStart || this.robots.length,
         robots: this.robots, // live roster for the survivors HUD
       });
     }

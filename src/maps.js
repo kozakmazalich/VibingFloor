@@ -42,11 +42,11 @@ export const MAPS = [
     decorAt(x, z) {
       if ((x === 0 || x === 19) && (z === 0 || z === 19)) return { type: "lamp", color: 0x00e5ff };
       if (x === 9 && z === 10) return { type: "crystal", color: 0x00e5ff };
-      if (x === 10 && z === 9) return { type: "crystal", color: 0xff2d95 };
+      if (x === 10 && z === 9) return { type: "crystal", color: 0x00e5ff };
       if (x === 8 && z === 8) return { type: "antenna", color: 0x00e5ff };
       const h = hash2(x, z);
       if (h < 0.012) return { type: "crystal", color: 0x00e5ff };
-      if (h < 0.026) return { type: "lamp", color: 0xff2d95 };
+      if (h < 0.026) return { type: "lamp", color: 0x00e5ff };
       if (h < 0.042) return { type: "rock" };
       return null;
     },
@@ -234,7 +234,6 @@ export function scaledMap(mapDef, fighters) {
 
   const isBaseActive = mapDef.isTileActive || (() => true);
   const baseElev = mapDef.elevationAt || (() => 0);
-  const baseDecor = mapDef.decorAt || (() => null);
 
   // Map a big-grid coordinate into BASE space by preserving NORMALIZED position
   // (center-out). v*size edge maps to base edge; the middle stays the middle —
@@ -281,16 +280,19 @@ export function scaledMap(mapDef, fighters) {
       return baseElev(project(x), project(z));
     },
     decorAt(x, z) {
-      const d = baseDecor(project(x), project(z));
-      if (d) return d;
-      // Sprinkle extra decor across the added outer rings so big arenas aren't
-      // empty. Skip the spawn safe-zone.
-      if (n >= 4 && (x + z) % 7 === 0 && !spawnSafe(x, z)) {
+      // Scaled arenas must NOT replay the base map's scattered decor: the base
+      // maps mix accent colours (CYBER ARENA scatters magenta lamps/crystals,
+      // ISLAND ARCHIPELAGO scatters green palms) that, when re-projected across
+      // a much larger grid, read as "stray inserts from another map". Instead
+      // the scaled arena only decorates with ITS OWN theme accent, and only in
+      // the added outer rings (the core keeps the base map's landmark props).
+      const accent = mapDef.theme ? mapDef.theme.edge : 0x00e5ff;
+      if ((x + z) % 7 === 0 && !spawnSafe(x, z)) {
         const h = ((x * 73856093) ^ (z * 19349663)) >>> 0;
         const f = (h % 1000) / 1000;
-        const accent = mapDef.theme ? mapDef.theme.edge : 0x00e5ff;
-        if (f < 0.06) return { type: "lamp", color: accent };
-        if (f < 0.1) return { type: "rock" };
+        if (f < 0.05) return { type: "lamp", color: accent };
+        if (f < 0.08) return { type: "crystal", color: accent };
+        if (f < 0.11) return { type: "rock" };
       }
       return null;
     },

@@ -84,6 +84,11 @@ const scoreP2El = document.getElementById("score-p2");
 const tileCountEl = document.getElementById("tile-count");
 const fallTimerEl = document.getElementById("fall-timer");
 const fallProgressBarEl = document.getElementById("fall-progress-bar");
+const aliveCountEl = document.getElementById("alive-count");
+const placementLabelEl = document.getElementById("placement-label");
+const itemStatusTextEl = document.getElementById("item-status-text");
+const itemSlotIconEl = document.getElementById("item-slot-icon");
+const itemSlotHintEl = document.getElementById("item-slot-hint");
 const pushProgressBarEl = document.getElementById("push-progress-bar");
 const pushStatusTextEl = document.getElementById("push-status-text");
 const spearProgressBarEl = document.getElementById("spear-progress-bar");
@@ -476,7 +481,11 @@ const game = new Game(scene, camera, {
       const s = status.abilities.spear;
       if (s) {
         spearProgressBarEl.style.width = `${Math.round(s.progress * 100)}%`;
-        if (s.ready) {
+        if (s.locked) {
+          spearStatusTextEl.textContent = "LOCKED";
+          spearStatusTextEl.className = "status-value locked tabular";
+          spearProgressBarEl.classList.remove("ready");
+        } else if (s.ready) {
           spearStatusTextEl.textContent = "READY";
           spearStatusTextEl.className = "status-value ready tabular";
           spearProgressBarEl.classList.add("ready");
@@ -491,7 +500,11 @@ const game = new Game(scene, camera, {
       const g = status.abilities.grenade;
       if (g) {
         grenadeProgressBarEl.style.width = `${Math.round(g.progress * 100)}%`;
-        if (g.ready) {
+        if (g.locked) {
+          grenadeStatusTextEl.textContent = "LOCKED";
+          grenadeStatusTextEl.className = "status-value locked tabular";
+          grenadeProgressBarEl.classList.remove("ready");
+        } else if (g.ready) {
           grenadeStatusTextEl.textContent = "READY";
           grenadeStatusTextEl.className = "status-value ready tabular";
           grenadeProgressBarEl.classList.add("ready");
@@ -516,18 +529,96 @@ const game = new Game(scene, camera, {
           dashProgressBarEl.classList.remove("ready");
         }
       }
+
+      // 5. Consumable item slot (Q — USE)
+      const item = status.abilities.item;
+      if (item && itemStatusTextEl) {
+        if (item.kind === "jetpack") {
+          itemStatusTextEl.textContent = "JETPACK";
+          itemStatusTextEl.className = "status-value ready tabular";
+          if (itemSlotIconEl) {
+            itemSlotIconEl.src = "assets/Jetpack.png";
+            itemSlotIconEl.style.display = "block";
+          }
+          if (itemSlotHintEl) itemSlotHintEl.textContent = "Q — USE";
+        } else if (item.kind === "quake") {
+          itemStatusTextEl.textContent = "QUAKE";
+          itemStatusTextEl.className = "status-value ready tabular";
+          if (itemSlotIconEl) {
+            itemSlotIconEl.src = "assets/Quake.png";
+            itemSlotIconEl.style.display = "block";
+          }
+          if (itemSlotHintEl) itemSlotHintEl.textContent = "Q — USE";
+        } else {
+          itemStatusTextEl.textContent = "EMPTY";
+          itemStatusTextEl.className = "status-value locked tabular";
+          if (itemSlotIconEl) itemSlotIconEl.style.display = "none";
+          if (itemSlotHintEl) itemSlotHintEl.textContent = "—";
+        }
+      }
     }
 
     scoreP1El.textContent = status.scores.p1;
     scoreP2El.textContent = status.scores.p2;
 
+    // Live standings: fighters left + the player's placement (while alive).
+    if (aliveCountEl) {
+      aliveCountEl.textContent = `${status.alive} / ${status.survivors}`;
+    }
+    if (placementLabelEl) {
+      if (status.placement != null) {
+        placementLabelEl.textContent = `#${status.placement} / ${status.totalFighters || status.survivors}`;
+      } else {
+        placementLabelEl.textContent = "-- (in play)";
+      }
+    }
+
     // Dim eliminated fighters in the survivors strip (cheap class toggle)
     if (status.robots) updateSurvivors(status.robots);
   },
 
+  // A fighter walked over a weapon pod and equipped it
+  onPickup: (info) => {
+    const label = info.kind === "spear" ? "SPEAR" : "GRENADE";
+    const key = info.kind === "spear" ? "E" : "G";
+    if (info.isPlayer) {
+      showToast(`◈ ${label} acquired — press ${key}`);
+      // Flash the matching ability block to draw the eye
+      const el = info.kind === "spear" ? spearStatusTextEl : grenadeStatusTextEl;
+      if (el) {
+        const block = el.closest(".ability-block");
+        if (block) {
+          block.classList.add("flash");
+          setTimeout(() => block.classList.remove("flash"), 700);
+        }
+      }
+    } else {
+      showToast(`⚡ ${info.name} grabbed the ${label}`);
+    }
+  },
+
+  // A fighter walked over a consumable pod (jetpack / quake)
+  onConsumablePickup: (info) => {
+    const label = info.kind === "jetpack" ? "JETPACK" : "QUAKE";
+    if (info.isPlayer) {
+      showToast(`◈ ${label} equipped — press Q to use`);
+      const block = document.getElementById("item-slot-block");
+      if (block) {
+        block.classList.add("flash");
+        setTimeout(() => block.classList.remove("flash"), 700);
+      }
+    } else {
+      showToast(`⚡ ${info.name} grabbed a ${label}`);
+    }
+  },
+
   onRoundEnd: (outcome) => {
+    // WINNER == inside the top-N cut (placement <= winnerCount). Online 1v1
+    // uses the same flag; non-winners get the placement screen with NO drum.
+    const isWinner = outcome.isPlayerWinner === true;
+
     // Track the player's win streak for the signed memo
-    if (outcome.winnerId === 1) {
+    if (isWinner) {
       winStreak++;
       addWin(); // profile WINS counter
     } else {
@@ -535,7 +626,7 @@ const game = new Game(scene, camera, {
     }
 
     // Optional crypto: sign the win with the connected wallet (silent if not connected)
-    if (outcome.winnerId === 1 && walletState.status === "connected") {
+    if (isWinner && walletState.status === "connected") {
       const memo = `${game.p1.name.toUpperCase()} WON — streak ${winStreak}`;
       signWinMessage(memo).then((res) => {
         if (res.ok) showToast("signed ✓");
@@ -562,8 +653,9 @@ const game = new Game(scene, camera, {
       winAvatarEl.style.display = "none";
     }
 
-    if (outcome.winnerId === 1) {
-      // Player won -> spin the prize drum first, then reveal the win screen
+    if (isWinner) {
+      // Player is a WINNER (top-N) -> spin the prize drum, then reveal the
+      // win screen. Non-winners skip the drum entirely.
       game.drumActive = true;
       if (touchUiEl) touchUiEl.style.display = "none"; // keep the spin clean on mobile
       showPrizeDrum(
@@ -580,7 +672,7 @@ const game = new Game(scene, camera, {
         { renderer, manualLoop: true }
       );
     } else {
-      // Loss or draw -> current behavior, no drum
+      // Loss / draw / not in the top-N -> no drum, just the normal screen
       winOverlayEl.classList.remove("hidden");
     }
   },

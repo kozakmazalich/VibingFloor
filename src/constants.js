@@ -118,6 +118,13 @@ export const GRENADE_THROW_SPEED = 14.0;
 export const GRENADE_THROW_DISTANCE = 4.8; // Thrown forward in facing direction
 export const GRENADE_IMPULSE = 20.0; // Blast knockback if caught in shockwave
 
+// Consumable power-ups (single item slot, USE key = Q)
+export const JETPACK_THRUST = 16.0; // vertical velocity on jetpack use (clears a jump)
+export const JETPACK_FORWARD = 9.0; // forward speed along facing on jetpack use
+export const QUAKE_RADIUS = 2.5; // visual/fx radius for the quake wave
+export const QUAKE_WAVE_ROWS = 5; // triangular wave depth: 1,2,3,4,5 tiles wide
+export const CONSUMABLE_COUNT = 2; // how many power-up pods to spawn per round
+
 // Falling / Void
 export const VOID_KILL_Y = -15.0; // GRAVITY is defined in the Jump block above (tuned for jump feel)
 

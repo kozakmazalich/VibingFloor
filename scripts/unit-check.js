@@ -198,6 +198,8 @@
   const { Island } = await import("/src/island.js");
   const { MAPS } = await import("/src/maps.js");
   const { Robot } = await import("/src/robot.js");
+  const { PickupManager, COLLECT_RADIUS } = await import("/src/pickups.js");
+  const { winnerCount } = await import("/src/game.js");
 
   const island = new Island(scene, MAPS[0]);
   // Rim setup on the 20x20 classic arena: p1 two tiles from the rim, p2 one
@@ -222,9 +224,10 @@
 
   // Spear round: reset, aim +X and let the spear fly into the bot
   b.reset();
+  a.equip("spear"); // fighters NOW start unarmed — the spear must be picked up
   a.spearCooldown = 0;
   a.facingAngle = -Math.PI / 2; // facing convention (-sin, -cos) -> (+X, 0)
-  const spearThrown = a.triggerSpear(b, fx2, null);
+  const spearThrown = a.triggerSpear(b, null, fx2, null);
   for (let i = 0; i < 40; i++) {
     fx2.update(1 / 60);
     b.update(1 / 60, null, island, a, null, fx2);
@@ -236,12 +239,13 @@
   // Laser round: META fires E — hitscan applies the impulse at 4.0 units
   // (beyond SPEAR_REACH 3.2, inside the 10.5 laser reach), and misses at 11.2.
   a.switchCharacter("meta");
+  a.equip("spear"); // META's laser still needs a picked-up spear to arm
   b.reset();
   b.pos.x = p1s.x - 4.0; // 4.0 units from the shooter
   a.pos.set(p1s.x, 0, p1s.z);
   a.spearCooldown = 0;
   a.facingAngle = Math.PI / 2; // aim -X toward b
-  const laserFired = a.triggerSpear(b, fx2, null);
+  const laserFired = a.triggerSpear(b, null, fx2, null);
   const laserImpulse = b.vel.length();
   laserFired && laserImpulse >= 30
     ? ok(`laser hits at 4.0 units (beyond spear reach) — impulse ${laserImpulse.toFixed(1)}`)
@@ -250,7 +254,7 @@
   b.reset();
   b.pos.x = p1s.x - 11.2; // beyond the 10.5 laser reach
   a.spearCooldown = 0;
-  a.triggerSpear(b, fx2, null);
+  a.triggerSpear(b, null, fx2, null);
   b.vel.length() < 1
     ? ok("laser misses beyond its reach")
     : bad(`laser hit beyond reach (impulse ${b.vel.length().toFixed(1)})`);
@@ -260,10 +264,149 @@
   b.reset();
   b.pos.set(p1s.x, 0, p1s.z - 3.0); // 3 units to the SIDE of the beam line
   a.spearCooldown = 0;
-  a.triggerSpear(b, fx2, null);
+  a.triggerSpear(b, null, fx2, null);
   b.vel.length() < 1
     ? ok("laser does not auto-aim at a sideways target")
     : bad(`laser locked onto a sideways target (impulse ${b.vel.length().toFixed(1)})`);
+
+  // 7. Weapon pickups: fighters start unarmed, pods spawn on idle tiles away
+  // from spawns, stepping on one equips it, and a second grab is a no-op.
+  const pickScene = new THREE.Scene();
+  const pm = new PickupManager(pickScene);
+  pm.spearCount = 1;
+  pm.grenadeCount = 1;
+
+  // Unarmed gate first
+  const r = new Robot(9, "PU", "assets/robot1_portrait.png", p1s.x, p1s.z, 0x00e5ff, true, pickScene);
+  r.hasSpear === false && r.hasGrenade === false
+    ? ok("fighters spawn unarmed (hasSpear/hasGrenade = false)")
+    : bad(`unarmed start wrong (spear=${r.hasSpear}, grenade=${r.hasGrenade})`);
+
+  r.triggerSpear(null, null, null) === false
+    ? ok("spear is gated until picked up")
+    : bad("spear fired while unarmed");
+  r.triggerGrenade(null, null, null, null) === false
+    ? ok("grenade is gated until picked up")
+    : bad("grenade thrown while unarmed");
+
+  // equip() idempotency
+  r.equip("spear") === true && r.hasSpear === true
+    ? ok("equip('spear') arms the spear once")
+    : bad("spear equip failed");
+  r.equip("spear") === false
+    ? ok("second spear equip is a no-op")
+    : bad("spear re-equip not idempotent");
+  r.equip("grenade") === true && r.hasGrenade === true
+    ? ok("equip('grenade') arms the grenade once")
+    : bad("grenade equip failed");
+  r.equip("bogus") === false
+    ? ok("unknown pickup kind is rejected")
+    : bad("bogus kind accepted");
+  r.dispose();
+
+  // Pod spawning: two pods, both on idle tiles, none near the given spawn
+  const spawnPoint = island.getWorldPos(10, 10);
+  pm.spawn(island, [{ x: spawnPoint.x, z: spawnPoint.z }]);
+  pm.pickups.length === 2
+    ? ok("spawns exactly 2 pods (1 spear + 1 grenade)")
+    : bad(`expected 2 pods, got ${pm.pickups.length}`);
+  const kinds = pm.pickups.map((p) => p.kind).sort();
+  kinds.join(",") === "grenade,spear"
+    ? ok("one spear + one grenade pod")
+    : bad(`pod kinds wrong (${kinds.join(",")})`);
+  let onIdle = true;
+  let awayFromSpawn = true;
+  for (const p of pm.pickups) {
+    const t = island.tileById.get(
+      Math.round(p.pos.x / 1.08 + (island.gridSize - 1) / 2) * island.gridSize +
+        Math.round(p.pos.z / 1.08 + (island.gridSize - 1) / 2)
+    );
+    if (!t || !t.isIdle()) onIdle = false;
+    if (Math.hypot(p.pos.x - spawnPoint.x, p.pos.z - spawnPoint.z) < 4.5) awayFromSpawn = false;
+  }
+  onIdle ? ok("pods spawn only on idle tiles") : bad("a pod is not on an idle tile");
+  awayFromSpawn ? ok("pods spawn away from fighter spawn points") : bad("a pod spawned on a spawn point");
+
+  // Overlap collection: pickupAt returns the pod within radius, null when far
+  const pod = pm.pickups[0];
+  pm.pickupAt(pod.pos.x, pod.pos.z) === pod
+    ? ok("pickupAt finds the pod when overlapping")
+    : bad("pickupAt missed an overlapping pod");
+  pm.pickupAt(pod.pos.x + 4, pod.pos.z + 4) === null
+    ? ok("pickupAt returns null when far away")
+    : bad("pickupAt false-positive far away");
+
+  // nearest() for AI pathing honours kind filter
+  const near = pm.nearest(p1s.x, p1s.z);
+  let isClosest = true;
+  if (near) {
+    const dNear = Math.hypot(near.pos.x - p1s.x, near.pos.z - p1s.z);
+    for (const p of pm.active) {
+      if (Math.hypot(p.pos.x - p1s.x, p.pos.z - p1s.z) < dNear - 1e-6) isClosest = false;
+    }
+  }
+  near && isClosest
+    ? ok("nearest() returns the closest uncollected pod")
+    : bad("nearest() wrong");
+  pm.nearest(0, 0, "grenade")
+    ? ok("nearest(kind='grenade') filters correctly")
+    : bad("nearest kind filter failed");
+
+  // Collection removes the pod from the active set + scene
+  const beforeActive = pm.active.length;
+  const podGroups = pm.pickups.map((p) => p.group);
+  pod.collect();
+  pm.active.length === beforeActive - 1 && pod.collected === true
+    ? ok("collecting a pod removes it from the active set")
+    : bad(`active set wrong after collect (${pm.active.length})`);
+  pm.clear();
+  pm.pickups.length === 0
+    ? ok("PickupManager.clear() empties the pod list")
+    : bad(`pickup clear left ${pm.pickups.length} pods`);
+  podGroups.every((g) => !g.parent)
+    ? ok("pickup groups are detached from the scene after clear()")
+    : bad("a pickup group is still attached to the scene");
+
+  // 8. Top-N winner count: 1v1 crowns 1, small brawls crown 2, big royales 3.
+  const wcChecks = [
+    [1, 1],
+    [2, 1], // 1v1 = exactly one winner
+    [3, 2],
+    [5, 2],
+    [6, 2],
+    [7, 3],
+    [10, 3],
+  ];
+  let wcAll = true;
+  for (const [n, expect] of wcChecks) {
+    if (winnerCount(n) !== expect) wcAll = false;
+  }
+  wcAll
+    ? ok("winnerCount() crowns 1 for 1v1, 2 for ≤6, 3 for >6 (2→1, 5→2, 10→3)")
+    : bad("winnerCount() wrong");
+
+  // 9. Placement: elimination order maps to placement = alive + 1.
+  //    10 fighters, 3 eliminated → placements 10, 9, 8; survivor = 1.
+  {
+    const pg = new PickupManager(new THREE.Scene());
+    const fakeRobots = [];
+    for (let i = 1; i <= 10; i++) {
+      fakeRobots.push({ id: i, state: "alive", placement: null });
+    }
+    const rec = (robot) => {
+      const alive = fakeRobots.filter((x) => x.state === "alive").length;
+      robot.placement = alive + 1;
+    };
+    // Eliminate three in order (placement = remaining-alive + 1)
+    const v1 = fakeRobots[9]; v1.state = "eliminated"; rec(v1); // alive 9 → 10th
+    const v2 = fakeRobots[8]; v2.state = "eliminated"; rec(v2); // alive 8 → 9th
+    const v3 = fakeRobots[7]; v3.state = "eliminated"; rec(v3); // alive 7 → 8th
+    const placed = [v1.placement, v2.placement, v3.placement];
+    placed.join(",") === "10,9,8"
+      ? ok("elimination order stamps placements 10th, 9th, 8th")
+      : bad(`placement order wrong (${placed.join(",")})`);
+    pg.clear();
+  }
 
   a.dispose();
   b.dispose();

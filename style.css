@@ -1648,6 +1648,48 @@ body {
   color: #ff5c1a;
 }
 
+.status-value.locked {
+  color: #64748b;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ability-block.flash {
+  animation: ability-flash 0.7s ease-out;
+}
+
+.item-slot-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-slot-icon {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  image-rendering: auto;
+  filter: drop-shadow(0 0 6px rgba(0, 229, 255, 0.6));
+}
+
+.item-slot-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 0.5px;
+}
+
+@keyframes ability-flash {
+  0% {
+    background: rgba(0, 229, 255, 0.28);
+    border-radius: 6px;
+  }
+  100% {
+    background: transparent;
+  }
+}
+
 .push-fill {
   background: linear-gradient(90deg, #0284c7, #00e5ff);
   box-shadow: 0 0 6px rgba(0, 229, 255, 0.4);
