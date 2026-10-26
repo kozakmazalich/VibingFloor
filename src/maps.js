@@ -235,28 +235,43 @@ export function scaledMap(mapDef, fighters) {
   const isBaseActive = mapDef.isTileActive || (() => true);
   const baseElev = mapDef.elevationAt || (() => 0);
   const baseDecor = mapDef.decorAt || (() => null);
-  const scale = base / size;
 
-  // Project a big-grid coordinate back into base-grid space (center-out), so
-  // base patterns tile onto the larger arena without tearing.
-  const project = (v) => Math.max(0, Math.min(base - 1, Math.round(v * scale)));
-  const nearSpawn = (x, z) => Math.min(x, z, size - 1 - x, size - 1 - z) < 3;
+  // Map a big-grid coordinate into BASE space by preserving NORMALIZED position
+  // (center-out). v*size edge maps to base edge; the middle stays the middle —
+  // so islands/bridges/ring grow outward coherently instead of tearing.
+  // Using a floor+blend keeps neighbouring big cells adjacent in base space.
+  const project = (v) => {
+    const t = v / (size - 1); // 0..1 across the whole big grid
+    return Math.max(0, Math.min(base - 1, Math.round(t * (base - 1))));
+  };
+
+  // Spawn safe-zone: match the SAME inset spawnRing() uses (14% of grid), so the
+  // shelf band can never drop tiles where fighters actually spawn.
+  const inset = Math.max(2, Math.floor(size * 0.14));
+  const spawnSafe = (x, z) =>
+    x < inset || z < inset || x > size - 1 - inset || z > size - 1 - inset;
 
   return {
     ...mapDef,
     gridSize: size,
     scaledFor: n,
-    p1Spawn: [1, 1],
-    p2Spawn: [size - 2, size - 2],
+    p1Spawn: [inset, inset],
+    p2Spawn: [size - 1 - inset, size - 1 - inset],
     isTileActive(x, z) {
       if (!isBaseActive(project(x), project(z))) return false;
       // Broken shelf band for bigger arenas: every 3rd ring from the middle is
-      // missing ~every other tile — risky perches to fight over (skip spawn nooks).
+      // missing ~every other tile — risky perches to fight over. NEVER inside
+      // the spawn safe-zone (fighters must always spawn on solid ground).
       if (n >= 4) {
         const cx = (size - 1) / 2;
         const ring = Math.max(Math.abs(x - cx), Math.abs(z - cx));
         const fromMid = Math.round(ring);
-        if (fromMid >= 4 && fromMid % 3 === 2 && (x + z) % 2 === 0 && !nearSpawn(x, z)) {
+        if (
+          fromMid >= 4 &&
+          fromMid % 3 === 2 &&
+          (x + z) % 2 === 0 &&
+          !spawnSafe(x, z)
+        ) {
           return false;
         }
       }
@@ -269,8 +284,8 @@ export function scaledMap(mapDef, fighters) {
       const d = baseDecor(project(x), project(z));
       if (d) return d;
       // Sprinkle extra decor across the added outer rings so big arenas aren't
-      // empty. Skip the shelf gaps (inactive tiles) and spawn nooks.
-      if (n >= 4 && (x + z) % 7 === 0 && !nearSpawn(x, z)) {
+      // empty. Skip the spawn safe-zone.
+      if (n >= 4 && (x + z) % 7 === 0 && !spawnSafe(x, z)) {
         const h = ((x * 73856093) ^ (z * 19349663)) >>> 0;
         const f = (h % 1000) / 1000;
         const accent = mapDef.theme ? mapDef.theme.edge : 0x00e5ff;

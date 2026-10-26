@@ -728,7 +728,8 @@ function refreshMapSizeLabels() {
   mapTabEls.forEach((btn, i) => {
     const sizeEl = btn.querySelector(".map-size");
     if (sizeEl && MAPS[i]) {
-      const g = MAPS[i].gridSize || 10;
+      const fighters = game.botCount + 1; // player + bots
+      const g = scaledMap(MAPS[i], fighters).gridSize || MAPS[i].gridSize || 10;
       sizeEl.textContent = `${g}x${g}`;
     }
   });

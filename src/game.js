@@ -248,13 +248,10 @@ export class Game {
     return this.robots.filter((r) => r.state === "alive" || r.pos.y > -3.5);
   }
 
-  // The map for the CURRENT match.
-  // TEMPORARILY returning the BASE map: the scaledMap() arena projection
-  // scrambled the layouts at 10 players (grid 33) — fix the scale properly
-  // before re-enabling. Online stays 1v1 (fighters = 2).
+  // The map for the CURRENT match: the base map scaled to fit this roster
+  // (fighters = player + bots). Bigger matches get a bigger arena (~+20% linear
+  // per extra fighter). Online stays 1v1 (fighters = 2).
   activeMap() {
-    return MAPS[this.currentMapIndex];
-    // eslint-disable-next-line no-unreachable
     const fighters = this.mode === "online" ? 2 : this.botCount + 1;
     return scaledMap(MAPS[this.currentMapIndex], fighters);
   }
