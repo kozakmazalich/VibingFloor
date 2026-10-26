@@ -101,7 +101,14 @@ export class Robot {
 
     this.spearCooldown = 0;
     this.grenadeCooldown = 0;
-    this.hasLaser = false; // META VIBER: E fires a green laser instead of a spear
+    // Weapon pickups: fighters start UNARMED (push + jump + dash only).
+    // hasSpear/hasGrenade become true when a fighter steps on a pickup.
+    // META VIBER still upgrades the spear to a laser — but only once it has a
+    // spear (isMetaLaser records the character trait from switchCharacter).
+    this.hasSpear = false;
+    this.hasGrenade = false;
+    this.isMetaLaser = false; // character trait; effective laser = hasSpear && isMetaLaser
+    this.hasLaser = false; // effective: true only after picking up a spear as META
 
     // Dash ability (SHIFT): burst + afterimage trail
     this.dashCooldown = 0;
@@ -262,7 +269,8 @@ export class Robot {
     const meta = CHAR_TYPES[charType] || CHAR_TYPES.robot1_jpg;
     this.charIndex = meta.idx;
     this.pushMult = meta.pushMult || 1;
-    this.hasLaser = !!meta.laser;
+    this.isMetaLaser = !!meta.laser; // trait; effective laser needs a picked-up spear too
+    this.hasLaser = this.isMetaLaser && this.hasSpear;
     if (this.isPlayer) {
       this.name = meta.name;
       this.portraitPath = meta.portrait;
@@ -301,6 +309,10 @@ export class Robot {
     this.angVelY = 0;
     this.angVelZ = 0;
     this.isGrounded = true;
+    // Start each round UNARMED — weapons come from pickups during the round.
+    this.hasSpear = false;
+    this.hasGrenade = false;
+    this.hasLaser = this.isMetaLaser && this.hasSpear; // = false when unarmed
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
     this.aiWanderTimer = 0;
@@ -583,12 +595,30 @@ export class Robot {
     this.dashGhostTimer = 0;
     this.dashTrailAccum = 0;
   }
+  // Pick up a weapon: permanently equip it for this round (until elimination).
+  // META VIBER's laser activates together with the spear pickup.
+  equip(kind) {
+    if (kind === "spear") {
+      if (this.hasSpear) return false; // already equipped
+      this.hasSpear = true;
+      this.hasLaser = this.isMetaLaser; // META laser activates with the spear
+    } else if (kind === "grenade") {
+      if (this.hasGrenade) return false;
+      this.hasGrenade = true;
+    } else {
+      return false;
+    }
+    return true;
+  }
+
   // --- ABILITY 3: CYBER SPEAR (KEY E) — FLIES IN FACING DIRECTION ---
   // META VIBER (hasLaser) replaces the spear with an instant green laser
   // hitscan: 35% further reach, same impulse/cooldown, #39ff14 beam.
   // `target` is the nearest living foe (the spear's lock); `enemies` is every
   // living foe (used by the laser hitscan to hit whatever crosses the beam).
   triggerSpear(target, enemies, fxManager, onScreenShake) {
+    // Gated: the spear (or META laser) only works once a spear is picked up.
+    if (!this.hasSpear) return false;
     if (this.state !== "alive" || this.spearCooldown > 0) return false;
 
     this.spearCooldown = SPEAR_COOLDOWN;
@@ -683,6 +713,8 @@ export class Robot {
 
   // --- ABILITY 4: CYBER GRENADE (KEY G) — FLIES IN FACING DIRECTION & DESTROYS FLOOR ---
   triggerGrenade(target, island, fxManager, onScreenShake) {
+    // Gated: the grenade only works once a grenade is picked up.
+    if (!this.hasGrenade) return false;
     if (this.state !== "alive" || this.grenadeCooldown > 0) return false;
 
     this.grenadeCooldown = GRENADE_COOLDOWN;
@@ -1617,13 +1649,15 @@ export class Robot {
         progress: Math.min(1.0, Math.max(0, 1.0 - this.pushCooldown / PUSH_COOLDOWN)),
       },
       spear: {
-        ready: this.spearCooldown <= 0,
+        ready: this.hasSpear && this.spearCooldown <= 0,
+        locked: !this.hasSpear, // HUD shows "LOCKED — find a pickup" until equipped
         remaining: this.spearCooldown,
         max: SPEAR_COOLDOWN,
         progress: Math.min(1.0, Math.max(0, 1.0 - this.spearCooldown / SPEAR_COOLDOWN)),
       },
       grenade: {
-        ready: this.grenadeCooldown <= 0,
+        ready: this.hasGrenade && this.grenadeCooldown <= 0,
+        locked: !this.hasGrenade, // HUD shows "LOCKED — find a pickup" until equipped
         remaining: this.grenadeCooldown,
         max: GRENADE_COOLDOWN,
         progress: Math.min(1.0, Math.max(0, 1.0 - this.grenadeCooldown / GRENADE_COOLDOWN)),
