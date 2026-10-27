@@ -4,6 +4,7 @@ import { COLORS } from "./constants.js";
 import { Game } from "./game.js";
 import { CHAR_TYPES } from "./robot.js";
 import { MAPS, scaledMap } from "./maps.js";
+import { createArenaLoader } from "./mapLoader.js";
 import { audio } from "./audio.js";
 import { isTouchDevice, setupTouchControls } from "./touch.js";
 import { walletState, signWinMessage } from "./wallet.js";
@@ -89,6 +90,9 @@ const placementLabelEl = document.getElementById("placement-label");
 const itemStatusTextEl = document.getElementById("item-status-text");
 const itemSlotIconEl = document.getElementById("item-slot-icon");
 const itemSlotHintEl = document.getElementById("item-slot-hint");
+const itemFuelBarEl = document.getElementById("item-fuel-bar");
+const itemFuelSegs = itemFuelBarEl ? Array.from(itemFuelBarEl.children) : [];
+let prevFuelCharges = null;
 const pushProgressBarEl = document.getElementById("push-progress-bar");
 const pushStatusTextEl = document.getElementById("push-status-text");
 const spearProgressBarEl = document.getElementById("spear-progress-bar");
@@ -400,6 +404,22 @@ function handleSoundToggle() {
 // 8. Initialize Game Engine
 let maxFallInterval = 2.2;
 
+const arenaLoader = createArenaLoader(scene, camera);
+const arenaLoaderEl = document.getElementById("arena-loader");
+const arenaLoaderNameEl = document.getElementById("arena-loader-name");
+
+function frameMenuCamera(gridSize) {
+  const g = gridSize || 20;
+  if (g <= 22) {
+    camera.position.copy(DEFAULT_CAM_POS);
+  } else {
+    const s = Math.min(1.7, g / 20);
+    camera.position.set(DEFAULT_CAM_POS.x * s, DEFAULT_CAM_POS.y * s, DEFAULT_CAM_POS.z * s);
+  }
+  controls.target.set(0, 0, 0);
+  controls.update();
+}
+
 const game = new Game(scene, camera, {
   onGameStart: (info) => {
     startMenuEl.classList.add("hidden");
@@ -416,6 +436,7 @@ const game = new Game(scene, camera, {
     }
 
     controls.autoRotate = false;
+    arenaLoader.setVisible(false);
   },
 
   // Fired whenever the fighter roster changes (bot count / map rebuild)
@@ -431,6 +452,19 @@ const game = new Game(scene, camera, {
     }
   },
 
+  onArenaLoading: (loading, label) => {
+    if (arenaLoaderEl) {
+      arenaLoaderEl.classList.toggle("hidden", !loading);
+      arenaLoaderEl.setAttribute("aria-hidden", loading ? "false" : "true");
+    }
+    if (loading && arenaLoaderNameEl && label) arenaLoaderNameEl.textContent = label;
+    document.body.classList.toggle("arena-loading", !!loading);
+  },
+
+  onArenaReady: (mapDef) => {
+    if (game.state === "menu") frameMenuCamera(mapDef && mapDef.gridSize);
+  },
+
   onMenu: () => {
     pauseMenuEl.classList.add("hidden");
     winOverlayEl.classList.add("hidden");
@@ -441,10 +475,9 @@ const game = new Game(scene, camera, {
     // Leaving the menu always tears down any live P2P session
     net.leave();
 
-    // Re-frame the attract-mode orbit on the island center
-    camera.position.copy(DEFAULT_CAM_POS);
-    controls.target.copy(DEFAULT_CAM_TARGET);
-    controls.update();
+    // Planet is the menu backdrop for as long as this screen is up.
+    arenaLoader.setVisible(true);
+    frameMenuCamera(game.island.gridSize);
 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
@@ -530,30 +563,60 @@ const game = new Game(scene, camera, {
         }
       }
 
-      // 5. Consumable item slot (Q — USE)
+      // 5. Consumable item slot. Hint stays "Q — USE" while an item is held.
+      // The jetpack fuel bar is five segments; the one that just drained pops.
       const item = status.abilities.item;
       if (item && itemStatusTextEl) {
-        if (item.kind === "jetpack") {
-          itemStatusTextEl.textContent = "JETPACK";
-          itemStatusTextEl.className = "status-value ready tabular";
+        const showJetpack = item.kind === "jetpack" || item.showFuel;
+        if (showJetpack) {
+          const charges = item.charges || 0;
+          const spent = charges <= 0;
+          itemStatusTextEl.textContent = spent ? "EMPTY" : "JETPACK";
+          itemStatusTextEl.className = spent
+            ? "status-value locked tabular"
+            : "status-value ready tabular";
           if (itemSlotIconEl) {
             itemSlotIconEl.src = "assets/Jetpack.png";
             itemSlotIconEl.style.display = "block";
+            itemSlotIconEl.classList.toggle("spent", spent);
           }
-          if (itemSlotHintEl) itemSlotHintEl.textContent = "Q — USE";
+          if (itemSlotHintEl) itemSlotHintEl.textContent = spent ? "—" : "Q — USE";
+          if (itemFuelBarEl) {
+            itemFuelBarEl.hidden = false;
+            for (let i = 0; i < itemFuelSegs.length; i++) {
+              itemFuelSegs[i].classList.toggle("lit", i < charges);
+            }
+            if (prevFuelCharges != null && charges < prevFuelCharges) {
+              const popped = itemFuelSegs[charges];
+              if (popped) {
+                popped.classList.remove("pop");
+                void popped.offsetWidth;
+                popped.classList.add("pop");
+              }
+            }
+            prevFuelCharges = charges;
+          }
         } else if (item.kind === "quake") {
           itemStatusTextEl.textContent = "QUAKE";
           itemStatusTextEl.className = "status-value ready tabular";
           if (itemSlotIconEl) {
             itemSlotIconEl.src = "assets/Quake.png";
             itemSlotIconEl.style.display = "block";
+            itemSlotIconEl.classList.remove("spent");
           }
           if (itemSlotHintEl) itemSlotHintEl.textContent = "Q — USE";
+          if (itemFuelBarEl) itemFuelBarEl.hidden = true;
+          prevFuelCharges = null;
         } else {
           itemStatusTextEl.textContent = "EMPTY";
           itemStatusTextEl.className = "status-value locked tabular";
-          if (itemSlotIconEl) itemSlotIconEl.style.display = "none";
+          if (itemSlotIconEl) {
+            itemSlotIconEl.style.display = "none";
+            itemSlotIconEl.classList.remove("spent");
+          }
           if (itemSlotHintEl) itemSlotHintEl.textContent = "—";
+          if (itemFuelBarEl) itemFuelBarEl.hidden = true;
+          prevFuelCharges = null;
         }
       }
     }
@@ -806,16 +869,9 @@ function selectMap(index) {
   });
 
   if (arenaNameEl) arenaNameEl.textContent = MAPS[index].name;
-
-  // Re-frame the camera for the new arena size
-  camera.position.copy(DEFAULT_CAM_POS);
-  controls.target.copy(DEFAULT_CAM_TARGET);
-  controls.update();
 }
 
-// Keep each map tab's size label in sync with the grid. Scaled arenas are
-// temporarily disabled (scaledMap scrambled layouts at 10 players), so show
-// the real BASE grid size until the scale is fixed.
+// Keep each map tab's size label in sync with the grid (more fighters = bigger).
 function refreshMapSizeLabels() {
   mapTabEls.forEach((btn, i) => {
     const sizeEl = btn.querySelector(".map-size");
@@ -1202,6 +1258,7 @@ function animate() {
 
   // Update game simulation
   game.update(dt);
+  arenaLoader.update(dt);
 
   // Rotate floating holographic arena halo rings
   haloMesh1.rotation.z += 0.0025;

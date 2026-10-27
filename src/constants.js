@@ -118,12 +118,25 @@ export const GRENADE_THROW_SPEED = 14.0;
 export const GRENADE_THROW_DISTANCE = 4.8; // Thrown forward in facing direction
 export const GRENADE_IMPULSE = 20.0; // Blast knockback if caught in shockwave
 
-// Consumable power-ups (single item slot, USE key = Q)
-export const JETPACK_THRUST = 16.0; // vertical velocity on jetpack use (clears a jump)
-export const JETPACK_FORWARD = 9.0; // forward speed along facing on jetpack use
-export const QUAKE_RADIUS = 2.5; // visual/fx radius for the quake wave
-export const QUAKE_WAVE_ROWS = 5; // triangular wave depth: 1,2,3,4,5 tiles wide
-export const CONSUMABLE_COUNT = 2; // how many power-up pods to spawn per round
+// Consumable power-ups (single item slot, USE key = Q).
+// Jetpack: 5 charges. Each press spends JETPACK_CHARGE_COST (one segment) and
+// SETs a small hop — it does not add onto the last hop. Peak height is
+// JETPACK_HOP_THRUST^2 / (2 * GRAVITY) = 2.0 world units. Forward travel during
+// the burn is about HOP_FORWARD / BURN_DAMP * (1 - e^(-BURN_DAMP * BURN_TIME))
+// ≈ 1.9, plus a short afterglow, ≈ 2.1 units (~2 tiles). Not a launch.
+export const JETPACK_MAX_CHARGES = 5;
+export const JETPACK_CHARGE_COST = 0.2; // fuel spent per Q press (one of five segments)
+export const JETPACK_HOP_THRUST = 8.0; // vertical velocity SET on each press
+export const JETPACK_HOP_FORWARD = 8.0; // along-facing speed SET on each press (not stacked)
+export const JETPACK_BURN_TIME = 0.45; // flame burst length, matched to the hop
+export const JETPACK_BURN_DAMP = 3.2; // exponential horizontal bleed while the thrusters fire
+export const QUAKE_RADIUS = 2.5; // fallback radial reach; the wave uses QUAKE_WAVE_ROWS
+export const QUAKE_WAVE_ROWS = 5; // forward triangular wave depth: 1,2,3,4,5 tiles wide
+export const QUAKE_ROW_DELAY = 0.075; // seconds between wave rows bursting (propagation)
+export const QUAKE_CRACK_TIME = 0.13; // seconds a tile shows cracks before it bursts
+export const QUAKE_SHARDS_MIN = 3; // debris chunks per shattered tile
+export const QUAKE_SHARDS_MAX = 6;
+export const CONSUMABLE_COUNT = 4; // a few jetpack + quake pods per round (alternating)
 
 // Falling / Void
 export const VOID_KILL_Y = -15.0; // GRAVITY is defined in the Jump block above (tuned for jump feel)

@@ -40,56 +40,109 @@ export class Island {
     this.reset();
   }
 
+  // Chunked rebuild. Tiles stay hidden until reveal(), so a cancelled load
+  // cannot leave the previous arena's tiles in the scene. `isStale` aborts
+  // when a newer map was requested mid-build.
+  setMapAsync(mapDef, isStale) {
+    this._buildGen = (this._buildGen || 0) + 1;
+    const gen = this._buildGen;
+    const stale = () => (isStale && isStale()) || this._buildGen !== gen;
+
+    this.mapDef = mapDef;
+    this.gridSize = mapDef.gridSize || 10;
+    this.clear();
+    this.isPaused = true;
+    this.grid = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(null));
+    this.allTiles = [];
+
+    const cells = this._activeCells();
+    const BATCH = 70;
+
+    return new Promise((resolve) => {
+      let i = 0;
+      const step = () => {
+        if (stale()) {
+          this.clear();
+          resolve(false);
+          return;
+        }
+        const end = Math.min(cells.length, i + BATCH);
+        for (; i < end; i++) {
+          this._addTile(cells[i][0], cells[i][1], false);
+        }
+        if (i < cells.length) {
+          requestAnimationFrame(step);
+        } else {
+          if (stale()) {
+            this.clear();
+            resolve(false);
+            return;
+          }
+          this._finalizeGrid(false);
+          resolve(true);
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  reveal() {
+    for (const tile of this.allTiles) {
+      if (tile && tile.group) tile.group.visible = true;
+    }
+    for (const prop of this.props || []) {
+      if (prop && prop.group) prop.group.visible = true;
+    }
+  }
+
   buildGrid() {
     this.clear();
+    this.grid = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(null));
     this.allTiles = [];
-    this.grid = Array.from({ length: this.gridSize }, () =>
-      Array(this.gridSize).fill(null)
-    );
+    for (const [x, z] of this._activeCells()) this._addTile(x, z, true);
+    this._finalizeGrid(true);
+  }
 
+  _activeCells() {
     const isTileActive = this.mapDef.isTileActive || (() => true);
+    const cells = [];
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let z = 0; z < this.gridSize; z++) {
+        if (isTileActive(x, z)) cells.push([x, z]);
+      }
+    }
+    return cells;
+  }
+
+  _addTile(x, z, visible) {
     const elevationAt = this.mapDef.elevationAt || (() => 0);
     const decorAt = this.mapDef.decorAt || (() => null);
     const theme = this.mapDef.theme || null;
+    const tile = new Tile(x, z, this.scene, this.gridSize, elevationAt(x, z), theme, decorAt(x, z));
+    tile.group.visible = visible;
+    this.grid[x][z] = tile;
+    this.allTiles.push(tile);
+  }
 
-    for (let x = 0; x < this.gridSize; x++) {
-      for (let z = 0; z < this.gridSize; z++) {
-        if (isTileActive(x, z)) {
-          const tile = new Tile(
-            x,
-            z,
-            this.scene,
-            this.gridSize,
-            elevationAt(x, z),
-            theme,
-            decorAt(x, z)
-          );
-          this.grid[x][z] = tile;
-          this.allTiles.push(tile);
-        }
-      }
-    }
-
+  _finalizeGrid(visibleProps) {
     this.totalInitialTiles = this.allTiles.length;
     this.tilesFallenCount = 0;
 
-    // Fast id -> tile lookup for snapshot deltas (online guest)
     this.tileById.clear();
     for (const tile of this.allTiles) {
       this.tileById.set(tile.gx * this.gridSize + tile.gz, tile);
     }
 
-    // Map-specific animated props (elevator, floating orb, ...)
     this.props = [];
     for (const def of this.mapDef.props || []) {
       const prop = buildProp(def);
       if (prop) {
+        prop.group.visible = visibleProps;
         this.scene.add(prop.group);
         this.props.push(prop);
       }
     }
 
-    // Scale shrink pacing so huge arenas still tighten up in a demo-length round
     const paceScale = Math.sqrt(100 / Math.max(1, this.totalInitialTiles));
     this.initialInterval = INITIAL_FALL_INTERVAL * paceScale;
     this.minInterval = MIN_FALL_INTERVAL * paceScale;
@@ -97,16 +150,28 @@ export class Island {
     this.fallTimer = this.initialInterval;
   }
 
+  // Dispose EVERY live tile, including ones that sit outside the new grid.
+  // The old loop used the incoming gridSize, so shrinking an arena (10 fighters
+  // back to 1v1, or a big honeycomb back to a 20x20 map) left the outer tiles
+  // in the scene and the two layouts drew on top of each other.
   clear() {
-    for (let x = 0; x < this.gridSize; x++) {
-      for (let z = 0; z < this.gridSize; z++) {
-        if (this.grid[x] && this.grid[x][z]) {
-          this.grid[x][z].dispose();
-          this.grid[x][z] = null;
-        }
+    const seen = new Set();
+    const drop = (tile) => {
+      if (!tile || seen.has(tile)) return;
+      seen.add(tile);
+      tile.dispose();
+    };
+    for (const tile of this.allTiles || []) drop(tile);
+    if (this.grid) {
+      for (let x = 0; x < this.grid.length; x++) {
+        const col = this.grid[x];
+        if (!col) continue;
+        for (let z = 0; z < col.length; z++) drop(col[z]);
       }
     }
     this.allTiles = [];
+    this.grid = [];
+    this.tileById.clear();
 
     for (const prop of this.props || []) {
       this.scene.remove(prop.group);
@@ -136,8 +201,9 @@ export class Island {
   }
 
   getTile(gx, gz) {
-    if (gx < 0 || gx >= this.gridSize || gz < 0 || gz >= this.gridSize) return null;
-    return this.grid[gx][gz];
+    if (!this.grid || gx < 0 || gz < 0 || gx >= this.gridSize || gz >= this.gridSize) return null;
+    const col = this.grid[gx];
+    return col ? col[gz] : null;
   }
 
   // Tile under a world position (grid rounding), or null
@@ -217,73 +283,88 @@ export class Island {
     return { x: sumX / count, z: sumZ / count };
   }
 
-  // Destroy floor tiles in a radius immediately (e.g. from Grenade blast)
-  destroyTilesAt(worldX, worldZ, radius) {
+  // Destroy floor tiles in a radius immediately (e.g. from a grenade blast).
+  // opts.shatter: quake path — crack, then burst into chunks. Grenades omit
+  // opts and keep the whole-tile tumble from collapseInstantly.
+  // opts.minDist spares tiles closer than this (the caster's own tile).
+  // opts.dirX/dirZ + opts.coneCos carve a forward wedge: only tiles whose
+  // unit vector from (worldX,worldZ) dots the facing >= coneCos are hit.
+  // opts.onBurst(tile) fires once, when that tile actually shatters.
+  destroyTilesAt(worldX, worldZ, radius, opts) {
+    const shatter = !!(opts && opts.shatter);
+    const minDist = opts && opts.minDist != null ? opts.minDist : -1;
+    const onBurst = opts && opts.onBurst;
+    const hasCone = !!(opts && (opts.dirX || opts.dirZ));
+    const dirX = (opts && opts.dirX) || 0;
+    const dirZ = (opts && opts.dirZ) || 0;
+    const coneCos = opts && opts.coneCos != null ? opts.coneCos : -1;
+    const dirLen = Math.hypot(dirX, dirZ) || 1;
+    const nx = dirX / dirLen;
+    const nz = dirZ / dirLen;
     const destroyed = [];
     for (const tile of this.allTiles) {
       if (tile && (tile.state === "idle" || tile.state === "warning")) {
-        const dist = Math.hypot(tile.worldX - worldX, tile.worldZ - worldZ);
-        if (dist <= radius) {
-          tile.collapseInstantly();
-          destroyed.push(tile);
+        const dx = tile.worldX - worldX;
+        const dz = tile.worldZ - worldZ;
+        const dist = Math.hypot(dx, dz);
+        if (dist <= radius && dist > minDist) {
+          if (hasCone) {
+            const dot = (dx * nx + dz * nz) / dist;
+            if (dot < coneCos) continue; // outside the forward wedge
+          }
+          if (shatter) {
+            if (tile.beginShatter(onBurst)) destroyed.push(tile);
+          } else {
+            tile.collapseInstantly();
+            destroyed.push(tile);
+          }
         }
       }
     }
     return destroyed;
   }
 
-  // QUAKE: collapse tiles in a TRIANGULAR forward wave. Rows extend away from
+  // QUAKE: group tiles into a TRIANGULAR forward wave. Rows extend away from
   // the caster along their facing direction, widening 1 → 2 → 3 → 4 → 5 tiles,
-  // so the first tile directly ahead drops, then two, three… forming a wedge.
-  // The caster's own tile (row 0) and anything behind are NEVER touched.
-  destroyTilesWave(worldX, worldZ, dirX, dirZ, range = 5, safeRadius = 0) {
-    const destroyed = [];
+  // so the first tile directly ahead is row 1, then row 2 (two tiles)… forming
+  // a wedge that travels FORWARD. The caster's own tile (row 0) and anything
+  // behind are NEVER touched. Returns an array of rows (each an array of live
+  // tiles), ordered nearest → furthest, ready for staggered animated shattering.
+  destroyTilesWave(worldX, worldZ, dirX, dirZ, range = 5) {
     const len = Math.hypot(dirX, dirZ) || 1;
     const fx = dirX / len; // facing unit vector
     const fz = dirZ / len;
-    // Perpendicular (for widening the row)
-    const px = -fz;
+    const px = -fz; // perpendicular (widens the row)
     const pz = fx;
 
-    // Grid resolution from the existing tiles (assume uniform TILE_SPACING)
-    const tileSpacing = this.allTiles.length
-      ? Math.hypot(
-          this.allTiles[0].worldX - (this.allTiles[1]?.worldX ?? 0),
-          this.allTiles[0].worldZ - (this.allTiles[1]?.worldZ ?? 0)
-        ) || 1.08
-      : 1.08;
-
-    const indexOf = (tx, tz) => {
-      let best = -1;
+    // Resolve a world position to the nearest live tile.
+    const tileAt = (tx, tz) => {
+      let best = null;
       let bd = Infinity;
-      for (let i = 0; i < this.allTiles.length; i++) {
-        const t = this.allTiles[i];
+      for (const t of this.allTiles) {
+        if (!t || !(t.state === "idle" || t.state === "warning")) continue;
         const d = Math.hypot(t.worldX - tx, t.worldZ - tz);
-        if (d < bd) { bd = d; best = i; }
+        if (d < bd) { bd = d; best = t; }
       }
-      return best;
+      return best && bd < TILE_SPACING * 0.75 ? best : null;
     };
 
-    // Walk triangle rows: row r (1..range) has width r tiles centered on the
-    // facing line, offset perpendicular by (k - (r-1)/2).
+    const rows = [];
     for (let r = 1; r <= range; r++) {
-      const forward = r * tileSpacing; // approx distance of this row
+      const forward = r * TILE_SPACING;
       const centerX = worldX + fx * forward;
       const centerZ = worldZ + fz * forward;
+      const row = [];
       for (let k = 0; k < r; k++) {
         const offset = k - (r - 1) / 2; // symmetric perpendicular offset
-        const tx = centerX + px * offset * tileSpacing;
-        const tz = centerZ + pz * offset * tileSpacing;
-        const idx = indexOf(tx, tz);
-        if (idx < 0) continue;
-        const tile = this.allTiles[idx];
-        if (tile && (tile.state === "idle" || tile.state === "warning")) {
-          tile.collapseInstantly();
-          if (!destroyed.includes(tile)) destroyed.push(tile);
-        }
+        const tx = centerX + px * offset * TILE_SPACING;
+        const tz = centerZ + pz * offset * TILE_SPACING;
+        const tile = tileAt(tx, tz);
+        if (tile && !row.includes(tile)) row.push(tile);
       }
+      if (row.length) rows.push(row);
     }
-    return destroyed;
+    return rows;
   }
 
   // Check if a 3D coordinate (rx, rz) has solid ground underneath

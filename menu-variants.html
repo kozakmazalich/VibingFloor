@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>4 варианта меню VIBING FLOOR — выбери</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700;800&family=Orbitron:wght@700;800;900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet" />
+<style>
+*{margin:0;padding:0;box-sizing:border-box;user-select:none}
+html,body{background:#05060d;font-family:'Rajdhani',system-ui,sans-serif;color:#e7ecff}
+head{}
+.vl{position:sticky;top:0;z-index:50;background:rgba(6,8,16,.95);backdrop-filter:blur(8px);border-bottom:1px solid rgba(0,229,255,.4);padding:13px 22px;font-family:'Orbitron',sans-serif;font-weight:800;letter-spacing:2px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.vl .tag{background:#00e5ff;color:#04121a;padding:3px 11px;border-radius:6px;font-size:13px}
+.vl .d{color:#9fb0d8;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700}
+.stage{padding:36px 22px 60px;min-height:96vh;position:relative;overflow:hidden}
+.stage:nth-child(even){background:rgba(255,255,255,.018)}
+.stage::before{content:"";position:absolute;inset:-10%;z-index:0;pointer-events:none;background:radial-gradient(40% 36% at 22% 30%,rgba(0,229,255,.2),transparent 70%),radial-gradient(46% 42% at 78% 26%,rgba(255,45,149,.16),transparent 70%),radial-gradient(54% 50% at 52% 84%,rgba(124,58,237,.18),transparent 72%);filter:blur(72px)}
+.stage::after{content:"";position:absolute;inset:0;z-index:0;pointer-events:none;background:linear-gradient(rgba(0,229,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,255,.045) 1px,transparent 1px);background-size:46px 46px;transform:perspective(360px) rotateX(63deg);transform-origin:50% 100%;mask-image:linear-gradient(180deg,transparent 0%,#000 78%);-webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 78%);opacity:.75}
+.wrap{position:relative;z-index:1;max-width:1160px;margin:0 auto}
+.hint{font-family:'JetBrains Mono',monospace;font-size:13px;color:#7f8db3;margin-bottom:16px;text-align:center}
+/* === карточка-контейнер (общая 2-колоночная сетка) === */
+.card{position:relative;z-index:1;max-width:1160px;margin:0 auto;display:grid;grid-template-columns:minmax(300px,1.05fr) minmax(330px,1fr);grid-template-areas:"header fighters" "showcase fighters" "actions maps" "guide difbots" ". difbots2";column-gap:24px;row-gap:15px;align-items:start;padding:26px 30px;font-size:15px}
+.gh{grid-area:header}.gf{grid-area:fighters}.gs{grid-area:showcase}.ga{grid-area:actions}.gm{grid-area:maps}.ggd{grid-area:guide}.gdb{grid-area:difbots}.gdb2{grid-area:difbots2}
+@media(max-width:860px){.card{grid-template-columns:1fr;grid-template-areas:"header" "fighters" "showcase" "actions" "maps" "difbots" "difbots2" "guide"}}
+.badge{display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;letter-spacing:1.5px;padding:4px 12px;border-radius:6px;text-transform:uppercase}
+.dot{width:6px;height:6px;border-radius:50%;background:#00e5ff;box-shadow:0 0 8px #00e5ff;animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.t3d{font-family:'Orbitron',sans-serif;font-size:46px;font-weight:900;letter-spacing:3px;line-height:1;display:flex;gap:2px;transform:perspective(650px) rotateX(14deg) rotateY(-7deg)}
+.t3d span{background-size:220% 100%;background-clip:text;-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 3px 0 rgba(2,10,16,.9)) drop-shadow(0 4px 0 rgba(0,229,255,.5))}
+.ta{background-image:linear-gradient(100deg,#00e5ff,#fff 55%,#ff4ba0)}.tb{background-image:linear-gradient(100deg,#ffc9e2,#fff 40%,#ff4ba0)}.tc{background-image:linear-gradient(100deg,#ff9ecb,#ff2d95)}
+.oo{display:inline-block;transform-origin:50% 80%;background-image:linear-gradient(100deg,#ffb3d4,#ff6fb8 55%,#ff2d95);animation:of 5.6s ease-in-out infinite}
+.oo2{animation-delay:.7s,.35s}
+@keyframes of{0%,40%,80%,100%{transform:translateY(0) rotateX(0);opacity:1}47%{transform:translateY(6px) rotateX(40deg)}54%,62%{transform:translateY(64px) rotateX(150deg) rotate(18deg);opacity:0}67%{transform:translateY(-26px) rotateX(-40deg);opacity:0}74%{transform:translateY(0) rotateX(0);opacity:1}}
+.lbl{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;letter-spacing:1.5px;margin-bottom:8px;text-align:left}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:9px}.tabs.three{grid-template-columns:1fr 1fr 1fr}
+.tab{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:10px;cursor:default;text-align:left;color:#e2e8f0;transition:all .18s}
+.tab .ph{width:34px;height:34px;border-radius:6px;object-fit:contain;background:rgba(10,14,28,.9);border:1.5px solid rgba(255,255,255,.2)}
+.tab .ti{display:flex;flex-direction:column;flex:1;min-width:0}
+.tab .tn{font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700}
+.tab .ts{font-family:'JetBrains Mono',monospace;font-size:8.5px;color:#94a3b8}
+.tab .bg{font-family:'JetBrains Mono',monospace;font-size:8px;font-weight:800;padding:2px 5px;border-radius:3px;background:rgba(255,255,255,.1);color:#94a3b8}
+.tab.active .tn{color:#00e5ff}.tab.active .bg{background:#00e5ff;color:#0a0a14;box-shadow:0 0 6px rgba(0,229,255,.6)}
+.vs{display:flex;align-items:center;justify-content:center;gap:18px;margin:6px 0}
+.cc{display:flex;flex-direction:column;align-items:center;gap:4px}
+.af{width:66px;height:66px;border-radius:12px;padding:3px;background:rgba(15,23,42,.85);border:2px solid #00e5ff;box-shadow:0 0 16px rgba(0,229,255,.35)}
+.af.m{border-color:#ff2d95;box-shadow:0 0 16px rgba(255,45,149,.35)}
+.af img{width:100%;height:100%;object-fit:contain;border-radius:8px}
+.cnn{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700}.cnn.c{color:#00e5ff}.cnn.m{color:#ff2d95}
+.crr{font-family:'JetBrains Mono',monospace;font-size:9px;color:#64748b}
+.vse{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:900;color:#475569;padding:5px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.08);background:rgba(15,23,42,.6)}
+.acts{display:flex;flex-direction:column;gap:9px}
+.cbtn{position:relative;font-family:'Orbitron',sans-serif;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:13px 22px;color:#fff;border:none;cursor:default;display:flex;align-items:center;justify-content:center;gap:11px;transition:all .18s}
+.cbtn .kt{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#00e5ff}
+.pbtn{background:linear-gradient(135deg,rgba(0,229,255,.28),rgba(14,24,48,.95))}
+.obtn{background:linear-gradient(135deg,rgba(20,28,54,.9),rgba(10,14,28,.95));border:1px solid rgba(255,45,149,.5)!important}
+.sbtn{background:linear-gradient(135deg,rgba(20,28,54,.85),rgba(10,14,28,.95))}
+.gguide{padding:4px 2px}.gt{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;margin-bottom:8px;text-align:left}
+.gg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px 12px}.gi{display:flex;align-items:center;gap:7px}
+.kb{background:rgba(20,28,54,.9);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:2px 7px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;color:#00e5ff}
+.gd2{font-size:11px;font-weight:600;color:#cbd5e1}
+.panel{border-radius:16px;padding:13px 15px}
+/* ============ A: GLASSMORPHISM (без рамок, матовое стекло) ============ */
+.vA .card{background:rgba(14,18,34,.4);backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);border-radius:24px;box-shadow:0 30px 70px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.1)}
+.vA .panel{background:rgba(255,255,255,.05)}
+.vA .tab{background:rgba(255,255,255,.04)}
+.vA .tab.active{background:rgba(0,229,255,.13);box-shadow:0 0 0 1px rgba(0,229,255,.55)}
+.vA .cbtn{border-radius:13px}.vA .pbtn{box-shadow:0 0 26px rgba(0,229,255,.32)}
+.vA .gguide{background:rgba(255,255,255,.04);border-radius:14px;padding:12px 15px}
+
+/* ============ B: MINIMAL DARK (совсем без рамок/боксов) ============ */
+.vB .card{background:transparent;padding-top:6px}
+.vB .panel{background:transparent;padding:0}
+.vB .lbl{color:#5f6f96}
+.vB .tab{border-radius:8px;border-bottom:1px solid rgba(255,255,255,.05);background:transparent}
+.vB .tab.active{background:rgba(255,255,255,.04)}
+.vB .cbtn{background:transparent!important;border:1px solid rgba(255,255,255,.1)!important;border-radius:11px}
+.vB .pbtn{border-color:rgba(0,229,255,.55)!important;color:#00e5ff}
+.vB .gguide{border-top:1px solid rgba(255,255,255,.07);padding-top:13px}
+
+/* ============ C: NEON GLOW (глоу вместо бордера) ============ */
+.vC .card{background:rgba(10,13,26,.7);border-radius:24px;box-shadow:0 0 46px rgba(0,229,255,.15),0 30px 70px rgba(0,0,0,.55)}
+.vC .panel{background:rgba(0,229,255,.05);box-shadow:0 0 22px rgba(0,229,255,.1),inset 0 0 24px rgba(0,229,255,.05)}
+.vC .tab{background:rgba(0,0,0,.28);box-shadow:inset 0 0 0 1px rgba(0,229,255,.14)}
+.vC .tab.active{box-shadow:0 0 18px rgba(0,229,255,.45),inset 0 0 0 1px rgba(0,229,255,.7)}
+.vC .cbtn{border-radius:13px}.vC .pbtn{box-shadow:0 0 32px rgba(0,229,255,.5)}.vC .obtn{box-shadow:0 0 22px rgba(255,45,149,.35)}
+.vC .gguide{background:rgba(0,229,255,.04);border-radius:14px;padding:12px 15px;box-shadow:0 0 20px rgba(0,229,255,.08)}
+
+/* ============ D: REFRESH (новый layout: акцент-кнопки слева, список) ============ */
+.vD .card{grid-template-columns:minmax(350px,1.25fr) minmax(310px,1fr);grid-template-areas:"header fighters" "showcase fighters" "actions difbots" "maps guide";background:rgba(10,13,26,.58);border-radius:24px;box-shadow:0 30px 70px rgba(0,0,0,.55)}
+.vD .panel{background:rgba(255,255,255,.035);border-radius:14px}
+.vD .t3d{font-size:54px}
+.vD .vs{justify-content:flex-start}
+.vD .cbtn{border-radius:0;clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);justify-content:flex-start}
+.vD .tab{border-radius:0;border-left:3px solid transparent;background:rgba(255,255,255,.03);transition:all .16s}
+.vD .tab:hover{background:rgba(255,255,255,.06)}
+.vD .tab.active{border-left-color:#00e5ff;background:rgba(0,229,255,.12);box-shadow:inset 0 0 22px rgba(0,229,255,.06)}
+.vD .tab .ph{width:40px;height:40px;border-radius:8px}
+.vD .lbl{color:#00e5ff;letter-spacing:2px}
+.vD .gdb{background:rgba(0,229,255,.035)}
+.vD .gguide{border-top:1px solid rgba(0,229,255,.2);padding-top:12px;background:transparent}
+</style>
+</head>
+<body>
+<div class="vl"><span class="tag">VIBING FLOOR</span> 4 ВАРИАНТА ГЛАВНОГО МЕНЮ (без рамок) <span class="d">— прокрути и выбери</span></div>
+<div class="stage">
+  <div class="wrap">
+    <div class="hint">ВАРИАНТ A — GLASSMORPHISM: убраны все рамки, панели = матовое стекло (blur)</div>
+    <div class="card vA">
+      <div class="gh">
+        <div class="badge"><span class="dot"></span>CYBER ARENA 3D // V3.0</div>
+        <h1 class="t3d"><span class="ta">VIBING</span> <span class="tb">FL</span><span class="oo">O</span><span class="oo oo2">O</span><span class="tc">R</span></h1>
+      </div>
+      <div class="gf panel">
+        <div class="lbl">SELECT PLAYER 1 3D MODEL:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/robot1_portrait.png"/><div class="ti"><span class="tn">CRIMSON MINER</span><span class="ts">HEAVY BRAWLER</span></div><span class="bg">EQUIPPED</span></div>
+          <div class="tab"><img class="ph" src="assets/robot3_portrait.png"/><div class="ti"><span class="tn">MOSS VIBER</span><span class="ts">JUNGLE STALKER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot2_portrait.png"/><div class="ti"><span class="tn">VOLT VIBER</span><span class="ts">SPEED FIGHTER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot4_portrait.png"/><div class="ti"><span class="tn">PHANTOM VIBER</span><span class="ts">PHASE GHOST</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot5_portrait.png"/><div class="ti"><span class="tn">CHOG VIBER</span><span class="ts">SPIKE TANK</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/meta.jpg"/><div class="ti"><span class="tn">META VIBER</span><span class="ts">NEURAL OVERSEER</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gs">
+        <div class="vs"><div class="cc"><div class="af"><img src="assets/robot1_portrait.png"/></div><span class="cnn c">CRIMSON MINER</span><span class="crr">PLAYER CONTROLLED</span></div><span class="vse">VS</span><div class="cc"><div class="af m"><img src="assets/robot2_portrait.png"/></div><span class="cnn m">VOLT VIBER</span><span class="crr">AI GLADIATOR 3D</span></div></div>
+      </div>
+      <div class="ga acts">
+        <div class="cbtn pbtn">▶ INITIALIZE BATTLE <span class="kt">SPACE</span></div>
+        <div class="cbtn obtn">⛓ ONLINE 1V1 <span class="kt">P2P</span></div>
+        <div class="cbtn sbtn">◈ PROFILE · STAKING DEMO</div>
+        <div class="cbtn sbtn">🔊 AUDIO SYNTH: ACTIVE</div>
+      </div>
+      <div class="gm panel">
+        <div class="lbl">SELECT ARENA:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/map_classic.png"/><div class="ti"><span class="tn">CYBER ARENA</span><span class="ts">20x20 · BALANCED</span></div><span class="bg">ACTIVE</span></div>
+          <div class="tab"><img class="ph" src="assets/map_archipelago.png"/><div class="ti"><span class="tn">ISLAND ARCHIPELAGO</span><span class="ts">20x20 · TACTICAL</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_twin_citadels.png"/><div class="ti"><span class="tn">TWIN CITADELS</span><span class="ts">20x20 · ADVANCED</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_chasm_ring.png"/><div class="ti"><span class="tn">HONEYCOMB CHASM</span><span class="ts">20x20 · HARDCORE</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gdb panel">
+        <div class="lbl">CPU DIFFICULTY:</div>
+        <div class="tabs three"><div class="tab"><div class="ti"><span class="tn">EASY</span><span class="ts">RELAXED CPU</span></div></div><div class="tab active"><div class="ti"><span class="tn">NORMAL</span><span class="ts">BALANCED</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">HARD</span><span class="ts">AGGRESSIVE</span></div></div></div>
+      </div>
+      <div class="gdb2 panel">
+        <div class="lbl">MATCH SIZE:</div>
+        <div class="tabs three"><div class="tab active"><div class="ti"><span class="tn">DUEL 1V1</span><span class="ts">2 FIGHTERS</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">SQUAD</span><span class="ts">5 FIGHTERS</span></div></div><div class="tab"><div class="ti"><span class="tn">ROYALE</span><span class="ts">10 FIGHTERS</span></div></div></div>
+      </div>
+      <div class="ggd gguide panel">
+        <div class="gt">// NEURAL CONTROL SCHEME</div>
+        <div class="gg">
+          <div class="gi"><span class="kb">WASD</span><span class="gd2">Move & Aim</span></div>
+          <div class="gi"><span class="kb">J</span><span class="gd2">Force Push</span></div>
+          <div class="gi"><span class="kb">SPACE</span><span class="gd2">Jet Jump</span></div>
+          <div class="gi"><span class="kb">E</span><span class="gd2">Cyber Spear</span></div>
+          <div class="gi"><span class="kb">G</span><span class="gd2">Grenade</span></div>
+          <div class="gi"><span class="kb">SHIFT</span><span class="gd2">Neon Dash</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="stage">
+  <div class="wrap">
+    <div class="hint">ВАРИАНТ B — MINIMAL DARK: совсем без боксов, только разделители и hover</div>
+    <div class="card vB">
+      <div class="gh">
+        <div class="badge"><span class="dot"></span>CYBER ARENA 3D // V3.0</div>
+        <h1 class="t3d"><span class="ta">VIBING</span> <span class="tb">FL</span><span class="oo">O</span><span class="oo oo2">O</span><span class="tc">R</span></h1>
+      </div>
+      <div class="gf panel">
+        <div class="lbl">SELECT PLAYER 1 3D MODEL:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/robot1_portrait.png"/><div class="ti"><span class="tn">CRIMSON MINER</span><span class="ts">HEAVY BRAWLER</span></div><span class="bg">EQUIPPED</span></div>
+          <div class="tab"><img class="ph" src="assets/robot3_portrait.png"/><div class="ti"><span class="tn">MOSS VIBER</span><span class="ts">JUNGLE STALKER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot2_portrait.png"/><div class="ti"><span class="tn">VOLT VIBER</span><span class="ts">SPEED FIGHTER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot4_portrait.png"/><div class="ti"><span class="tn">PHANTOM VIBER</span><span class="ts">PHASE GHOST</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot5_portrait.png"/><div class="ti"><span class="tn">CHOG VIBER</span><span class="ts">SPIKE TANK</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/meta.jpg"/><div class="ti"><span class="tn">META VIBER</span><span class="ts">NEURAL OVERSEER</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gs">
+        <div class="vs"><div class="cc"><div class="af"><img src="assets/robot1_portrait.png"/></div><span class="cnn c">CRIMSON MINER</span><span class="crr">PLAYER CONTROLLED</span></div><span class="vse">VS</span><div class="cc"><div class="af m"><img src="assets/robot2_portrait.png"/></div><span class="cnn m">VOLT VIBER</span><span class="crr">AI GLADIATOR 3D</span></div></div>
+      </div>
+      <div class="ga acts">
+        <div class="cbtn pbtn">▶ INITIALIZE BATTLE <span class="kt">SPACE</span></div>
+        <div class="cbtn obtn">⛓ ONLINE 1V1 <span class="kt">P2P</span></div>
+        <div class="cbtn sbtn">◈ PROFILE · STAKING DEMO</div>
+        <div class="cbtn sbtn">🔊 AUDIO SYNTH: ACTIVE</div>
+      </div>
+      <div class="gm panel">
+        <div class="lbl">SELECT ARENA:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/map_classic.png"/><div class="ti"><span class="tn">CYBER ARENA</span><span class="ts">20x20 · BALANCED</span></div><span class="bg">ACTIVE</span></div>
+          <div class="tab"><img class="ph" src="assets/map_archipelago.png"/><div class="ti"><span class="tn">ISLAND ARCHIPELAGO</span><span class="ts">20x20 · TACTICAL</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_twin_citadels.png"/><div class="ti"><span class="tn">TWIN CITADELS</span><span class="ts">20x20 · ADVANCED</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_chasm_ring.png"/><div class="ti"><span class="tn">HONEYCOMB CHASM</span><span class="ts">20x20 · HARDCORE</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gdb panel">
+        <div class="lbl">CPU DIFFICULTY:</div>
+        <div class="tabs three"><div class="tab"><div class="ti"><span class="tn">EASY</span><span class="ts">RELAXED CPU</span></div></div><div class="tab active"><div class="ti"><span class="tn">NORMAL</span><span class="ts">BALANCED</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">HARD</span><span class="ts">AGGRESSIVE</span></div></div></div>
+      </div>
+      <div class="gdb2 panel">
+        <div class="lbl">MATCH SIZE:</div>
+        <div class="tabs three"><div class="tab active"><div class="ti"><span class="tn">DUEL 1V1</span><span class="ts">2 FIGHTERS</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">SQUAD</span><span class="ts">5 FIGHTERS</span></div></div><div class="tab"><div class="ti"><span class="tn">ROYALE</span><span class="ts">10 FIGHTERS</span></div></div></div>
+      </div>
+      <div class="ggd gguide panel">
+        <div class="gt">// NEURAL CONTROL SCHEME</div>
+        <div class="gg">
+          <div class="gi"><span class="kb">WASD</span><span class="gd2">Move & Aim</span></div>
+          <div class="gi"><span class="kb">J</span><span class="gd2">Force Push</span></div>
+          <div class="gi"><span class="kb">SPACE</span><span class="gd2">Jet Jump</span></div>
+          <div class="gi"><span class="kb">E</span><span class="gd2">Cyber Spear</span></div>
+          <div class="gi"><span class="kb">G</span><span class="gd2">Grenade</span></div>
+          <div class="gi"><span class="kb">SHIFT</span><span class="gd2">Neon Dash</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="stage">
+  <div class="wrap">
+    <div class="hint">ВАРИАНТ C — NEON GLOW: вместо рамок — внешнее неоновое свечение</div>
+    <div class="card vC">
+      <div class="gh">
+        <div class="badge"><span class="dot"></span>CYBER ARENA 3D // V3.0</div>
+        <h1 class="t3d"><span class="ta">VIBING</span> <span class="tb">FL</span><span class="oo">O</span><span class="oo oo2">O</span><span class="tc">R</span></h1>
+      </div>
+      <div class="gf panel">
+        <div class="lbl">SELECT PLAYER 1 3D MODEL:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/robot1_portrait.png"/><div class="ti"><span class="tn">CRIMSON MINER</span><span class="ts">HEAVY BRAWLER</span></div><span class="bg">EQUIPPED</span></div>
+          <div class="tab"><img class="ph" src="assets/robot3_portrait.png"/><div class="ti"><span class="tn">MOSS VIBER</span><span class="ts">JUNGLE STALKER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot2_portrait.png"/><div class="ti"><span class="tn">VOLT VIBER</span><span class="ts">SPEED FIGHTER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot4_portrait.png"/><div class="ti"><span class="tn">PHANTOM VIBER</span><span class="ts">PHASE GHOST</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot5_portrait.png"/><div class="ti"><span class="tn">CHOG VIBER</span><span class="ts">SPIKE TANK</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/meta.jpg"/><div class="ti"><span class="tn">META VIBER</span><span class="ts">NEURAL OVERSEER</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gs">
+        <div class="vs"><div class="cc"><div class="af"><img src="assets/robot1_portrait.png"/></div><span class="cnn c">CRIMSON MINER</span><span class="crr">PLAYER CONTROLLED</span></div><span class="vse">VS</span><div class="cc"><div class="af m"><img src="assets/robot2_portrait.png"/></div><span class="cnn m">VOLT VIBER</span><span class="crr">AI GLADIATOR 3D</span></div></div>
+      </div>
+      <div class="ga acts">
+        <div class="cbtn pbtn">▶ INITIALIZE BATTLE <span class="kt">SPACE</span></div>
+        <div class="cbtn obtn">⛓ ONLINE 1V1 <span class="kt">P2P</span></div>
+        <div class="cbtn sbtn">◈ PROFILE · STAKING DEMO</div>
+        <div class="cbtn sbtn">🔊 AUDIO SYNTH: ACTIVE</div>
+      </div>
+      <div class="gm panel">
+        <div class="lbl">SELECT ARENA:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/map_classic.png"/><div class="ti"><span class="tn">CYBER ARENA</span><span class="ts">20x20 · BALANCED</span></div><span class="bg">ACTIVE</span></div>
+          <div class="tab"><img class="ph" src="assets/map_archipelago.png"/><div class="ti"><span class="tn">ISLAND ARCHIPELAGO</span><span class="ts">20x20 · TACTICAL</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_twin_citadels.png"/><div class="ti"><span class="tn">TWIN CITADELS</span><span class="ts">20x20 · ADVANCED</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_chasm_ring.png"/><div class="ti"><span class="tn">HONEYCOMB CHASM</span><span class="ts">20x20 · HARDCORE</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gdb panel">
+        <div class="lbl">CPU DIFFICULTY:</div>
+        <div class="tabs three"><div class="tab"><div class="ti"><span class="tn">EASY</span><span class="ts">RELAXED CPU</span></div></div><div class="tab active"><div class="ti"><span class="tn">NORMAL</span><span class="ts">BALANCED</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">HARD</span><span class="ts">AGGRESSIVE</span></div></div></div>
+      </div>
+      <div class="gdb2 panel">
+        <div class="lbl">MATCH SIZE:</div>
+        <div class="tabs three"><div class="tab active"><div class="ti"><span class="tn">DUEL 1V1</span><span class="ts">2 FIGHTERS</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">SQUAD</span><span class="ts">5 FIGHTERS</span></div></div><div class="tab"><div class="ti"><span class="tn">ROYALE</span><span class="ts">10 FIGHTERS</span></div></div></div>
+      </div>
+      <div class="ggd gguide panel">
+        <div class="gt">// NEURAL CONTROL SCHEME</div>
+        <div class="gg">
+          <div class="gi"><span class="kb">WASD</span><span class="gd2">Move & Aim</span></div>
+          <div class="gi"><span class="kb">J</span><span class="gd2">Force Push</span></div>
+          <div class="gi"><span class="kb">SPACE</span><span class="gd2">Jet Jump</span></div>
+          <div class="gi"><span class="kb">E</span><span class="gd2">Cyber Spear</span></div>
+          <div class="gi"><span class="kb">G</span><span class="gd2">Grenade</span></div>
+          <div class="gi"><span class="kb">SHIFT</span><span class="gd2">Neon Dash</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="stage">
+  <div class="wrap">
+    <div class="hint">ВАРИАНТ D — REFRESH: новый layout, кнопки-шевроны, список слева</div>
+    <div class="card vD">
+      <div class="gh">
+        <div class="badge"><span class="dot"></span>CYBER ARENA 3D // V3.0</div>
+        <h1 class="t3d"><span class="ta">VIBING</span> <span class="tb">FL</span><span class="oo">O</span><span class="oo oo2">O</span><span class="tc">R</span></h1>
+      </div>
+      <div class="gf panel">
+        <div class="lbl">SELECT PLAYER 1 3D MODEL:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/robot1_portrait.png"/><div class="ti"><span class="tn">CRIMSON MINER</span><span class="ts">HEAVY BRAWLER</span></div><span class="bg">EQUIPPED</span></div>
+          <div class="tab"><img class="ph" src="assets/robot3_portrait.png"/><div class="ti"><span class="tn">MOSS VIBER</span><span class="ts">JUNGLE STALKER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot2_portrait.png"/><div class="ti"><span class="tn">VOLT VIBER</span><span class="ts">SPEED FIGHTER</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot4_portrait.png"/><div class="ti"><span class="tn">PHANTOM VIBER</span><span class="ts">PHASE GHOST</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/robot5_portrait.png"/><div class="ti"><span class="tn">CHOG VIBER</span><span class="ts">SPIKE TANK</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/meta.jpg"/><div class="ti"><span class="tn">META VIBER</span><span class="ts">NEURAL OVERSEER</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gs">
+        <div class="vs"><div class="cc"><div class="af"><img src="assets/robot1_portrait.png"/></div><span class="cnn c">CRIMSON MINER</span><span class="crr">PLAYER CONTROLLED</span></div><span class="vse">VS</span><div class="cc"><div class="af m"><img src="assets/robot2_portrait.png"/></div><span class="cnn m">VOLT VIBER</span><span class="crr">AI GLADIATOR 3D</span></div></div>
+      </div>
+      <div class="ga acts">
+        <div class="cbtn pbtn">▶ INITIALIZE BATTLE <span class="kt">SPACE</span></div>
+        <div class="cbtn obtn">⛓ ONLINE 1V1 <span class="kt">P2P</span></div>
+        <div class="cbtn sbtn">◈ PROFILE · STAKING DEMO</div>
+        <div class="cbtn sbtn">🔊 AUDIO SYNTH: ACTIVE</div>
+      </div>
+      <div class="gm panel">
+        <div class="lbl">SELECT ARENA:</div>
+        <div class="tabs">
+          <div class="tab active"><img class="ph" src="assets/map_classic.png"/><div class="ti"><span class="tn">CYBER ARENA</span><span class="ts">20x20 · BALANCED</span></div><span class="bg">ACTIVE</span></div>
+          <div class="tab"><img class="ph" src="assets/map_archipelago.png"/><div class="ti"><span class="tn">ISLAND ARCHIPELAGO</span><span class="ts">20x20 · TACTICAL</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_twin_citadels.png"/><div class="ti"><span class="tn">TWIN CITADELS</span><span class="ts">20x20 · ADVANCED</span></div><span class="bg">SELECT</span></div>
+          <div class="tab"><img class="ph" src="assets/map_chasm_ring.png"/><div class="ti"><span class="tn">HONEYCOMB CHASM</span><span class="ts">20x20 · HARDCORE</span></div><span class="bg">SELECT</span></div>
+        </div>
+      </div>
+      <div class="gdb panel">
+        <div class="lbl">CPU DIFFICULTY:</div>
+        <div class="tabs three"><div class="tab"><div class="ti"><span class="tn">EASY</span><span class="ts">RELAXED CPU</span></div></div><div class="tab active"><div class="ti"><span class="tn">NORMAL</span><span class="ts">BALANCED</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">HARD</span><span class="ts">AGGRESSIVE</span></div></div></div>
+      </div>
+      <div class="gdb2 panel">
+        <div class="lbl">MATCH SIZE:</div>
+        <div class="tabs three"><div class="tab active"><div class="ti"><span class="tn">DUEL 1V1</span><span class="ts">2 FIGHTERS</span></div><span class="bg">ACTIVE</span></div><div class="tab"><div class="ti"><span class="tn">SQUAD</span><span class="ts">5 FIGHTERS</span></div></div><div class="tab"><div class="ti"><span class="tn">ROYALE</span><span class="ts">10 FIGHTERS</span></div></div></div>
+      </div>
+      <div class="ggd gguide panel">
+        <div class="gt">// NEURAL CONTROL SCHEME</div>
+        <div class="gg">
+          <div class="gi"><span class="kb">WASD</span><span class="gd2">Move & Aim</span></div>
+          <div class="gi"><span class="kb">J</span><span class="gd2">Force Push</span></div>
+          <div class="gi"><span class="kb">SPACE</span><span class="gd2">Jet Jump</span></div>
+          <div class="gi"><span class="kb">E</span><span class="gd2">Cyber Spear</span></div>
+          <div class="gi"><span class="kb">G</span><span class="gd2">Grenade</span></div>
+          <div class="gi"><span class="kb">SHIFT</span><span class="gd2">Neon Dash</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>

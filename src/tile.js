@@ -7,6 +7,7 @@ import {
   GRAVITY,
   VOID_KILL_Y,
   LEVEL_STEP,
+  QUAKE_CRACK_TIME,
   COLORS,
 } from "./constants.js";
 import { audio } from "./audio.js";
@@ -25,6 +26,47 @@ const underglowGeometry = new THREE.PlaneGeometry(
   TILE_SIZE * 0.9
 );
 const cyberCoreGeometry = new THREE.CylinderGeometry(0.16, 0.16, 0.05, 6);
+const crackPlaneGeo = new THREE.PlaneGeometry(TILE_SIZE * 0.92, TILE_SIZE * 0.92);
+
+// One shared crack mask. Per-tile materials tint it; the texture is never disposed.
+let crackTexture = null;
+function getCrackTexture() {
+  if (crackTexture) return crackTexture;
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const g = canvas.getContext("2d");
+  g.clearRect(0, 0, 128, 128);
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  g.strokeStyle = "rgba(255,255,255,0.95)";
+  g.shadowColor = "#ff2d95";
+  g.shadowBlur = 8;
+  g.lineWidth = 2.2;
+  const cx = 64;
+  const cy = 64;
+  for (let i = 0; i < 8; i++) {
+    let ang = (i / 8) * Math.PI * 2 + 0.2;
+    let x = cx;
+    let y = cy;
+    g.beginPath();
+    g.moveTo(cx, cy);
+    for (let s = 0; s < 4; s++) {
+      ang += s % 2 === 0 ? 0.45 : -0.32;
+      x += Math.cos(ang) * (16 + s * 3);
+      y += Math.sin(ang) * (16 + s * 3);
+      g.lineTo(x, y);
+    }
+    g.stroke();
+    g.beginPath();
+    g.moveTo(x, y);
+    g.lineTo(x + Math.cos(ang + 1.15) * 14, y + Math.sin(ang + 1.15) * 14);
+    g.stroke();
+  }
+  crackTexture = new THREE.CanvasTexture(canvas);
+  crackTexture.colorSpace = THREE.SRGBColorSpace;
+  return crackTexture;
+}
 
 export class Tile {
   constructor(gx, gz, scene, gridSize = 10, elevation = 0, theme = null, decorDef = null) {
@@ -59,6 +101,7 @@ export class Tile {
 
     // Create 3D group and meshes
     this.group = new THREE.Group();
+    this.group.userData.isTile = true;
     this.group.position.set(this.worldX, elevation * LEVEL_STEP, this.worldZ);
 
     // 1. Dark cyber base block
@@ -126,6 +169,8 @@ export class Tile {
       const decor = buildDecor(decorDef);
       if (decor) {
         decor.position.y = 0.02; // Sit on top of the tile faceplate
+        decor.name = decorDef.type;
+        decor.userData.decorType = decorDef.type;
         this.group.add(decor);
       }
     }
@@ -168,15 +213,68 @@ export class Tile {
 
   // Drop the tile into the abyss
   startFalling() {
-    if (this.state === "falling" || this.state === "dead") return;
+    if (this.state === "falling" || this.state === "dead" || this.state === "cracking") return;
     this.state = "falling";
     this.vy = -1.5; // Initial downward nudge
     audio.playTileFall();
   }
 
+  // Quake: crack in place, then hide the tile and hand it to the debris burst.
+  // Gameplay treats it as gone (not walkable) the moment the crack starts.
+  // The whole-tile tumble stays on collapseInstantly for grenades.
+  beginShatter(onBurst) {
+    if (this.state === "falling" || this.state === "dead" || this.state === "cracking" || this.isDead) {
+      return false;
+    }
+    this.state = "cracking";
+    this.crackTimer = QUAKE_CRACK_TIME * (0.85 + Math.random() * 0.35);
+    this._onShatter = onBurst || null;
+
+    this.group.position.set(this.worldX, this.elevation * LEVEL_STEP, this.worldZ);
+    this.group.rotation.set(0, 0, 0);
+    this.topMaterial.emissive.setHex(0xfff4ff);
+    this.topMaterial.emissiveIntensity = 1.8;
+    this.edgeMaterial.color.setHex(0xff2d95);
+    if (this.coreMaterial) {
+      this.coreMaterial.emissive.setHex(0xff2d95);
+      this.coreMaterial.emissiveIntensity = 2.2;
+    }
+
+    this.crackMat = new THREE.MeshBasicMaterial({
+      map: getCrackTexture(),
+      color: 0xff4db0,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    this.crackMesh = new THREE.Mesh(crackPlaneGeo, this.crackMat);
+    this.crackMesh.rotation.x = -Math.PI / 2;
+    this.crackMesh.position.y = 0.04;
+    this.group.add(this.crackMesh);
+    return true;
+  }
+
+  _finishShatter() {
+    const cb = this._onShatter;
+    this._onShatter = null;
+    if (this.crackMesh) {
+      this.group.remove(this.crackMesh);
+      this.crackMesh = null;
+    }
+    if (this.crackMat) {
+      this.crackMat.dispose();
+      this.crackMat = null;
+    }
+    this.group.visible = false;
+    this.state = "dead";
+    this.isDead = true;
+    if (cb) cb(this);
+  }
+
   // Destroyed by weapon explosion — collapses immediately
   collapseInstantly() {
-    if (this.state === "falling" || this.state === "dead") return;
+    if (this.state === "falling" || this.state === "dead" || this.state === "cracking") return;
     this.state = "falling";
     this.vy = -7.5; // High velocity downward plunge
     this.angVelX = (Math.random() - 0.5) * 5.0;
@@ -235,6 +333,18 @@ export class Tile {
       if (this.warningTimer <= 0) {
         this.startFalling();
       }
+    } else if (this.state === "cracking") {
+      this.crackTimer -= dt;
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.045);
+      this.topMaterial.emissive.setHex(pulse > 0.55 ? 0xfff6ff : 0xff2d95);
+      this.topMaterial.emissiveIntensity = 1.3 + pulse * 1.5;
+      this.edgeMaterial.color.setHex(0xff2d95);
+      this.edgeMaterial.opacity = 0.75 + pulse * 0.25;
+      if (this.crackMat) this.crackMat.opacity = 0.35 + pulse * 0.6;
+      const j = Math.sin(performance.now() * 0.06) * 0.018;
+      this.group.position.x = this.worldX + j;
+      this.group.position.z = this.worldZ - j * 0.6;
+      if (this.crackTimer <= 0) this._finishShatter();
     } else if (this.state === "falling") {
       // Free fall gravity
       this.vy -= GRAVITY * dt;
@@ -266,5 +376,6 @@ export class Tile {
     this.edgeMaterial.dispose();
     this.underglowMaterial.dispose();
     if (this.coreMaterial) this.coreMaterial.dispose();
+    if (this.crackMat) this.crackMat.dispose();
   }
 }

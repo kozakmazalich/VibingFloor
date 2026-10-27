@@ -36,6 +36,11 @@
     <!-- Three.js Canvas -->
     <canvas id="game-canvas"></canvas>
 
+    <!-- Shown while an arena streams in. The planet itself is in the 3D scene. -->
+    <div id="arena-loader" class="arena-loader hidden" aria-hidden="true">
+      <p class="arena-loader-label"><span>LOADING</span> <strong id="arena-loader-name">ARENA</strong></p>
+    </div>
+
     <!-- 1. START / MAIN MENU SCREEN -->
     <div id="start-menu" class="menu-screen">
       <!-- Shining aurora background (huly-style hero glow, CSS-only) + cyber grid -->
@@ -295,6 +300,10 @@
             <div class="guide-item">
               <span class="key-badge">G</span>
               <span class="guide-desc">Floor Grenade Blast</span>
+            </div>
+            <div class="guide-item">
+              <span class="key-badge">Q</span>
+              <span class="guide-desc">Use Item (Jetpack / Quake)</span>
             </div>
             <div class="guide-item">
               <span class="key-badge">SHIFT</span>
@@ -607,6 +616,13 @@
           <div class="item-slot-row">
             <img id="item-slot-icon" class="item-slot-icon" alt="item" style="display:none" />
             <span id="item-slot-hint" class="item-slot-hint">Q — USE</span>
+          </div>
+          <div id="item-fuel-bar" class="item-fuel-bar" hidden>
+            <span class="item-fuel-seg"></span>
+            <span class="item-fuel-seg"></span>
+            <span class="item-fuel-seg"></span>
+            <span class="item-fuel-seg"></span>
+            <span class="item-fuel-seg"></span>
           </div>
         </div>
       </div>

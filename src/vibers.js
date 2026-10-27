@@ -278,7 +278,7 @@ export function buildViber(def) {
   addExtras(def.footExtrasR, legR);
   addSpikes(def.spikes);
   root.scale.setScalar(0.8);
-  return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat, eyeMat };
+  return { root, bodyPivot, head, body: bodyMesh, mats, legL, legR, armL, armR, visorMat, eyeMat };
 }
 
 // META VIBER chibi build — matches assets/meta/gemini-code-1791997066782.html
@@ -366,5 +366,5 @@ function buildMetaViber(def) {
   addExtras(armR, def.armExtrasR);
 
   root.scale.setScalar(0.8);
-  return { root, bodyPivot, head, mats, legL, legR, armL, armR, visorMat: null, eyeMat: null };
+  return { root, bodyPivot, head, body: torso, mats, legL, legR, armL, armR, visorMat: null, eyeMat: null };
 }

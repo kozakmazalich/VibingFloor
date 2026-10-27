@@ -126,8 +126,13 @@ export const MAPS = [
       return 0;
     },
     decorAt(x, z) {
-      // Two tall citadel keeps, one on each side of the arena
-      if ((x === 3 && z === 4) || (x === 16 && z === 15)) {
+      // A keep on every tower. The four footprints already exist; only two of
+      // them used to carry a building, so the empty pair read as bare pads.
+      // (3,4)<->(16,15) and (3,15)<->(16,4) are half-turn pairs.
+      if (
+        (x === 3 && z === 4) || (x === 16 && z === 15) ||
+        (x === 3 && z === 15) || (x === 16 && z === 4)
+      ) {
         return { type: "citadel", color: 0xffb020 };
       }
       if (
@@ -207,94 +212,194 @@ export const MAPS = [
 ];
 
 /**
- * Scale a base map's playfield to fit N fighters (+20% linear size per extra
- * fighter → area grows proportionally) and add variety so BIG arenas feel
- * interesting rather than just "more of the same":
- *
- *  - grid grows by ~sqrt(1 + 0.2*(N-1)) (area scales with the roster: 2→20,
- *    5→29, 10→38 tiles), capped for the 8GB-M1 frame budget;
- *  - the base map's shape (islands/bridges/ring) is REPLAYED across the bigger
- *    grid by projecting coordinates back into normalized [0,1] space, so the
- *    layout stays coherent instead of tearing;
- *  - every 3rd ring from the middle becomes a broken "shelf" band — alternating
- *    tiles drop away, giving each fighter its own risky perches to fight over
- *    once the roster is larger;
- *  - decor density scales with the area so big arenas stay lively.
- *
- * Returns a NEW map def (the base MAPS entry is never mutated).
+ * Arena for a fighter count.
+ * 2 fighters returns the base map unchanged (the launched 1v1).
+ * More fighters enlarge that same plan: even grid, half-turn symmetric,
+ * landmarks (citadels, crystals, lamps) replayed from the original cells.
  */
 export function scaledMap(mapDef, fighters) {
   const n = Math.max(2, fighters | 0);
-  const base = mapDef.gridSize || 10;
+  if (n <= 2) return mapDef;
+  return scaleSymmetric(mapDef, n);
+}
 
-  // +20% linear size per extra fighter, area ~ fighters (sqrt keeps tiles/area
-  // proportional to roster, not squared). Capped so huge rosters stay playable.
-  const factor = Math.sqrt(1 + 0.2 * (n - 1));
-  const size = Math.max(base, Math.min(40, Math.round(base * factor)));
+// Even size so the centre stays between tiles (every base map is 20x20).
+// ~sqrt growth: 5 fighters → 28, 10 fighters → 34, never past 40.
+function scaledSize(base, fighters) {
+  const factor = Math.sqrt(1 + 0.2 * (fighters - 1));
+  let size = Math.round(base * factor);
+  if (size % 2 !== 0) size += 1;
+  if (size < base) size = base + (base % 2 === 0 ? 0 : 1);
+  if (size > 40) size = 40;
+  if (size % 2 !== 0) size -= 1;
+  return size;
+}
+
+/**
+ * Magnify `mapDef` onto a bigger even grid without changing the floor plan.
+ * The lower half of each axis is a uniform scale of the base's lower half;
+ * the upper half is its half-turn, so project(size-1-v) = base-1-project(v).
+ * Activity and height take both sides, which mirrors the 1v1 hash scatter.
+ * Each original landmark is placed once, on the big cell nearest the centre
+ * of the cells that magnify that base cell (and on the opposite side).
+ */
+function scaleSymmetric(mapDef, fighters) {
+  const base = mapDef.gridSize || 20;
+  const size = scaledSize(base, fighters);
+  const half = size >> 1;
 
   const isBaseActive = mapDef.isTileActive || (() => true);
   const baseElev = mapDef.elevationAt || (() => 0);
+  const baseDecor = mapDef.decorAt || (() => null);
 
-  // Map a big-grid coordinate into BASE space by preserving NORMALIZED position
-  // (center-out). v*size edge maps to base edge; the middle stays the middle —
-  // so islands/bridges/ring grow outward coherently instead of tearing.
-  // Using a floor+blend keeps neighbouring big cells adjacent in base space.
-  const project = (v) => {
-    const t = v / (size - 1); // 0..1 across the whole big grid
-    return Math.max(0, Math.min(base - 1, Math.round(t * (base - 1))));
+  // Equal slices of the lower half, then a mirror. Every base index gets
+  // either floor or ceil cells, so a 2-tile ring stays a 2-tile ring.
+  const buckets = base >> 1;
+  const proj = new Int16Array(size);
+  let cursor = 0;
+  for (let i = 0; i < buckets; i++) {
+    const end = Math.round(((i + 1) * half) / buckets);
+    for (let v = cursor; v < end; v++) {
+      proj[v] = i;
+      proj[size - 1 - v] = base - 1 - i;
+    }
+    cursor = end;
+  }
+
+  // Centre of the band of big cells that magnify base index `c`.
+  const inv = (c) => {
+    const partner = base - 1 - c;
+    if (c > partner) return size - 1 - inv(partner);
+    let sum = 0;
+    let n = 0;
+    for (let v = 0; v < half; v++) {
+      if (proj[v] !== c) continue;
+      sum += v;
+      n++;
+    }
+    const ideal = n ? sum / n : 0;
+    let best = 0;
+    let bestD = Infinity;
+    for (let v = 0; v < half; v++) {
+      if (proj[v] !== c) continue;
+      const d = Math.abs(v - ideal);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    return best;
   };
 
-  // Spawn safe-zone: match the SAME inset spawnRing() uses (14% of grid), so the
-  // shelf band can never drop tiles where fighters actually spawn.
-  const inset = Math.max(2, Math.floor(size * 0.14));
-  const spawnSafe = (x, z) =>
-    x < inset || z < inset || x > size - 1 - inset || z > size - 1 - inset;
+  const p1 = mapDef.p1Spawn || [1, 1];
+  const p2 = mapDef.p2Spawn || [base - 2, base - 2];
+
+  // Representative big cell per base cell. Canonical half is chosen first;
+  // the opposite cell is forced to its half-turn so props stay symmetric.
+  const sumX = new Float64Array(base * base);
+  const sumZ = new Float64Array(base * base);
+  const count = new Int16Array(base * base);
+  for (let x = 0; x < size; x++) {
+    const bx = proj[x];
+    for (let z = 0; z < size; z++) {
+      const i = bx * base + proj[z];
+      sumX[i] += x;
+      sumZ[i] += z;
+      count[i]++;
+    }
+  }
+  const repX = new Int16Array(base * base);
+  const repZ = new Int16Array(base * base);
+  repX.fill(-1);
+  for (let bx = 0; bx < base; bx++) {
+    for (let bz = 0; bz < base; bz++) {
+      const px = base - 1 - bx;
+      const pz = base - 1 - bz;
+      const canonical = bx < px || (bx === px && bz <= pz);
+      if (!canonical) continue;
+      const i = bx * base + bz;
+      if (count[i] === 0) continue;
+      const cx = sumX[i] / count[i];
+      const cz = sumZ[i] / count[i];
+      let bestX = 0;
+      let bestZ = 0;
+      let bestD = Infinity;
+      for (let x = 0; x < size; x++) {
+        if (proj[x] !== bx) continue;
+        for (let z = 0; z < size; z++) {
+          if (proj[z] !== bz) continue;
+          const d = (x - cx) * (x - cx) + (z - cz) * (z - cz);
+          if (d < bestD) {
+            bestD = d;
+            bestX = x;
+            bestZ = z;
+          }
+        }
+      }
+      repX[i] = bestX;
+      repZ[i] = bestZ;
+      const j = px * base + pz;
+      if (j !== i) {
+        repX[j] = size - 1 - bestX;
+        repZ[j] = size - 1 - bestZ;
+      }
+    }
+  }
+
+  // Hand-placed landmarks outrank the hash scatter, so a citadel or antenna
+  // is never replaced by the rock that happened to land on its half-turn.
+  const decorRank = { citadel: 5, antenna: 4, palm: 3, crystal: 2, lamp: 1, fern: 1, rock: 0 };
+  // `a` is the canonical side. Equal rank keeps `a`, so both halves agree.
+  const preferDecor = (a, b) => {
+    if (!a) return b || null;
+    if (!b) return a;
+    return (decorRank[b.type] || 0) > (decorRank[a.type] || 0) ? b : a;
+  };
+  const decorMap = new Map();
+  for (let bx = 0; bx < base; bx++) {
+    for (let bz = 0; bz < base; bz++) {
+      const px = base - 1 - bx;
+      const pz = base - 1 - bz;
+      if (!isBaseActive(bx, bz) && !isBaseActive(px, pz)) continue;
+      const i = bx * base + bz;
+      if (repX[i] < 0) continue;
+      const left = bx < px || (bx === px && bz <= pz);
+      const decor = preferDecor(
+        baseDecor(left ? bx : px, left ? bz : pz),
+        baseDecor(left ? px : bx, left ? pz : bz)
+      );
+      if (!decor) continue;
+      decorMap.set(`${repX[i]},${repZ[i]}`, decor);
+    }
+  }
 
   return {
     ...mapDef,
     gridSize: size,
-    scaledFor: n,
-    p1Spawn: [inset, inset],
-    p2Spawn: [size - 1 - inset, size - 1 - inset],
+    scaledFor: fighters,
+    p1Spawn: [inv(p1[0]), inv(p1[1])],
+    p2Spawn: [inv(p2[0]), inv(p2[1])],
     isTileActive(x, z) {
-      if (!isBaseActive(project(x), project(z))) return false;
-      // Broken shelf band for bigger arenas: every 3rd ring from the middle is
-      // missing ~every other tile — risky perches to fight over. NEVER inside
-      // the spawn safe-zone (fighters must always spawn on solid ground).
-      if (n >= 4) {
-        const cx = (size - 1) / 2;
-        const ring = Math.max(Math.abs(x - cx), Math.abs(z - cx));
-        const fromMid = Math.round(ring);
-        if (
-          fromMid >= 4 &&
-          fromMid % 3 === 2 &&
-          (x + z) % 2 === 0 &&
-          !spawnSafe(x, z)
-        ) {
-          return false;
-        }
-      }
-      return true;
+      if (x < 0 || z < 0 || x >= size || z >= size) return false;
+      const bx = proj[x];
+      const bz = proj[z];
+      return isBaseActive(bx, bz) || isBaseActive(base - 1 - bx, base - 1 - bz);
     },
     elevationAt(x, z) {
-      return baseElev(project(x), project(z));
+      const bx = proj[x];
+      const bz = proj[z];
+      const px = base - 1 - bx;
+      const pz = base - 1 - bz;
+      const a = isBaseActive(bx, bz);
+      const b = isBaseActive(px, pz);
+      if (a && b) return Math.max(baseElev(bx, bz), baseElev(px, pz));
+      if (a) return baseElev(bx, bz);
+      if (b) return baseElev(px, pz);
+      return 0;
     },
     decorAt(x, z) {
-      // Scaled arenas must NOT replay the base map's scattered decor: the base
-      // maps mix accent colours (CYBER ARENA scatters magenta lamps/crystals,
-      // ISLAND ARCHIPELAGO scatters green palms) that, when re-projected across
-      // a much larger grid, read as "stray inserts from another map". Instead
-      // the scaled arena only decorates with ITS OWN theme accent, and only in
-      // the added outer rings (the core keeps the base map's landmark props).
-      const accent = mapDef.theme ? mapDef.theme.edge : 0x00e5ff;
-      if ((x + z) % 7 === 0 && !spawnSafe(x, z)) {
-        const h = ((x * 73856093) ^ (z * 19349663)) >>> 0;
-        const f = (h % 1000) / 1000;
-        if (f < 0.05) return { type: "lamp", color: accent };
-        if (f < 0.08) return { type: "crystal", color: accent };
-        if (f < 0.11) return { type: "rock" };
-      }
-      return null;
+      return decorMap.get(`${x},${z}`) || null;
     },
   };
 }
+

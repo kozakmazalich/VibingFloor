@@ -1,10 +1,10 @@
 /**
  * Consumable power-up pickups for Vibing Floor.
  *
- * Jetpack and Quake are single-use items held in ONE item slot and triggered
- * with Q. Each round spawns a couple of pods on random walkable tiles. They use
- * transparent PNG sprites (assets/Jetpack.png, assets/Quake.png) as floating
- * icons with a neon glow, matching the cyberpunk pickup style.
+ * Jetpack and Quake share ONE item slot and fire with Q. A jetpack has five
+ * charges; a quake is one slam. Each round spawns a few pods on walkable tiles
+ * that cannot shrink. A pod disappears if its tile falls. Icons are the
+ * existing PNGs (assets/Jetpack.png, assets/Quake.png) with a neon glow.
  */
 
 import * as THREE from "three";
@@ -28,9 +28,13 @@ function loadSprite(url) {
 }
 
 class ConsumablePickup {
-  constructor(kind, x, z, y, scene) {
+  constructor(kind, tile, scene) {
     this.kind = kind; // "jetpack" | "quake"
+    this.tile = tile;
     this.collected = false;
+    const x = tile.worldX;
+    const z = tile.worldZ;
+    const y = tile.surfaceY + 0.02;
     this.pos = new THREE.Vector3(x, y, z);
     this.phase = Math.random() * Math.PI * 2;
     this.scene = scene;
@@ -85,6 +89,11 @@ class ConsumablePickup {
 
   update(dt, now) {
     if (this.collected) return;
+    // The floor under this pod fell, cracked, or left the walkable set.
+    if (this.tile && !this.tile.isWalkable()) {
+      this.collect();
+      return;
+    }
     const t = now * 0.001 + this.phase;
     this.icon.position.y = 1.0 + Math.sin(t * 2.2) * 0.14;
     this.glow.position.y = this.icon.position.y;
@@ -122,6 +131,8 @@ export class ConsumableManager {
     const candidates = [];
     for (const tile of island.allTiles) {
       if (!tile || !tile.isIdle()) continue;
+      // Rim tiles are the ones that shrink. Never drop a pod on one.
+      if (island.isRimTile(tile.gx, tile.gz)) continue;
       let blocked = false;
       for (const p of avoidPoints) {
         if (Math.hypot(tile.worldX - p.x, tile.worldZ - p.z) < 4.5) {
@@ -132,7 +143,7 @@ export class ConsumableManager {
       if (!blocked) candidates.push(tile);
     }
 
-    // Alternate jetpack / quake for variety; a small fixed count per round.
+    // Alternate jetpack / quake. Count is CONSUMABLE_COUNT (a few per round).
     const kinds = [];
     for (let i = 0; i < this.count; i++) {
       kinds.push(i % 2 === 0 ? "jetpack" : "quake");
@@ -142,7 +153,7 @@ export class ConsumableManager {
       if (candidates.length === 0) break;
       const idx = Math.floor(Math.random() * candidates.length);
       const tile = candidates.splice(idx, 1)[0];
-      const pod = new ConsumablePickup(kind, tile.worldX, tile.worldZ, tile.surfaceY + 0.02, this.scene);
+      const pod = new ConsumablePickup(kind, tile, this.scene);
       this.pods.push(pod);
     }
   }

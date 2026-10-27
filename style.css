@@ -30,6 +30,53 @@ body {
   touch-action: none;
 }
 
+/* Planet-orbit load state. The mesh is in the WebGL scene; this is just the caption.
+   The menu scrim lifts so the orbits read instead of a blurred half-built arena. */
+.arena-loader {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  z-index: 140;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+.arena-loader.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.arena-loader-label {
+  margin: 0;
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: #d8f7ff;
+  background: rgba(6, 10, 24, 0.78);
+  border: 1px solid rgba(0, 229, 255, 0.5);
+  border-radius: 999px;
+  padding: 8px 16px;
+  box-shadow: 0 0 22px rgba(0, 229, 255, 0.28);
+}
+.arena-loader-label span {
+  color: #00e5ff;
+  margin-right: 8px;
+}
+/* The exoplanet is the main-menu backdrop. The loading state used to be the
+   only time this veil lifted; keep it lifted so the planet does not pop. */
+#start-menu {
+  background: rgba(6, 8, 18, 0.18);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+body.arena-loading #start-menu {
+  background: rgba(6, 8, 18, 0.18);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* =========================================
    GENERIC MENU SCREENS (Start, Pause, Win)
    ========================================= */
@@ -1680,6 +1727,51 @@ body {
   letter-spacing: 0.5px;
 }
 
+.item-slot-icon.spent {
+  filter: grayscale(1) brightness(0.55);
+}
+
+.item-fuel-bar {
+  display: flex;
+  gap: 3px;
+  margin-top: 5px;
+  height: 6px;
+}
+
+.item-fuel-bar[hidden] {
+  display: none;
+}
+
+.item-fuel-seg {
+  flex: 1;
+  height: 6px;
+  border-radius: 2px;
+  background: #2a3148;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  transform-origin: center bottom;
+}
+
+.item-fuel-seg.lit {
+  background: #00e5ff;
+  box-shadow: 0 0 6px rgba(0, 229, 255, 0.9);
+}
+
+.item-fuel-seg.pop {
+  animation: fuel-pop 0.18s ease-out;
+}
+
+@keyframes fuel-pop {
+  0% {
+    transform: scaleY(2.4);
+    filter: brightness(2.4);
+    background: #fff6d0;
+  }
+  100% {
+    transform: scaleY(1);
+    filter: brightness(1);
+  }
+}
+
 @keyframes ability-flash {
   0% {
     background: rgba(0, 229, 255, 0.28);
@@ -2141,17 +2233,17 @@ body {
   .start-card {
     border: none !important;
     border-top: none !important;
-    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55), 0 0 46px rgba(0, 229, 255, 0.1);
-    background: linear-gradient(160deg, rgba(12, 15, 30, 0.72), rgba(8, 10, 22, 0.82));
+    box-shadow: none;
+    background: transparent;
   }
-  /* Panels: no border -> subtle fill. */
+  /* Panels stay dark glass so the labels read; the planet shows between them. */
   .start-card .fighter-select-panel,
   .start-card .map-select-panel,
   .start-card .difficulty-group .diff-select-panel,
   .start-card .difficulty-group .bot-select-panel,
   .start-card .menu-controls-guide {
     border: none;
-    background: rgba(255, 255, 255, 0.035);
+    background: rgba(8, 12, 24, 0.72);
   }
   /* Selector rows read like a list: active = cyan left rail + fill. */
   .start-card .char-tab-btn,

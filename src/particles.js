@@ -1,6 +1,29 @@
 import * as THREE from "three";
-import { COLORS } from "./constants.js";
+import { COLORS, GRAVITY, QUAKE_SHARDS_MIN, QUAKE_SHARDS_MAX } from "./constants.js";
 import { audio } from "./audio.js";
+
+// Shared, never disposed. Pools below only swap materials and visibility.
+const CHUNK_GEO = new THREE.BoxGeometry(0.32, 0.14, 0.24);
+const EMBER_GEO = new THREE.SphereGeometry(0.08, 5, 4);
+const DEBRIS_POOL = 84;
+const EMBER_POOL = 80;
+
+function makeGlowTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const g = canvas.getContext("2d");
+  const grd = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grd.addColorStop(0, "rgba(255,255,255,1)");
+  grd.addColorStop(0.4, "rgba(255,80,170,0.7)");
+  grd.addColorStop(1, "rgba(255,45,149,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const IMPACT_GLOW_TEX = makeGlowTexture();
 
 /**
  * Lightweight particle & projectile FX manager for Vibing Floor
@@ -78,6 +101,249 @@ export class FXManager {
       duration: 0.22,
       elapsed: 0,
     });
+  }
+
+  // Flat expanding ring on the floor. worldReach is the outer radius in world units.
+  // Additive, no bloom. Existing grenade shockwaves stay wireframe spheres.
+  spawnQuakeRing(x, y, z, worldReach) {
+    const geo = new THREE.RingGeometry(0.86, 1, 40);
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xff2d95,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, y, z);
+    mesh.scale.setScalar(0.2);
+    this.scene.add(mesh);
+    this.shockwaves.push({
+      mesh,
+      mat,
+      geo,
+      maxRadius: worldReach,
+      duration: 0.42,
+      elapsed: 0,
+      flat: true,
+    });
+  }
+
+  // Bright disc at the slam point. One-shot, disposed with the other shockwaves.
+  spawnImpactFlash(x, y, z) {
+    const mat = new THREE.SpriteMaterial({
+      map: IMPACT_GLOW_TEX,
+      color: 0xffffff,
+      transparent: true,
+      opacity: 1,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const mesh = new THREE.Sprite(mat);
+    mesh.position.set(x, y, z);
+    mesh.scale.set(0.4, 0.4, 0.4);
+    this.scene.add(mesh);
+    this.shockwaves.push({
+      mesh,
+      mat,
+      geo: null,
+      maxRadius: 3.2,
+      duration: 0.18,
+      elapsed: 0,
+      flat: true,
+      sprite: true,
+    });
+  }
+
+  _ensureDebris() {
+    if (this.debris) return;
+    this.debris = [];
+    this._debrisCursor = 0;
+    for (let i = 0; i < DEBRIS_POOL; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x1a2038,
+        roughness: 0.42,
+        metalness: 0.55,
+        emissive: 0x00e5ff,
+        emissiveIntensity: 0.4,
+        transparent: true,
+        opacity: 1,
+      });
+      const mesh = new THREE.Mesh(CHUNK_GEO, mat);
+      mesh.visible = false;
+      mesh.castShadow = false;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = true;
+      this.scene.add(mesh);
+      this.debris.push({
+        mesh,
+        mat,
+        active: false,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        sx: 0,
+        sy: 0,
+        sz: 0,
+        life: 0,
+        maxLife: 1,
+      });
+    }
+  }
+
+  _ensureEmbers() {
+    if (this.embers) return;
+    this.embers = [];
+    this._emberCursor = 0;
+    for (let i = 0; i < EMBER_POOL; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x9af6ff,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(EMBER_GEO, mat);
+      mesh.visible = false;
+      mesh.frustumCulled = true;
+      this.scene.add(mesh);
+      this.embers.push({
+        mesh,
+        mat,
+        active: false,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        life: 0,
+        maxLife: 0.3,
+      });
+    }
+  }
+
+  // One shattered tile: 3–6 pooled chunks plus a short dust burst.
+  // Chunks fly out from the quake origin, then fall into the void.
+  spawnTileShatter(tile, originX, originZ) {
+    this._ensureDebris();
+    const x = tile.worldX;
+    const y = (tile.group ? tile.group.position.y : 0) + 0.05;
+    const z = tile.worldZ;
+    const color = tile.topMaterial ? tile.topMaterial.color.getHex() : 0x1a2038;
+    const edge = (tile.theme && tile.theme.edge) || COLORS.tileEdge;
+    const span = QUAKE_SHARDS_MAX - QUAKE_SHARDS_MIN + 1;
+    const n = QUAKE_SHARDS_MIN + Math.floor(Math.random() * span);
+    for (let i = 0; i < n; i++) this._launchChunk(x, y, z, originX, originZ, color, edge);
+    this.spawnSparkBurst(x, y + 0.12, z, 9, edge, 0.95);
+  }
+
+  _launchChunk(x, y, z, ox, oz, color, edge) {
+    const c = this.debris[this._debrisCursor];
+    this._debrisCursor = (this._debrisCursor + 1) % this.debris.length;
+    c.active = true;
+    c.mesh.visible = true;
+    c.mesh.position.set(
+      x + (Math.random() - 0.5) * 0.4,
+      y + Math.random() * 0.06,
+      z + (Math.random() - 0.5) * 0.4
+    );
+    const s = 0.5 + Math.random() * 0.65;
+    c.mesh.scale.set(
+      s * (0.75 + Math.random() * 0.55),
+      s * (0.4 + Math.random() * 0.45),
+      s * (0.75 + Math.random() * 0.55)
+    );
+    c.mesh.rotation.set(Math.random() * 6.28, Math.random() * 6.28, Math.random() * 6.28);
+    let dx = x - ox;
+    let dz = z - oz;
+    const len = Math.hypot(dx, dz);
+    if (len < 0.2) {
+      const a = Math.random() * Math.PI * 2;
+      dx = Math.cos(a);
+      dz = Math.sin(a);
+    } else {
+      dx /= len;
+      dz /= len;
+    }
+    const spd = 2.6 + Math.random() * 3.2;
+    c.vx = dx * spd + (Math.random() - 0.5) * 1.5;
+    c.vz = dz * spd + (Math.random() - 0.5) * 1.5;
+    c.vy = 3.6 + Math.random() * 4.0;
+    c.sx = (Math.random() - 0.5) * 9;
+    c.sy = (Math.random() - 0.5) * 9;
+    c.sz = (Math.random() - 0.5) * 9;
+    c.maxLife = 1.6 + Math.random() * 0.6;
+    c.life = c.maxLife;
+    c.mat.color.setHex(color);
+    c.mat.emissive.setHex(edge);
+    c.mat.emissiveIntensity = 0.5;
+    c.mat.opacity = 1;
+  }
+
+  // Jetpack exhaust. Ring-buffered so a burn never allocates.
+  spawnEmber(x, y, z, vx, vy, vz) {
+    this._ensureEmbers();
+    const e = this.embers[this._emberCursor];
+    this._emberCursor = (this._emberCursor + 1) % this.embers.length;
+    e.active = true;
+    e.mesh.visible = true;
+    e.mesh.position.set(x, y, z);
+    e.mesh.scale.setScalar(0.45 + Math.random() * 0.75);
+    e.vx = vx;
+    e.vy = vy;
+    e.vz = vz;
+    e.maxLife = 0.26 + Math.random() * 0.22;
+    e.life = e.maxLife;
+    e.mat.color.setHex(Math.random() < 0.72 ? 0x9af6ff : 0xffe7a8);
+    e.mat.opacity = 0.95;
+  }
+
+  _updateDebris(dt) {
+    if (!this.debris) return;
+    for (const c of this.debris) {
+      if (!c.active) continue;
+      c.life -= dt;
+      c.vy -= GRAVITY * dt;
+      c.mesh.position.x += c.vx * dt;
+      c.mesh.position.y += c.vy * dt;
+      c.mesh.position.z += c.vz * dt;
+      c.mesh.rotation.x += c.sx * dt;
+      c.mesh.rotation.y += c.sy * dt;
+      c.mesh.rotation.z += c.sz * dt;
+      const k = c.maxLife > 0 ? Math.max(0, c.life / c.maxLife) : 0;
+      c.mat.opacity = k;
+      if (c.life <= 0 || c.mesh.position.y < -12) {
+        c.active = false;
+        c.mesh.visible = false;
+      }
+    }
+  }
+
+  _updateEmbers(dt) {
+    if (!this.embers) return;
+    for (const e of this.embers) {
+      if (!e.active) continue;
+      e.life -= dt;
+      e.vy -= GRAVITY * 0.35 * dt;
+      e.mesh.position.x += e.vx * dt;
+      e.mesh.position.y += e.vy * dt;
+      e.mesh.position.z += e.vz * dt;
+      const k = e.maxLife > 0 ? Math.max(0, e.life / e.maxLife) : 0;
+      e.mat.opacity = k * 0.95;
+      e.mesh.scale.setScalar(0.35 + k * 0.5);
+      if (e.life <= 0) {
+        e.active = false;
+        e.mesh.visible = false;
+      }
+    }
+  }
+
+  _hidePool(list) {
+    if (!list) return;
+    for (const item of list) {
+      item.active = false;
+      item.mesh.visible = false;
+    }
   }
 
   // Spawn quick directional or radial sparks (for spear hits, explosions, tile breaks)
@@ -453,12 +719,13 @@ export class FXManager {
       const t = Math.min(1.0, s.elapsed / s.duration);
 
       const radius = 0.3 + (s.maxRadius - 0.3) * Math.sin(t * (Math.PI / 2));
-      s.mesh.scale.set(radius, radius * 0.5, radius);
+      if (s.flat) s.mesh.scale.setScalar(Math.max(0.05, radius));
+      else s.mesh.scale.set(radius, radius * 0.5, radius);
       s.mat.opacity = (1.0 - t) * 0.9;
 
       if (t >= 1.0) {
         this.scene.remove(s.mesh);
-        s.geo.dispose();
+        if (s.geo) s.geo.dispose();
         s.mat.dispose();
         this.shockwaves.splice(i, 1);
       }
@@ -538,6 +805,9 @@ export class FXManager {
         this.laserBeams.splice(i, 1);
       }
     }
+
+    this._updateDebris(dt);
+    this._updateEmbers(dt);
   }
 
   clear() {
@@ -555,10 +825,12 @@ export class FXManager {
 
     for (const s of this.shockwaves) {
       this.scene.remove(s.mesh);
-      s.geo.dispose();
+      if (s.geo) s.geo.dispose();
       s.mat.dispose();
     }
     this.shockwaves = [];
+    this._hidePool(this.debris);
+    this._hidePool(this.embers);
 
     for (const b of this.sparkBursts) {
       this.scene.remove(b.points);

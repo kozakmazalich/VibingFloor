@@ -27,8 +27,12 @@ import {
   GRENADE_RADIUS,
   GRENADE_THROW_DISTANCE,
   GRENADE_IMPULSE,
-  JETPACK_THRUST,
-  JETPACK_FORWARD,
+  JETPACK_MAX_CHARGES,
+  JETPACK_CHARGE_COST,
+  JETPACK_HOP_THRUST,
+  JETPACK_HOP_FORWARD,
+  JETPACK_BURN_TIME,
+  JETPACK_BURN_DAMP,
   QUAKE_RADIUS,
   GRAVITY,
   VOID_KILL_Y,
@@ -41,6 +45,52 @@ import {
 } from "./constants.js";
 import { audio } from "./audio.js";
 import { buildViber, CHARACTERS } from "./vibers.js";
+
+// Shared jetpack geometry. Per-robot materials so idle pulse and burn flicker stay independent.
+// A proper 3D backpack (matching the Jetpack.png icon): a central rounded body
+// shell, TWO big vertical engine nacelles (jet turbines) with intake rings on
+// top and exhaust nozzles at the bottom, a fuel spine, and shoulder pylons.
+// No flat card, no floating rods — everything is chunky and cohesive.
+const JP_BODY_GEO = new THREE.BoxGeometry(0.44, 0.62, 0.26);          // main backpack shell
+const JP_BODY_TOP_GEO = new THREE.CylinderGeometry(0.22, 0.22, 0.16, 12); // rounded top cap
+const JP_NACELLE_GEO = new THREE.CylinderGeometry(0.16, 0.17, 0.5, 14); // engine nacelle body
+const JP_INTAKE_RING_GEO = new THREE.TorusGeometry(0.175, 0.045, 8, 16); // intake fan ring (top)
+const JP_INTAKE_DISC_GEO = new THREE.CircleGeometry(0.13, 14);          // intake fan face
+const JP_NOZZLE_GEO = new THREE.CylinderGeometry(0.09, 0.14, 0.16, 12); // exhaust nozzle (bottom)
+const JP_PYLON_GEO = new THREE.BoxGeometry(0.16, 0.14, 0.24);          // connects body -> nacelle
+const JP_ACCENT_GEO = new THREE.BoxGeometry(0.4, 0.05, 0.03);          // chest accent stripe
+const JP_STRIPE_GEO = new THREE.BoxGeometry(0.46, 0.045, 0.02);        // neon stripe on shell
+const JP_RIM_GEO = new THREE.EdgesGeometry(JP_BODY_GEO);
+const JP_FUEL_GEO = new THREE.BoxGeometry(0.07, 0.05, 0.03);           // fuel segment
+const JP_FUEL_TRACK_GEO = new THREE.BoxGeometry(0.36, 0.06, 0.014);    // fuel strip
+const JP_SPINE_GEO = new THREE.BoxGeometry(0.1, 0.5, 0.1);             // central spine tank
+// Flame cones. The cone's apex sits at local +Y, fired from the bottom nozzle
+// (rotated to point down-back). Two per nacelle: outer glow + bright core.
+const JP_FLAME_GEO = new THREE.ConeGeometry(0.2, 0.7, 10);
+const JP_FLAME_CORE_GEO = new THREE.ConeGeometry(0.09, 0.45, 6);
+const _jpBox = new THREE.Box3();
+const _jpCenter = new THREE.Vector3();
+const _jpSize = new THREE.Vector3();
+const _jpWorld = new THREE.Vector3();
+const _tmpV = new THREE.Vector3();
+const _tmpV2 = new THREE.Vector3();
+
+function makeJetpackGlow() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const g = canvas.getContext("2d");
+  const grd = g.createRadialGradient(32, 32, 1, 32, 32, 30);
+  grd.addColorStop(0, "rgba(255,255,255,1)");
+  grd.addColorStop(0.35, "rgba(140,246,255,0.9)");
+  grd.addColorStop(1, "rgba(0,229,255,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const JP_GLOW_TEX = makeJetpackGlow();
 
 // Selectable fighters: type key -> character index, name and menu avatar
 // pushMult scales the knockback of the J push (CHOG VIBER hits harder)
@@ -113,8 +163,14 @@ export class Robot {
     this.isMetaLaser = false; // character trait; effective laser = hasSpear && isMetaLaser
     this.hasLaser = false; // effective: true only after picking up a spear as META
 
-    // Consumable power-up slot (single-use; Q activates it)
+    // Consumable power-up slot (one item; Q uses it). Jetpack keeps 5 charges.
     this.heldItem = null; // null | "jetpack" | "quake"
+    this.jetpackBurn = 0; // >0 while the worn pack is still firing
+    this.jetpackCharges = 0; // 0..JETPACK_MAX_CHARGES
+    this.jetpackFuel = 0; // charges * JETPACK_CHARGE_COST (0..1)
+    this.jpFuelPopT = 0; // >0 while the segment that just drained is popping
+    this.jpFuelPopIndex = -1;
+    this._emptyJetpackBurn = false; // last charge spent; pack stays up until the flame dies
 
     // Dash ability (SHIFT): burst + afterimage trail
     this.dashCooldown = 0;
@@ -188,6 +244,387 @@ export class Robot {
     this.modelGroup.add(v.root);
     this.group.add(this.modelGroup);
     this.has3DModel = true;
+    if (this.jetpack) this.attachJetpack();
+  }
+
+  // Low-poly 3D jetpack: a central body shell with two vertical jet-engine
+  // nacelles (intake ring on top, exhaust nozzle below), a fuel spine, shoulder
+  // pylons and neon accents. Parented to modelGroup so facing, walk bob and the
+  // attack lunge carry it. modelGroup +Z is the back (v.root.rotation.y = PI).
+  buildJetpack() {
+    const pack = new THREE.Group();
+    pack.name = "jetpack";
+    pack.visible = false;
+
+    const shellMat = new THREE.MeshStandardMaterial({
+      color: 0x141b30, metalness: 0.85, roughness: 0.3,
+      emissive: 0x06283c, emissiveIntensity: 0.22,
+    });
+    const nacelleMat = new THREE.MeshStandardMaterial({
+      color: 0x1b2440, metalness: 0.92, roughness: 0.24,
+      emissive: 0x0099bb, emissiveIntensity: 0.3,
+    });
+    const ringMat = new THREE.MeshStandardMaterial({
+      color: 0x0c1220, metalness: 0.7, roughness: 0.4,
+      emissive: 0x00e5ff, emissiveIntensity: 0.35,
+    });
+    const fanMat = new THREE.MeshBasicMaterial({ color: 0x7fd6ff, transparent: true, opacity: 0.55 });
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: 0x00e5ff, emissive: 0x00e5ff, emissiveIntensity: 0.7,
+      metalness: 0.35, roughness: 0.22,
+    });
+    const rimMat = new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.7 });
+
+    // Central back shell + rim outline
+    const shell = new THREE.Mesh(JP_BODY_GEO, shellMat);
+    shell.castShadow = false;
+    pack.add(shell);
+    const rim = new THREE.LineSegments(JP_RIM_GEO, rimMat);
+    pack.add(rim);
+
+    // Rounded top + bottom caps (3D silhouette)
+    const topCap = new THREE.Mesh(JP_BODY_TOP_GEO, shellMat);
+    topCap.position.set(0, 0.38, 0); topCap.castShadow = false;
+    pack.add(topCap);
+    const botCap = new THREE.Mesh(JP_BODY_TOP_GEO, shellMat);
+    botCap.position.set(0, -0.28, 0); botCap.rotation.z = Math.PI; botCap.castShadow = false;
+    pack.add(botCap);
+
+    // Central fuel spine tank + neon spine stripe
+    const spine = new THREE.Mesh(JP_SPINE_GEO, nacelleMat);
+    spine.position.set(0, 0.0, 0.09); spine.castShadow = false;
+    pack.add(spine);
+    const accent = new THREE.Mesh(JP_ACCENT_GEO, accentMat);
+    accent.position.set(0, 0.16, 0.14);
+    pack.add(accent);
+    const stripe = new THREE.Mesh(JP_STRIPE_GEO, accentMat);
+    stripe.position.set(0, -0.02, 0.15);
+    pack.add(stripe);
+
+    // Fuel strip ("бензин") on the lower shell face. Five segments, rightmost
+    // drains first. Each segment has its own material.
+    const trackMat = new THREE.MeshStandardMaterial({
+      color: 0x0c101c, metalness: 0.4, roughness: 0.6,
+      emissive: 0x041820, emissiveIntensity: 0.4,
+    });
+    const track = new THREE.Mesh(JP_FUEL_TRACK_GEO, trackMat);
+    track.position.set(0, -0.14, 0.14); track.castShadow = false;
+    pack.add(track);
+
+    const fuelSegs = [];
+    for (let i = 0; i < JETPACK_MAX_CHARGES; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x3a4258, emissive: 0x10131c, emissiveIntensity: 0.05,
+        metalness: 0.2, roughness: 0.35,
+      });
+      const mesh = new THREE.Mesh(JP_FUEL_GEO, mat);
+      mesh.position.set((i - 2) * 0.068, -0.14, 0.148);
+      mesh.castShadow = false;
+      pack.add(mesh);
+      fuelSegs.push({ mesh, mat });
+    }
+
+    const flames = [];
+    const vents = [];
+    const glows = [];
+    const nozzles = [];
+    const pivots = [];
+
+    const addFlame = (pivot, geo, color, halfH) => {
+      const mat = new THREE.MeshBasicMaterial({
+        color, transparent: true, opacity: 0.9, depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.y = halfH;
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      pivot.add(mesh);
+      flames.push({ mesh, mat, halfH });
+    };
+
+    // Two big vertical engine nacelles flanking the shell, joined by shoulder
+    // pylons so it reads as one cohesive 3D backpack.
+    for (const x of [-0.3, 0.3]) {
+      const pylon = new THREE.Mesh(JP_PYLON_GEO, shellMat);
+      pylon.position.set(x * 0.42, 0.16, 0.02); pylon.castShadow = false;
+      pack.add(pylon);
+
+      const nac = new THREE.Mesh(JP_NACELLE_GEO, nacelleMat);
+      nac.position.set(x, 0.0, 0.0); nac.castShadow = false;
+      pack.add(nac);
+
+      const ring = new THREE.Mesh(JP_INTAKE_RING_GEO, ringMat);
+      ring.rotation.x = Math.PI / 2; ring.position.set(x, 0.26, 0); ring.castShadow = false;
+      pack.add(ring);
+      const fan = new THREE.Mesh(JP_INTAKE_DISC_GEO, fanMat);
+      fan.rotation.x = -Math.PI / 2; fan.position.set(x, 0.26, 0.001);
+      pack.add(fan);
+
+      const nozzleMesh = new THREE.Mesh(JP_NOZZLE_GEO, nacelleMat);
+      nozzleMesh.position.set(x, -0.32, 0); nozzleMesh.castShadow = false;
+      pack.add(nozzleMesh);
+      vents.push(nozzleMesh);
+      vents.push(ring);
+
+      const pivot = new THREE.Group();
+      pivot.position.set(x, -0.4, 0);
+      pivot.rotation.x = Math.PI - 0.55;
+      pack.add(pivot);
+      pivots.push(pivot);
+
+      const nozzle = new THREE.Object3D();
+      pivot.add(nozzle);
+      nozzles.push(nozzle);
+
+      addFlame(pivot, JP_FLAME_GEO, 0x00e5ff, 0.35);
+      addFlame(pivot, JP_FLAME_CORE_GEO, 0xfff1c4, 0.22);
+
+      const glowMat = new THREE.SpriteMaterial({
+        map: JP_GLOW_TEX,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.2,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const glow = new THREE.Sprite(glowMat);
+      glow.scale.set(0.3, 0.3, 0.3);
+      pivot.add(glow);
+      glows.push(glow);
+    }
+
+    this.jetpack = pack;
+    this.jpPlateMat = shellMat;
+    this.jpAccentMat = accentMat;
+    this.jpThrusterMat = nacelleMat;
+    this.jpRimMat = rimMat;
+    this.jpFlames = flames;
+    this.jpVents = vents;
+    this.jpGlows = glows;
+    this.jpNozzles = nozzles;
+    this.jpPivots = pivots;
+    this.jpFuelSegs = fuelSegs;
+    this.jpFuelTrackMat = trackMat;
+
+    // Cache the pack's RAW local bounds (identity transform) so attachJetpack
+    // can size + center it without fighting the modelGroup's world transform.
+    // Hide flames/glow sprites first — they overhang and would skew the center.
+    for (const f of flames) f.mesh.visible = false;
+    for (const g of glows) g.visible = false;
+    pack.updateMatrixWorld(true);
+    const rawBox = new THREE.Box3().setFromObject(pack);
+    rawBox.getSize(_jpSize);
+    rawBox.getCenter(_jpCenter);
+    this._jpRawW = _jpSize.x || 1;
+    this._jpRawD = _jpSize.z || 1;
+    this._jpRawCenter = _jpCenter.clone();
+
+    this.paintFuelStrip();
+  }
+
+  // Light the first `jetpackCharges` segments cyan; the rest sit grey.
+  paintFuelStrip() {
+    if (!this.jpFuelSegs) return;
+    const lit = this.jetpackCharges | 0;
+    for (let i = 0; i < this.jpFuelSegs.length; i++) {
+      const on = i < lit;
+      const seg = this.jpFuelSegs[i];
+      seg.mat.color.setHex(on ? 0x00e5ff : 0x3a4258);
+      seg.mat.emissive.setHex(on ? 0x00e5ff : 0x10131c);
+      seg.mat.emissiveIntensity = on ? 1.25 : 0.05;
+      seg.mesh.scale.set(1, on ? 1 : 0.62, 1);
+    }
+  }
+
+  // Pop the segment that just went dark, then settle. Lit cells shimmer.
+  tickFuelStrip(dt) {
+    if (!this.jpFuelSegs) return;
+    if (this.jpFuelPopT > 0) {
+      this.jpFuelPopT = Math.max(0, this.jpFuelPopT - dt);
+      const seg = this.jpFuelSegs[this.jpFuelPopIndex];
+      if (seg) {
+        const k = this.jpFuelPopT / 0.16;
+        const s = 1 + 0.75 * k;
+        seg.mesh.scale.set(s, s * 1.7, s);
+        seg.mat.color.setHex(0xfff6d0);
+        seg.mat.emissive.setHex(0xfff1c4);
+        seg.mat.emissiveIntensity = 1.4 + 2.6 * k;
+      }
+      if (this.jpFuelPopT <= 0) this.paintFuelStrip();
+      return;
+    }
+    if (!this.jetpack || !this.jetpack.visible) return;
+    const pulse = 0.8 + 0.4 * Math.sin(performance.now() * 0.008);
+    for (let i = 0; i < this.jetpackCharges; i++) {
+      const seg = this.jpFuelSegs[i];
+      if (seg) seg.mat.emissiveIntensity = 1.15 * pulse;
+    }
+    if (this.jpFuelTrackMat) this.jpFuelTrackMat.emissiveIntensity = 0.25 + 0.35 * pulse;
+  }
+
+  // Sit the pack on the back surface of the current body. Safe to call again
+  // after switchCharacter rebuilds modelGroup.
+  attachJetpack() {
+    if (!this.modelGroup || !this.viber) return;
+    if (!this.jetpack) this.buildJetpack();
+    if (this.jetpack.parent !== this.modelGroup) {
+      if (this.jetpack.parent) this.jetpack.parent.remove(this.jetpack);
+      this.modelGroup.add(this.jetpack);
+    }
+    // Reset the pack to an identity transform while we measure its raw size.
+    this.jetpack.scale.setScalar(1);
+    this.jetpack.position.set(0, 0, 0);
+    this.jetpack.rotation.set(0, 0, 0);
+    this.modelGroup.updateMatrixWorld(true);
+
+    // Anchor to the TORSO (not the whole viber root — the head is much deeper
+    // than the body and would push the pack out into empty space). Use WORLD
+    // positions so the modelGroup rotation can't skew the result.
+    const ref = (this.viber && this.viber.body) || this.viber.root;
+    const torsoWorld = ref.getWorldPosition(new THREE.Vector3());
+
+    // Torso footprint in world units (its bbox, widest of x/z — the torso is a
+    // chunky box, so this approximates its depth too).
+    _jpBox.setFromObject(ref);
+    _jpBox.getSize(_jpSize);
+    const torsoW = Math.max(_jpSize.x, _jpSize.z);
+    const torsoHalfD = torsoW / 2;
+
+    // Scale the pack to ~1.15x the torso width so it reads as a worn backpack.
+    const s = (torsoW * 1.15) / (this._jpRawW || 1);
+    this.jetpack.scale.setScalar(s);
+    const rawCenter = this._jpRawCenter || new THREE.Vector3();
+    // Pack half-depth (along +Z = the "away from robot" axis) after scaling.
+    const packHalfD = (this._jpRawD * s) / 2;
+
+    // Back direction (modelGroup +Z) expressed in WORLD space.
+    const back = new THREE.Vector3(0, 0, 1).applyQuaternion(
+      this.modelGroup.getWorldQuaternion(new THREE.Quaternion())
+    );
+
+    // Torso back surface (world): center + half depth + a tiny gap.
+    const torsoBack = _tmpV.copy(torsoWorld).addScaledVector(back, torsoHalfD + 0.03);
+    // Pack center (world): torso back + pack half-depth so its front face sits
+    // flush on the torso's back.
+    const packCenterWorld = _tmpV2.copy(torsoBack).addScaledVector(back, packHalfD);
+    this.modelGroup.worldToLocal(packCenterWorld);
+    // Compensate the pack's own local center offset (scaled) in X/Y only
+    // (Z is already handled by packHalfD so the pack hugs the back).
+    this.jetpack.position.set(
+      packCenterWorld.x - rawCenter.x * s,
+      packCenterWorld.y - rawCenter.y * s + 0.05,
+      packCenterWorld.z
+    );
+    this.jetpack.rotation.set(0, 0, 0);
+  }
+
+  syncJetpack() {
+    const show = this.heldItem === "jetpack" || this.jetpackBurn > 0;
+    if (show) this.attachJetpack();
+    if (!this.jetpack) return;
+    this.jetpack.visible = show;
+    const firing = this.jetpackBurn > 0;
+    if (this.jpFlames) {
+      for (const f of this.jpFlames) f.mesh.visible = firing;
+    }
+  }
+
+  updateJetpack(dt, fxManager) {
+    if (!this.jetpack) return;
+    if (this.state === "eliminated") {
+      this.jetpackBurn = 0;
+      this.syncJetpack();
+      return;
+    }
+    const burning = this.jetpackBurn > 0;
+    if (!burning && !this.jetpack.visible) return;
+
+    if (burning) {
+      this.jetpackBurn = Math.max(0, this.jetpackBurn - dt);
+      const k = JETPACK_BURN_TIME > 0 ? this.jetpackBurn / JETPACK_BURN_TIME : 0;
+      const flick = 0.72 + Math.random() * 0.55;
+      const sputter = k < 0.22 && Math.random() < 0.45 ? 0.12 + Math.random() * 0.3 : 1;
+      const len = (0.5 + 1.15 * k) * flick * sputter;
+      for (const f of this.jpFlames) {
+        const wide = 0.65 + 0.5 * flick * Math.max(k, 0.2);
+        f.mesh.scale.set(wide, len, wide);
+        f.mesh.position.y = f.halfH * len;
+        f.mat.opacity = Math.min(1, (0.28 + 0.72 * k) * sputter);
+      }
+      const hot = 0.7 + 1.7 * k * flick;
+      this.jpThrusterMat.emissiveIntensity = hot;
+      this.jpAccentMat.emissiveIntensity = 0.55 + 1.5 * k;
+      this.jpPlateMat.emissiveIntensity = 0.25 + 0.9 * k;
+      for (const g of this.jpGlows) {
+        g.material.opacity = (0.4 + 0.6 * k) * sputter;
+        const s = 0.26 + 0.24 * flick * Math.max(k, 0.25);
+        g.scale.set(s, s, s);
+      }
+      for (const v of this.jpVents) {
+        v.material.opacity = 0.65 + 0.35 * flick;
+        v.scale.setScalar(1 + 0.4 * k * flick);
+      }
+      if (fxManager && this.jetpackBurn > 0) {
+        const dirX = -Math.sin(this.facingAngle);
+        const dirZ = -Math.cos(this.facingAngle);
+        const backX = -dirX;
+        const backZ = -dirZ;
+        for (const nozzle of this.jpNozzles) {
+          nozzle.getWorldPosition(_jpWorld);
+          fxManager.spawnEmber(
+            _jpWorld.x,
+            _jpWorld.y,
+            _jpWorld.z,
+            backX * (2.4 + Math.random() * 2.2) + (Math.random() - 0.5) * 0.8,
+            -2.6 - Math.random() * 3.4,
+            backZ * (2.4 + Math.random() * 2.2) + (Math.random() - 0.5) * 0.8
+          );
+        }
+      }
+      if (this.jetpackBurn <= 0) {
+        if (this.heldItem !== "jetpack") this._emptyJetpackBurn = false;
+        this.syncJetpack();
+      }
+    } else {
+      const pulse = 0.28 + 0.22 * Math.sin(performance.now() * 0.006);
+      this.jpAccentMat.emissiveIntensity = 0.4 + pulse;
+      this.jpPlateMat.emissiveIntensity = 0.16 + pulse * 0.45;
+      this.jpThrusterMat.emissiveIntensity = 0.18 + pulse * 0.4;
+      for (const v of this.jpVents) {
+        v.material.opacity = 0.4 + pulse;
+        v.scale.setScalar(0.85 + pulse * 0.35);
+      }
+      for (const g of this.jpGlows) {
+        g.material.opacity = 0.1 + pulse * 0.28;
+        const s = 0.15 + pulse * 0.08;
+        g.scale.set(s, s, s);
+      }
+    }
+    this.tickFuelStrip(dt);
+  }
+
+  disposeJetpack() {
+    if (!this.jetpack) return;
+    const seen = new Set();
+    this.jetpack.traverse((obj) => {
+      if (!obj.material) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) {
+        if (seen.has(m)) continue;
+        seen.add(m);
+        m.dispose();
+      }
+    });
+    if (this.jetpack.parent) this.jetpack.parent.remove(this.jetpack);
+    this.jetpack = null;
+    this.jpFlames = null;
+    this.jpVents = null;
+    this.jpGlows = null;
+    this.jpNozzles = null;
+    this.jpPivots = null;
+    this.jpFuelSegs = null;
+    this.jpFuelTrackMat = null;
   }
 
   setupGroundRing() {
@@ -284,6 +721,7 @@ export class Robot {
       this.name = meta.name;
       this.portraitPath = meta.portrait;
     }
+    if (this.jetpack && this.jetpack.parent) this.jetpack.parent.remove(this.jetpack);
     if (this.modelGroup) {
       this.group.remove(this.modelGroup);
       this.modelGroup = null;
@@ -323,6 +761,12 @@ export class Robot {
     this.hasGrenade = false;
     this.hasLaser = this.isMetaLaser && this.hasSpear; // = false when unarmed
     this.heldItem = null; // consumables are re-scattered every round
+    this.jetpackBurn = 0;
+    this.jetpackCharges = 0;
+    this.jetpackFuel = 0;
+    this.jpFuelPopT = 0;
+    this.jpFuelPopIndex = -1;
+    this._emptyJetpackBurn = false;
     this.walkPhase = 0;
     this.hitShakeTimer = 0;
     this.aiWanderTimer = 0;
@@ -362,6 +806,7 @@ export class Robot {
     this.groundGroup.rotation.y = this.facingAngle;
     this.group.visible = true;
     this.groundGroup.visible = true;
+    this.syncJetpack();
   }
 
   applyImpulse(ix, iz) {
@@ -369,6 +814,17 @@ export class Robot {
     this.vel.y += iz;
     this.hitShakeTimer = 0.25;
     audio.playImpact(Math.hypot(ix, iz) / 5);
+  }
+
+  // Walk damping is linear and a single long frame can zero it. While the
+  // jetpack is burning, bleed exponentially so one hop crosses about two
+  // tiles and a hitch cannot erase it. See JETPACK_BURN_DAMP.
+  dampHorizontal(dt, rate) {
+    if (this.jetpackBurn > 0) {
+      this.vel.multiplyScalar(Math.exp(-JETPACK_BURN_DAMP * dt));
+      return;
+    }
+    this.vel.multiplyScalar(Math.max(0, 1 - rate * dt));
   }
 
   // Normalize the `opponent` argument (a single Robot OR an array of enemies)
@@ -554,8 +1010,8 @@ export class Robot {
         child.material = ghostMat;
         child.castShadow = false;
         child.receiveShadow = false;
-      } else if (child.isLineSegments) {
-        child.visible = false; // clean silhouette, no outlines in the trail
+      } else if (child.isLineSegments || child.isSprite) {
+        child.visible = false; // clean silhouette; jetpack glow sprites would not fade
       }
     });
     // Replicate the model group's transform inside the scene (group pos + bob)
@@ -621,58 +1077,99 @@ export class Robot {
     return true;
   }
 
-  // Pick up a single-use consumable into the item slot (replaces whatever is held).
+  // Pick up a consumable into the single item slot (replaces whatever is held).
+  // A jetpack arrives full: JETPACK_MAX_CHARGES segments.
   equipConsumable(kind) {
     if (kind !== "jetpack" && kind !== "quake") return false;
     this.heldItem = kind;
+    if (kind === "jetpack") {
+      this.jetpackCharges = JETPACK_MAX_CHARGES;
+      this.jetpackFuel = JETPACK_MAX_CHARGES * JETPACK_CHARGE_COST;
+      this._emptyJetpackBurn = false;
+      this.jpFuelPopT = 0;
+      this.jpFuelPopIndex = -1;
+    } else {
+      this.jetpackCharges = 0;
+      this.jetpackFuel = 0;
+      this._emptyJetpackBurn = false;
+      this.jpFuelPopT = 0;
+    }
+    this.syncJetpack();
+    this.paintFuelStrip();
     return true;
   }
 
-  // Use the held consumable (if any). Returns true on a successful use.
-  // - jetpack: strong up+forward thrust (escape a fall / reach a platform)
-  // - quake:   ground slam that collapses tiles around the user via onQuake
+  // Use the held consumable. Returns true on a successful use.
+  // - jetpack: one charge, small up+forward hop. Works grounded or airborne.
+  //   The pack comes off only when the 5th charge empties the tank.
+  // - quake:   grounded slam. handleQuake cracks and shatters tiles in radius.
   useItem(fxManager, onScreenShake, onQuake) {
     if (!this.heldItem) return false;
-    if (this.state !== "alive") return false;
+    if (this.state === "eliminated") return false;
+    // A jetpack can still fire after the robot has tipped off the edge.
+    if (this.state === "falling" && this.heldItem !== "jetpack") return false;
+    if (this.state !== "alive" && this.state !== "falling") return false;
 
     const kind = this.heldItem;
-    this.heldItem = null; // single use — consumed immediately
 
     if (kind === "jetpack") {
-      // Strong thrust UP + FORWARD along facing, usable airborne (escape a fall)
+      if (this.jetpackCharges <= 0) {
+        this.heldItem = null;
+        this.jetpackFuel = 0;
+        this.syncJetpack();
+        return false;
+      }
+      // Same facing frame as the spear: world forward is (-sin θ, -cos θ).
+      if (this.state === "falling") {
+        this.state = "alive";
+        this.group.rotation.set(0, 0, 0);
+        this.angVelX = 0;
+        this.angVelY = 0;
+        this.angVelZ = 0;
+        if (this.groundGroup) this.groundGroup.visible = true;
+        if (this.modelGroup) this.modelGroup.rotation.set(0, this.facingAngle, 0);
+      }
       const dirX = -Math.sin(this.facingAngle);
       const dirZ = -Math.cos(this.facingAngle);
-      this.vy = JETPACK_THRUST;
-      this.vel.x += dirX * JETPACK_FORWARD;
-      this.vel.y += dirZ * JETPACK_FORWARD;
+      // SET the hop. Adding would turn five presses into a rocket.
+      this.vy = JETPACK_HOP_THRUST;
+      const along = this.vel.x * dirX + this.vel.y * dirZ;
+      const push = JETPACK_HOP_FORWARD - along;
+      this.vel.x += dirX * push;
+      this.vel.y += dirZ * push;
       this.isGrounded = false;
+      this.jetpackBurn = JETPACK_BURN_TIME;
+      this.jetpackCharges -= 1;
+      this.jetpackFuel = this.jetpackCharges * JETPACK_CHARGE_COST;
+      this.jpFuelPopIndex = this.jetpackCharges; // the segment that just went dark
+      this.jpFuelPopT = 0.16;
+      this.paintFuelStrip();
+      if (this.jetpackCharges <= 0) {
+        this.heldItem = null;
+        this.jetpackFuel = 0;
+        this._emptyJetpackBurn = true;
+      }
+      this.syncJetpack();
       this.fxJetpackCount = (this.fxJetpackCount || 0) + 1;
       audio.playJetpack();
       if (fxManager) {
-        fxManager.spawnJumpThruster(this.pos.x, this.pos.y + 0.15, this.pos.z, 0x00e5ff);
-        fxManager.spawnSparkBurst(this.pos.x, this.pos.y + 0.3, this.pos.z, 20, 0x00e5ff, 1.3);
+        fxManager.spawnSparkBurst(this.pos.x, this.pos.y + 0.2, this.pos.z, 10, 0x00e5ff, 0.9);
       }
-      if (onScreenShake) onScreenShake(0.3);
+      if (onScreenShake) onScreenShake(0.22);
       return true;
     }
 
     if (kind === "quake") {
-      // Only usable while grounded. Collapses a FORWARD WAVE along the facing
-      // direction — the tiles under/behind the caster stay solid.
-      if (!this.isGrounded) {
-        this.heldItem = "quake"; // refund if airborne (keep it simple)
-        return false;
-      }
+      // Ground only. The slam itself is radial; handleQuake cracks and shatters.
+      if (!this.isGrounded) return false;
+      this.heldItem = null;
+      this.syncJetpack();
       this.fxQuakeCount = (this.fxQuakeCount || 0) + 1;
       audio.playQuake();
       const qdirX = -Math.sin(this.facingAngle);
       const qdirZ = -Math.cos(this.facingAngle);
       if (onQuake) onQuake(this.pos.x, this.pos.z, QUAKE_RADIUS, qdirX, qdirZ);
-      if (fxManager) {
-        fxManager.spawnExplosionShockwave(this.pos.x + qdirX * 1.2, this.pos.y + 0.1, this.pos.z + qdirZ * 1.2, 0xff2d95, QUAKE_RADIUS * 1.4);
-        fxManager.spawnSparkBurst(this.pos.x + qdirX * 1.2, this.pos.y + 0.1, this.pos.z + qdirZ * 1.2, 30, 0xff2d95, 1.5);
-      }
-      if (onScreenShake) onScreenShake(0.85);
+      if (onScreenShake) onScreenShake(1.2);
       return true;
     }
 
@@ -885,7 +1382,7 @@ export class Robot {
       this.triggerGrenade(target, island, fxManager, onScreenShake);
     }
 
-    // 5. Q = Use held consumable (jetpack / quake) — single use
+    // 5. Q = Use held consumable. Jetpack spends one charge per press.
     if (keys["KeyQ"]) {
       this.useItem(fxManager, onScreenShake, onQuake);
       keys["KeyQ"] = false; // one-shot: consume the key edge so it's a press not a hold
@@ -946,15 +1443,15 @@ export class Robot {
     // Friction & speed clamp (knockback impulses slide freely while hitShakeTimer
     // is active; the dash burst and its short recovery bleed above the cap too)
     if (this.dashRecovery > 0) this.dashRecovery -= dt;
-    const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
-    this.vel.multiplyScalar(dampingFactor);
+    this.dampHorizontal(dt, P1_DAMPING);
 
     const currentSpeed = this.vel.length();
     if (
       currentSpeed > P1_MAX_SPEED &&
       this.hitShakeTimer <= 0 &&
       this.dashTimer <= 0 &&
-      this.dashRecovery <= 0
+      this.dashRecovery <= 0 &&
+      this.jetpackBurn <= 0
     ) {
       this.vel.multiplyScalar(P1_MAX_SPEED / currentSpeed);
     }
@@ -968,13 +1465,20 @@ export class Robot {
     const center = island.getActiveCenter();
 
     // Consumable usage: jetpack to escape a fall, quake when enemies are close.
+    // Wait out the current hop before spending another charge.
     if (this.heldItem) {
-      if (this.heldItem === "jetpack" && !this.isGrounded && this.vy < 0 && this.pos.y < 0.5) {
-        // Falling into the void — burn the jetpack to boost back up.
+      if (
+        this.heldItem === "jetpack" &&
+        this.jetpackBurn <= 0 &&
+        !this.isGrounded &&
+        this.vy < 0 &&
+        this.pos.y < 0.5
+      ) {
         this.useItem(fxManager, onScreenShake, onQuake);
       } else if (this.heldItem === "quake" && this.isGrounded && opponent) {
-        const dq = opponent && Math.hypot(opponent.pos.x - this.pos.x, opponent.pos.z - this.pos.z);
-        if (dq != null && dq <= 3.2) {
+        const dq = Math.hypot(opponent.pos.x - this.pos.x, opponent.pos.z - this.pos.z);
+        // Adjacent tile only — orthogonal or diagonal neighbor, not a long poke.
+        if (dq <= TILE_SPACING * 1.45) {
           this.useItem(fxManager, onScreenShake, onQuake);
         }
       }
@@ -1362,12 +1866,12 @@ export class Robot {
       if (this.vel.y < 0 && !island.hasGroundUnder(this.pos.x, tileBaseZ - TILE_SPACING)) this.vel.y = 0;
     }
 
-    const dampingFactor = Math.max(0, 1 - AI_DAMPING * dt);
-    this.vel.multiplyScalar(dampingFactor);
+    this.dampHorizontal(dt, AI_DAMPING);
 
     const currentSpeed = this.vel.length();
-    // Skip the clamp while knocked back so push/spear/grenade impulses land properly
-    if (currentSpeed > this.ai.maxSpeed && this.hitShakeTimer <= 0) {
+    // Skip the clamp while knocked back, and while a jetpack burn is bleeding off,
+    // so the forward burst is not clipped to max speed. Damping still applies.
+    if (currentSpeed > this.ai.maxSpeed && this.hitShakeTimer <= 0 && this.jetpackBurn <= 0) {
       this.vel.multiplyScalar(this.ai.maxSpeed / currentSpeed);
     }
   }
@@ -1441,15 +1945,15 @@ export class Robot {
 
     // Friction & speed clamp (identical to the local player path)
     if (this.dashRecovery > 0) this.dashRecovery -= dt;
-    const dampingFactor = Math.max(0, 1 - P1_DAMPING * dt);
-    this.vel.multiplyScalar(dampingFactor);
+    this.dampHorizontal(dt, P1_DAMPING);
 
     const currentSpeed = this.vel.length();
     if (
       currentSpeed > P1_MAX_SPEED &&
       this.hitShakeTimer <= 0 &&
       this.dashTimer <= 0 &&
-      this.dashRecovery <= 0
+      this.dashRecovery <= 0 &&
+      this.jetpackBurn <= 0
     ) {
       this.vel.multiplyScalar(P1_MAX_SPEED / currentSpeed);
     }
@@ -1712,23 +2216,53 @@ export class Robot {
       this.group.position.z = this.pos.z;
       this.group.position.y = this.pos.y;
     } else if (this.state === "falling") {
-      this.vy -= GRAVITY * dt;
-      this.pos.y += this.vy * dt;
+      // Bots burn a held jetpack as soon as they tip off. The player (and a
+      // remote guest) still has to press Q. A successful burn returns them
+      // to the alive state inside useItem.
+      let rescued = false;
+      if (this.heldItem === "jetpack") {
+        // Player and remote guest chain with Q. Bots spend one charge per hop.
+        const want = this.isPlayer
+          ? !!(keys && keys["KeyQ"])
+          : remoteInput
+            ? !!remoteInput.useItem
+            : this.jetpackBurn <= 0;
+        if (want) {
+          if (this.isPlayer && keys) keys["KeyQ"] = false;
+          if (remoteInput) remoteInput.useItem = false;
+          rescued = this.useItem(fxManager, onScreenShake, onQuake);
+        }
+      }
 
-      this.pos.x += this.vel.x * dt * 0.7;
-      this.pos.z += this.vel.y * dt * 0.7;
+      if (!rescued) {
+        this.vy -= GRAVITY * dt;
+        this.pos.y += this.vy * dt;
 
-      this.group.rotation.x += this.angVelX * dt;
-      this.group.rotation.y += this.angVelY * dt;
-      this.group.rotation.z += this.angVelZ * dt;
+        this.pos.x += this.vel.x * dt * 0.7;
+        this.pos.z += this.vel.y * dt * 0.7;
 
-      this.group.position.copy(this.pos);
+        this.group.rotation.x += this.angVelX * dt;
+        this.group.rotation.y += this.angVelY * dt;
+        this.group.rotation.z += this.angVelZ * dt;
 
-      if (this.pos.y < VOID_KILL_Y) {
-        this.state = "eliminated";
-        this.group.visible = false;
+        this.group.position.copy(this.pos);
+
+        if (this.pos.y < VOID_KILL_Y) {
+          this.state = "eliminated";
+          this.group.visible = false;
+        }
+      } else {
+        this.vy -= GRAVITY * dt;
+        this.pos.y += this.vy * dt;
+        this.pos.x += this.vel.x * dt;
+        this.pos.z += this.vel.y * dt;
+        this.group.rotation.set(0, 0, 0);
+        if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
+        this.group.position.copy(this.pos);
       }
     }
+
+    this.updateJetpack(dt, fxManager);
   }
 
   // Can the robot horizontally enter a tile whose surface is at surfaceY?
@@ -1804,12 +2338,18 @@ export class Robot {
       },
       item: {
         kind: this.heldItem, // null | "jetpack" | "quake"
+        fuel: this.heldItem === "jetpack" ? this.jetpackFuel : 0,
+        charges: this.heldItem === "jetpack" ? this.jetpackCharges : 0,
+        maxCharges: JETPACK_MAX_CHARGES,
+        // Keep the fuel bar up for the last burn so the 5th segment can pop grey.
+        showFuel: this.heldItem === "jetpack" || (this._emptyJetpackBurn && this.jetpackBurn > 0),
       },
     };
   }
 
   dispose() {
     this.clearDashGhosts();
+    this.disposeJetpack();
     this.scene.remove(this.group);
   }
 }

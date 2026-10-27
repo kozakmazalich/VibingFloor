@@ -22,7 +22,9 @@ import {
   JUMP_FORCE,
   GRAVITY,
   STEP_UP_MAX,
+  QUAKE_RADIUS,
   QUAKE_WAVE_ROWS,
+  QUAKE_ROW_DELAY,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -243,23 +245,8 @@ export class Game {
     const n = Math.max(1, Math.min(9, count | 0));
     if (n === this.botCount) return;
     this.botCount = n;
-    // Arena scales with the roster: rebuild the map at the NEW size, then
-    // re-place every fighter on the fresh spawn ring.
-    this.island.setMap(this.activeMap());
-    this.rebuildRoster();
-    // Reflect spawns immediately if we're sitting in the menu
-    if (this.state === "menu") {
-      this.fx.clear();
-      this.pickups.clear();
-      this.consumables.clear();
-      this.island.reset();
-      this.resetFighters();
-      this.island.isPaused = true;
-    } else {
-      this.restartRound(false);
-    }
-    // Let the menu refresh its map-size label (NxN) after scaling.
     if (this.ui.onMapScaled) this.ui.onMapScaled(this.activeMap());
+    this._queueArena();
   }
 
   // Every enemy EXCEPT the given robot (used as the `opponent` source for
@@ -273,37 +260,103 @@ export class Game {
     return this.robots.filter((r) => r.state === "alive" || r.pos.y > -3.5);
   }
 
-  // The map for the CURRENT match: the base map scaled to fit this roster
-  // (fighters = player + bots). Bigger matches get a bigger arena (~+20% linear
-  // per extra fighter). Online stays 1v1 (fighters = 2).
+  // The map for the CURRENT match. 1v1 is the original arena. More fighters
+  // enlarge that same plan (half-turn symmetric). Online stays 1v1.
   activeMap() {
     const fighters = this.mode === "online" ? 2 : this.botCount + 1;
-    // 1v1 (2 fighters) uses the UNSCALED base map — preserving its landmark
-    // decor (corner lamps, crystals, citadels, palms). Scaling only kicks in
-    // for 3+ fighters, where the arena must grow and re-decoration is safe.
-    if (fighters <= 2) return MAPS[this.currentMapIndex];
     return scaledMap(MAPS[this.currentMapIndex], fighters);
   }
 
   setMap(mapIndex) {
     if (mapIndex < 0 || mapIndex >= MAPS.length) return;
-    const wasPlaying = this.state === "playing" || this.state === "paused";
+    if (mapIndex === this.currentMapIndex) return;
     this.currentMapIndex = mapIndex;
-    const mapDef = this.activeMap();
-    this.island.setMap(mapDef);
+    this._queueArena();
+  }
 
-    // Spawn points depend on the grid — rebuild the whole roster on the new map.
-    this.rebuildRoster();
+  // Coalesce rapid map / roster changes onto the latest request. The heavy
+  // tile build yields between batches, and anything but the newest request
+  // is dropped, so two arenas can never be in the scene together.
+  _queueArena() {
+    this._arenaReq = (this._arenaReq || 0) + 1;
+    if (!this._arenaPump) this._arenaPump = this._pumpArena();
+  }
 
-    if (wasPlaying) {
-      this.restartRound(false);
-    } else {
-      // Rebuild the arena and reset fighters while staying in menu attract mode
-      this.fx.clear();
-      this.island.reset();
-      this.resetFighters();
-      this.island.isPaused = true;
+  _loaderLabel() {
+    const map = MAPS[this.currentMapIndex];
+    const scaled = this.activeMap();
+    const g = scaled.gridSize || map.gridSize || 10;
+    return `${map.name}  ${g}×${g}`;
+  }
+
+  _setFightersVisible(visible) {
+    for (const r of this.robots) {
+      if (r && r.group) r.group.visible = visible;
     }
+  }
+
+  async _pumpArena() {
+    this._arenaBusy = true;
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    // The planet is already the menu backdrop, so this only keeps the
+    // LOADING label from flickering on a very fast swap.
+    const MIN_VISIBLE_MS = 240;
+    try {
+      while (true) {
+        const req = this._arenaReq;
+        // Drop the previous arena before the loader frame paints, so a fast
+        // re-entry never shows two maps at once.
+        this.island.clear();
+        this.island.isPaused = true;
+        this._loaderShownAt = this._loaderShownAt || performance.now();
+        this._setFightersVisible(false);
+        if (this.ui.onArenaLoading) this.ui.onArenaLoading(true, this._loaderLabel());
+        await nextFrame();
+        if (req !== this._arenaReq) continue;
+
+        const ok = await this.island.setMapAsync(this.activeMap(), () => this._arenaReq !== req);
+        if (!ok || this._arenaReq !== req) continue;
+
+        const remain = MIN_VISIBLE_MS - (performance.now() - this._loaderShownAt);
+        if (remain > 0) await sleep(remain);
+        if (this._arenaReq !== req) continue;
+
+        this._settleArena();
+        if (this._arenaReq === req) break;
+      }
+    } catch (err) {
+      console.error("arena load failed", err);
+      this._setFightersVisible(true);
+    } finally {
+      this._arenaBusy = false;
+      this._arenaPump = null;
+      this._loaderShownAt = 0;
+      const start = this._startAfterLoad;
+      this._startAfterLoad = false;
+      // Finish a deferred Play before dropping the LOADING label, so a tap
+      // during a swap never starts on a half-cleared arena.
+      if (start) this._beginMatch();
+      if (this.ui.onArenaLoading) this.ui.onArenaLoading(false);
+    }
+  }
+
+  _settleArena() {
+    this.island.reveal();
+    this.rebuildRoster();
+    this.fx.clear();
+    this.pickups.clear();
+    this.consumables.clear();
+    this.resetFighters();
+    const playing = this.state === "playing" || this.state === "paused";
+    this.island.isPaused = !playing;
+    if (playing) {
+      this.resetPlacement();
+      this.spawnPickups();
+    }
+    this._setFightersVisible(true);
+    if (this.ui.onRosterChange) this.ui.onRosterChange(this.robots);
+    if (this.ui.onArenaReady) this.ui.onArenaReady(this.island.mapDef);
   }
 
   // Reset every fighter AND settle each onto the surface under its spawn point.
@@ -349,7 +402,8 @@ export class Game {
     const avoid = this.robots.map((r) => ({ x: r.startX, z: r.startZ }));
     this.pickups.spawn(this.island, avoid);
 
-    // Consumable power-ups (jetpack / quake) — a small fixed count per round.
+    // Jetpack and quake pods. Spawn skips rim tiles; a pod is removed if its
+    // tile falls (ConsumablePickup.update). Online skips both — not synced.
     this.consumables.spawn(this.island, avoid);
   }
 
@@ -423,11 +477,29 @@ export class Game {
     }
   }
 
-  // Quake ground slam collapses tiles in a TRIANGULAR WAVE along the caster's
-  // facing direction (1 → 2 → 3 → 4 → 5 tiles wide). The caster's tile and
-  // everything behind are spared.
-  handleQuake(x, z, radius, dirX, dirZ) {
-    this.island.destroyTilesWave(x, z, dirX, dirZ, QUAKE_WAVE_ROWS);
+  // Quake slams a TRIANGULAR WAVE straight ahead of the caster. Tiles crack then
+  // shatter into debris row-by-row (1 → 2 → 3 → 4 → 5 wide), each row bursting
+  // QUAKE_ROW_DELAY after the last so the destruction visibly travels forward.
+  // The caster's own tile and anything behind are never touched.
+  handleQuake(x, z, radiusTiles, dirX, dirZ) {
+    const fx = dirX || 0;
+    const fz = dirZ || 0;
+    const span = (QUAKE_WAVE_ROWS + 1) * TILE_SPACING;
+    this.fx.spawnQuakeRing(x, 0.08, z, span);
+    this.fx.spawnImpactFlash(x, 0.42, z);
+    this.fx.spawnSparkBurst(x, 0.2, z, 18, 0xff2d95, 1.5);
+
+    const rows = this.island.destroyTilesWave(x, z, fx, fz, QUAKE_WAVE_ROWS);
+    rows.forEach((row, i) => {
+      const cb = (tile) => this.fx.spawnTileShatter(tile, x, z);
+      setTimeout(() => {
+        for (const tile of row) {
+          if (tile.state === "idle" || tile.state === "warning") {
+            tile.beginShatter(cb);
+          }
+        }
+      }, i * QUAKE_ROW_DELAY * 1000);
+    });
   }
 
   // How many winners this round crowns (2 for ≤6 fighters, 3 for bigger).
@@ -545,6 +617,16 @@ export class Game {
   }
 
   startGame() {
+    // A map swap may still be streaming tiles in. Wait for it, then start,
+    // so the round never begins on a half-built or previous arena.
+    if (this._arenaBusy) {
+      this._startAfterLoad = true;
+      return;
+    }
+    this._beginMatch();
+  }
+
+  _beginMatch() {
     // Always start in local vs-CPU mode; online mode has its own entry point
     this.mode = "cpu";
     this.netRole = null;
