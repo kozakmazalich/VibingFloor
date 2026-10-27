@@ -25,6 +25,7 @@ import {
   QUAKE_RADIUS,
   QUAKE_WAVE_ROWS,
   QUAKE_ROW_DELAY,
+  ROUND_END_GRACE,
 } from "./constants.js";
 import { Island } from "./island.js";
 import { Robot, CHAR_TYPES } from "./robot.js";
@@ -54,6 +55,12 @@ export class Game {
     this.scores = { p1: 0, p2: 0 };
     this.roundNumber = 1;
     this.currentMapIndex = 0;
+
+    // Round-end grace: once the last enemy is "out" we keep the arena live for
+    // ROUND_END_GRACE seconds so the player SEES the loser tumble into the void
+    // before the win overlay / prize drum covers the screen.
+    this.roundEndGrace = 0;
+    this.roundEndOutcome = null; // outcome object held until the grace elapses
 
     // Placement tracking (top-N win). Every fighter's elimination order is
     // recorded so the round can award multiple winners (see winnerCount()).
@@ -786,6 +793,8 @@ export class Game {
   restartRoundLocal(advanceRound = true) {
     this.state = "playing";
     this.keys = {}; // Avoid held keys firing abilities on the first frame
+    this.roundEndGrace = 0;
+    this.roundEndOutcome = null;
     if (advanceRound) {
       this.roundNumber++;
     }
@@ -879,15 +888,13 @@ export class Game {
     if (remaining.length === 0) {
       // Everyone fell — mutual KO
       this.lastWinner = "draw";
-      if (this.ui.onRoundEnd) {
-        this.ui.onRoundEnd({
-          winnerId: 0,
-          winnerText: "DRAW / MUTUAL KO!",
-          subText: "Every robot tumbled into the dark abyss!",
-          winnerColor: "#ffffff",
-          scores: this.scores,
-        });
-      }
+      this._fireRoundEnd({
+        winnerId: 0,
+        winnerText: "DRAW / MUTUAL KO!",
+        subText: "Every robot tumbled into the dark abyss!",
+        winnerColor: "#ffffff",
+        scores: this.scores,
+      });
       return;
     }
 
@@ -923,23 +930,22 @@ export class Game {
         this.lastWinner = "guest";
         this.scores.p2++;
       }
-      this.ui.onRoundEnd &&
-        this.ui.onRoundEnd({
-          winnerId: playerWon ? 1 : 2,
-          winnerText: playerWon
-            ? `${winner.name.toUpperCase()} WINS!`
-            : `${winner.name.toUpperCase()} WINS!`,
-          subText: playerWon
-            ? "You knocked your opponent into the void!"
-            : "Your opponent pushed you off the edge!",
-          winnerColor: playerWon ? "#00e5ff" : "#ff2d95",
-          winnerAvatar: winner.portraitPath,
-          scores: this.scores,
-          placement: pPlacement,
-          totalFighters: this.totalFightersAtRoundStart,
-          winners: winners.map((w) => w.id),
-          isPlayerWinner: playerWon,
-        });
+      this._fireRoundEnd({
+        winnerId: playerWon ? 1 : 2,
+        winnerText: playerWon
+          ? `${winner.name.toUpperCase()} WINS!`
+          : `${winner.name.toUpperCase()} WINS!`,
+        subText: playerWon
+          ? "You knocked your opponent into the void!"
+          : "Your opponent pushed you off the edge!",
+        winnerColor: playerWon ? "#00e5ff" : "#ff2d95",
+        winnerAvatar: winner.portraitPath,
+        scores: this.scores,
+        placement: pPlacement,
+        totalFighters: this.totalFightersAtRoundStart,
+        winners: winners.map((w) => w.id),
+        isPlayerWinner: playerWon,
+      });
       return;
     }
 
@@ -964,24 +970,30 @@ export class Game {
       ? `${this.p1.name.toUpperCase()} PLACED #${pPlacement} / ${this.totalFightersAtRoundStart} — WINNER!`
       : `${this.p1.name.toUpperCase()} PLACED #${pPlacement} / ${this.totalFightersAtRoundStart}`;
 
-    this.ui.onRoundEnd &&
-      this.ui.onRoundEnd({
-        winnerId: isPlayerAmongWinners ? 1 : 2,
-        winnerText: playerHeadline,
-        subText:
-          this.robots.length > 2
-            ? `Top ${topN} survive: ${crownedText}`
-            : isPlayerAmongWinners
-              ? "Player knocked the CPU into the void!"
-              : "The CPU outlasted you!",
-        winnerColor: isPlayerAmongWinners ? "#00e5ff" : "#ff2d95",
-        winnerAvatar: isPlayerAmongWinners ? this.p1.portraitPath : winners[0].portraitPath,
-        scores: this.scores,
-        placement: pPlacement,
-        totalFighters: this.totalFightersAtRoundStart,
-        winners: winners.map((w) => w.id),
-        isPlayerWinner: isPlayerAmongWinners,
-      });
+    this._fireRoundEnd({
+      winnerId: isPlayerAmongWinners ? 1 : 2,
+      winnerText: playerHeadline,
+      subText:
+        this.robots.length > 2
+          ? `Top ${topN} survive: ${crownedText}`
+          : isPlayerAmongWinners
+            ? "Player knocked the CPU into the void!"
+            : "The CPU outlasted you!",
+      winnerColor: isPlayerAmongWinners ? "#00e5ff" : "#ff2d95",
+      winnerAvatar: isPlayerAmongWinners ? this.p1.portraitPath : winners[0].portraitPath,
+      scores: this.scores,
+      placement: pPlacement,
+      totalFighters: this.totalFightersAtRoundStart,
+      winners: winners.map((w) => w.id),
+      isPlayerWinner: isPlayerAmongWinners,
+    });
+  }
+
+  // Defer the win overlay / prize drum so the player can watch the loser fall.
+  // The outcome is stashed and delivered by update() after ROUND_END_GRACE.
+  _fireRoundEnd(outcome) {
+    this.roundEndOutcome = outcome;
+    this.roundEndGrace = ROUND_END_GRACE;
   }
 
 
@@ -1282,7 +1294,7 @@ export class Game {
           scores: this.scores,
         };
       }
-      if (this.ui.onRoundEnd) this.ui.onRoundEnd(outcome);
+      this._fireRoundEnd(outcome);
     }
   }
 
@@ -1616,6 +1628,17 @@ export class Game {
     if (this.state === "paused") {
       // Frozen during pause
       return;
+    }
+
+    // Victory grace: after the last enemy fell "out", keep the arena ticking for
+    // ROUND_END_GRACE so the loser's fall is visible, THEN reveal the win screen.
+    if (this.roundEndGrace > 0) {
+      this.roundEndGrace -= dt;
+      if (this.roundEndGrace <= 0 && this.roundEndOutcome) {
+        const outcome = this.roundEndOutcome;
+        this.roundEndOutcome = null;
+        if (this.ui.onRoundEnd) this.ui.onRoundEnd(outcome);
+      }
     }
 
     // ONLINE GUEST: thin client — no authoritative physics, but with LOCAL

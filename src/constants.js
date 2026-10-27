@@ -17,6 +17,10 @@ export const MIN_FALL_INTERVAL = 0.65;
 export const FALL_ACCEL_RATE = 0.985;
 export const WARNING_DURATION = 0.85;
 
+// Victory reveal: after the last enemy is "out", keep the arena live this many
+// seconds so the player can watch the loser fall before the win overlay/drum.
+export const ROUND_END_GRACE = 1.6;
+
 // Robot physics
 export const ROBOT_RADIUS = 0.52;
 export const ROBOT_SCALE = 1.25;
