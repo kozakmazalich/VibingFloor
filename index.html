@@ -64,6 +64,7 @@
         <div class="fighter-select-panel">
           <div class="select-label">SELECT PLAYER 1 3D MODEL:</div>
           <div class="fighter-tabs">
+            <div class="char-page" id="char-page-1">
             <button id="btn-char-jpg" class="char-tab-btn active" title="Play with Crimson Miner">
               <img src="assets/robot1_portrait.png" alt="Crimson Miner" class="tab-thumb" />
               <div class="tab-info">
@@ -117,6 +118,63 @@
               </div>
               <span class="tab-status-badge">SELECT</span>
             </button>
+            </div>
+            <div class="char-page hidden" id="char-page-2">
+            <button id="btn-char-agent103" class="char-tab-btn" title="Play with Agent 103">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-103.png" alt="Agent 103" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 103</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button id="btn-char-agent107" class="char-tab-btn" title="Play with Agent 107">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-107.png" alt="Agent 107" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 107</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button id="btn-char-agent111" class="char-tab-btn" title="Play with Agent 111">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-111.png" alt="Agent 111" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 111</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button id="btn-char-agent116" class="char-tab-btn" title="Play with Agent 116">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-116.png" alt="Agent 116" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 116</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button id="btn-char-agent120" class="char-tab-btn" title="Play with Agent 120">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-120.png" alt="Agent 120" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 120</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button id="btn-char-agent123" class="char-tab-btn" title="Play with Agent 123">
+              <img src="assets/robots-cutout copy/vibe-vibers-agent-123.png" alt="Agent 123" class="tab-thumb" />
+              <div class="tab-info">
+                <span class="tab-name">AGENT 123</span>
+                <span class="tab-sub">CUTOUT UNIT</span>
+              </div>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            </div>
+          </div>
+
+          <div class="char-pager">
+            <button id="char-pager-prev" class="char-pager-btn" title="Previous fighters">◀</button>
+            <span id="char-pager-label" class="char-pager-label">1 / 2</span>
+            <button id="char-pager-next" class="char-pager-btn" title="Next fighters">▶</button>
           </div>
         </div>
 
@@ -218,24 +276,12 @@
           </div>
         </div>
 
-        <!-- Versus Showcase -->
+        <!-- Player Showcase -->
         <div class="vs-showcase">
-          <div class="combatant-card p1-card">
-            <div class="avatar-frame cyan" id="menu-p1-avatar-frame">
-              <img id="menu-p1-avatar" src="assets/robot1_portrait.png" alt="Player 1" class="showcase-avatar" />
-            </div>
+          <div class="combatant-card p1-card showcase-solo">
+            <canvas id="menu-p1-avatar-canvas" width="260" height="260"></canvas>
             <span id="menu-p1-name" class="combatant-name cyan">CRIMSON MINER</span>
             <span class="combatant-role">PLAYER CONTROLLED</span>
-          </div>
-
-          <div class="vs-emblem">VS</div>
-
-          <div class="combatant-card p2-card">
-            <div class="avatar-frame magenta">
-              <img src="assets/robot2_portrait.png" alt="Volt Viber" class="showcase-avatar" />
-            </div>
-            <span class="combatant-name magenta">VOLT VIBER</span>
-            <span class="combatant-role">AI GLADIATOR 3D</span>
           </div>
         </div>
 
@@ -249,6 +295,15 @@
             <span class="btn-icon">▶</span>
             <span class="btn-text">INITIALIZE BATTLE</span>
             <span class="key-tag">SPACE</span>
+          </button>
+          <button id="btn-menu-race" class="cyber-btn cyber-btn-race">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">⚑</span>
+            <span class="btn-text">VIBER RACE</span>
+            <span class="key-tag">NEW</span>
           </button>
           <button id="btn-menu-online" class="cyber-btn cyber-btn-online">
             <span class="btn-corner tl"></span>
@@ -390,6 +445,91 @@
       </div>
     </div>
 
+    <!-- 1.6 VIBER RACE SETUP PANEL -->
+    <div id="race-menu" class="menu-screen hidden">
+      <div class="menu-card race-card">
+        <div class="neon-badge magenta">
+          <span class="live-dot"></span>OBSTACLE COURSE // JETPACK RACE
+        </div>
+        <h2 class="menu-title" style="font-size: 32px">VIBER RACE</h2>
+        <p class="menu-tagline">FIRST TO THE FINISH GATE WINS — GRAB ⚡ BATTERIES, JETPACK THE SHORTCUTS</p>
+
+        <div class="race-select-panel">
+          <div class="select-label">RACERS:</div>
+          <div class="race-tabs race-tabs-2">
+            <button class="race-size-btn active" data-racers="5" title="You + 4 bots">
+              <span class="map-tab-info">
+                <span class="tab-name">SPRINT</span>
+                <span class="tab-sub">5 RACERS</span>
+              </span>
+              <span class="tab-status-badge">ACTIVE</span>
+            </button>
+            <button class="race-size-btn" data-racers="10" title="You + 9 bots">
+              <span class="map-tab-info">
+                <span class="tab-name">STAMPEDE</span>
+                <span class="tab-sub">10 RACERS</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="race-select-panel">
+          <div class="select-label">BOT DIFFICULTY:</div>
+          <div class="race-tabs">
+            <button class="race-diff-btn" data-diff="easy" title="Slow bots that botch jumps">
+              <span class="map-tab-info">
+                <span class="tab-name">EASY</span>
+                <span class="tab-sub">CLUMSY</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+            <button class="race-diff-btn active" data-diff="normal" title="Balanced bots">
+              <span class="map-tab-info">
+                <span class="tab-name">NORMAL</span>
+                <span class="tab-sub">RIVALS</span>
+              </span>
+              <span class="tab-status-badge">ACTIVE</span>
+            </button>
+            <button class="race-diff-btn" data-diff="hard" title="Fast bots that use every shortcut">
+              <span class="map-tab-info">
+                <span class="tab-name">HARD</span>
+                <span class="tab-sub">PROS</span>
+              </span>
+              <span class="tab-status-badge">SELECT</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="race-rules">
+          <span><span class="key-badge mini">WASD</span> RUN</span>
+          <span><span class="key-badge mini">SPACE</span> JUMP</span>
+          <span><span class="key-badge mini">SHIFT</span> DASH</span>
+          <span><span class="key-badge mini">Q</span> JETPACK (1 ⚡ PER BURST)</span>
+        </div>
+
+        <div class="menu-actions">
+          <button id="btn-race-start" class="cyber-btn cyber-btn-race btn-pulse">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">▶</span>
+            <span class="btn-text">START RACE</span>
+            <span class="key-tag">SPACE</span>
+          </button>
+          <button id="btn-race-back" class="cyber-btn cyber-btn-secondary">
+            <span class="btn-corner tl"></span>
+            <span class="btn-corner tr"></span>
+            <span class="btn-corner bl"></span>
+            <span class="btn-corner br"></span>
+            <span class="btn-icon">←</span>
+            <span class="btn-text">BACK TO MENU</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 2. PAUSE SCREEN (P or Esc) -->
     <div id="pause-menu" class="menu-screen hidden">
       <div class="menu-card pause-card">
@@ -491,7 +631,7 @@
         <div class="brand-section">
           <h1 class="title">
             Vibing Floor
-            <span class="title-badge">3D ARENA</span>
+            <span id="hud-title-badge" class="title-badge">3D ARENA</span>
           </h1>
         </div>
 
@@ -537,34 +677,68 @@
 
       <!-- Island Shrink Tracker & Weapons Arsenal -->
       <div class="island-status">
-        <div class="status-row">
+        <!-- VIBER RACE standings (race mode only) -->
+        <div class="race-only race-status">
+          <div class="race-place-row">
+            <span class="race-place-label">POS</span>
+            <span id="race-place" class="race-place-value tabular">1</span>
+            <span id="race-place-total" class="race-place-total tabular">/ 5</span>
+          </div>
+          <div class="status-row">
+            <span>Map</span>
+            <span id="race-map" class="status-value race-map">—</span>
+          </div>
+          <div class="status-row race-light-row">
+            <span>Hazard</span>
+            <span id="race-light" class="status-value race-light">—</span>
+          </div>
+          <div class="status-row">
+            <span>Time</span>
+            <span id="race-time" class="status-value tabular">00:00.0</span>
+          </div>
+          <div class="status-row">
+            <span>Checkpoint</span>
+            <span id="race-cp" class="status-value tabular">0 / 5</span>
+          </div>
+          <div class="status-row">
+            <span>⚡ Batteries</span>
+            <span id="race-batt" class="status-value tabular race-batt">0 / 5</span>
+          </div>
+          <div class="race-track" aria-label="Race progress">
+            <div id="race-track-fill" class="race-track-fill"></div>
+            <div id="race-track-dots" class="race-track-dots"></div>
+            <span class="race-track-flag">⚑</span>
+          </div>
+        </div>
+
+        <div class="status-row battle-only">
           <span>Arena</span>
           <span id="arena-name" class="status-value">CYBER ARENA</span>
         </div>
-        <div class="status-row">
+        <div class="status-row battle-only">
           <span>Active Tiles</span>
           <span id="tile-count" class="status-value tabular">100/100</span>
         </div>
-        <div class="status-row">
+        <div class="status-row battle-only">
           <span>Next Drop</span>
           <span id="fall-timer" class="status-value tabular">2.2s</span>
         </div>
-        <div class="progress-track">
+        <div class="progress-track battle-only">
           <div id="fall-progress-bar" class="progress-fill"></div>
         </div>
 
         <!-- Live standings: fighters left + the player's current placement -->
-        <div class="status-row">
+        <div class="status-row battle-only">
           <span>Alive</span>
           <span id="alive-count" class="status-value tabular">2 / 2</span>
         </div>
-        <div class="status-row">
+        <div class="status-row battle-only">
           <span>Your Place</span>
           <span id="placement-label" class="status-value tabular">—</span>
         </div>
 
         <!-- Ability 1: Push (J) -->
-        <div class="ability-block">
+        <div class="ability-block battle-only">
           <div class="status-row">
             <span class="ability-label"><span class="key-badge mini">J</span> PUSH</span>
             <span id="push-status-text" class="status-value ready tabular">READY</span>
@@ -575,7 +749,7 @@
         </div>
 
         <!-- Ability 2: Spear Thrust (E) -->
-        <div class="ability-block">
+        <div class="ability-block battle-only">
           <div class="status-row">
             <span class="ability-label"><span class="key-badge mini">E</span> SPEAR</span>
             <span id="spear-status-text" class="status-value ready tabular">READY</span>
@@ -586,7 +760,7 @@
         </div>
 
         <!-- Ability 3: Cyber Grenade (G) -->
-        <div class="ability-block">
+        <div class="ability-block battle-only">
           <div class="status-row">
             <span class="ability-label"><span class="key-badge mini">G</span> GRENADE</span>
             <span id="grenade-status-text" class="status-value ready tabular">READY</span>
@@ -627,9 +801,50 @@
         </div>
       </div>
 
+      <!-- Race countdown (3-2-1-GO) -->
+      <div id="race-countdown" class="race-countdown hidden" aria-live="assertive"></div>
+
       <!-- Bottom Bar: Controls hint -->
       <footer class="bottom-bar">
-        <div class="controls-hint">
+        <div class="controls-hint race-only">
+          <div class="hint-pill">
+            <span class="key-badge">W</span>
+            <span class="key-badge">A</span>
+            <span class="key-badge">S</span>
+            <span class="key-badge">D</span>
+            <span>Run</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">SPACE</span>
+            <span>Jump</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">SHIFT</span>
+            <span>Dash</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">Q</span>
+            <span>Jetpack (uses ⚡)</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">P</span>
+            <span>Pause</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span class="key-badge">R</span>
+            <span>Restart</span>
+          </div>
+          <span class="hint-sep">•</span>
+          <div class="hint-pill">
+            <span>Fall = respawn at checkpoint</span>
+          </div>
+        </div>
+        <div class="controls-hint battle-only">
           <div class="hint-pill">
             <span class="key-badge">W</span>
             <span class="key-badge">A</span>

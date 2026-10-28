@@ -101,6 +101,13 @@ export const CHAR_TYPES = {
   phantom: { idx: 3, name: "Phantom Viber", portrait: "assets/robot4_portrait.png" },
   chog: { idx: 4, name: "Chog Viber", portrait: "assets/robot5_portrait.png", pushMult: 3.78 },
   meta: { idx: 5, name: "Meta Viber", portrait: "assets/meta.jpg", laser: true },
+  // PAGE 2 — cutout fighters. portrait IS the cutout PNG (used as-is).
+  agent103: { idx: 6, name: "Agent 103", portrait: "assets/robots-cutout copy/vibe-vibers-agent-103.png" },
+  agent107: { idx: 7, name: "Agent 107", portrait: "assets/robots-cutout copy/vibe-vibers-agent-107.png" },
+  agent111: { idx: 8, name: "Agent 111", portrait: "assets/robots-cutout copy/vibe-vibers-agent-111.png" },
+  agent116: { idx: 9, name: "Agent 116", portrait: "assets/robots-cutout copy/vibe-vibers-agent-116.png" },
+  agent120: { idx: 10, name: "Agent 120", portrait: "assets/robots-cutout copy/vibe-vibers-agent-120.png" },
+  agent123: { idx: 11, name: "Agent 123", portrait: "assets/robots-cutout copy/vibe-vibers-agent-123.png" },
 };
 
 export class Robot {
@@ -198,6 +205,13 @@ export class Robot {
     this.aiSeekTimer = 0; // pickup-seeking steering re-eval cadence
     this.aiSeekTarget = null; // world position of the pod being chased
     this.aiSeekPickup = null; // the Pickup object being chased
+
+    // VIBER RACE hooks (src/race.js). raceController replaces updateAI for race
+    // bots; speedMult scales the player's run speed; combatDisabled locks out
+    // push / spear / grenade (race mode is non-combat).
+    this.raceController = null;
+    this.speedMult = 1;
+    this.combatDisabled = false;
 
     // Online multiplayer
     this.fxJumpCount = 0; // incremented on each jump (host broadcasts as fx event)
@@ -1363,7 +1377,7 @@ export class Robot {
     const { target, enemies } = this.pickEnemies(opponent);
 
     // 1. J = Force Push (knockback wave) — hits ALL foes in radius
-    if (keys["KeyJ"] && this.pushCooldown <= 0) {
+    if (keys["KeyJ"] && this.pushCooldown <= 0 && !this.combatDisabled) {
       this.triggerPush(enemies, fxManager);
     }
 
@@ -1373,12 +1387,12 @@ export class Robot {
     }
 
     // 3. E = Spear Thrust / Throw — flies toward/through the nearest foe
-    if (keys["KeyE"] && this.spearCooldown <= 0) {
+    if (keys["KeyE"] && this.spearCooldown <= 0 && !this.combatDisabled) {
       this.triggerSpear(target, enemies, fxManager, onScreenShake);
     }
 
     // 4. G = Grenade Throw (knockback hits everyone in the blast by radius)
-    if (keys["KeyG"] && this.grenadeCooldown <= 0) {
+    if (keys["KeyG"] && this.grenadeCooldown <= 0 && !this.combatDisabled) {
       this.triggerGrenade(target, island, fxManager, onScreenShake);
     }
 
@@ -1430,8 +1444,8 @@ export class Robot {
       if (this.modelGroup) this.modelGroup.rotation.y = this.facingAngle;
     } else if (inputForward !== 0 || inputRight !== 0) {
       const moveWorld = this.cameraRelativeMove(camera, inputForward, inputRight);
-      this.vel.x += moveWorld.x * P1_ACCEL * dt;
-      this.vel.y += moveWorld.z * P1_ACCEL * dt;
+      this.vel.x += moveWorld.x * P1_ACCEL * this.speedMult * dt;
+      this.vel.y += moveWorld.z * P1_ACCEL * this.speedMult * dt;
 
       // Face the direction of travel on screen
       // (convention: facingAngle -> (-sin, -cos) used by spear/grenade)
@@ -1446,14 +1460,15 @@ export class Robot {
     this.dampHorizontal(dt, P1_DAMPING);
 
     const currentSpeed = this.vel.length();
+    const maxSpeed = P1_MAX_SPEED * this.speedMult;
     if (
-      currentSpeed > P1_MAX_SPEED &&
+      currentSpeed > maxSpeed &&
       this.hitShakeTimer <= 0 &&
       this.dashTimer <= 0 &&
       this.dashRecovery <= 0 &&
       this.jetpackBurn <= 0
     ) {
-      this.vel.multiplyScalar(P1_MAX_SPEED / currentSpeed);
+      this.vel.multiplyScalar(maxSpeed / currentSpeed);
     }
   }
 
@@ -2117,6 +2132,8 @@ export class Robot {
         this.updatePlayerInput(camera, keys, dt, opponent, island, fxManager, onScreenShake, onQuake);
       } else if (remoteInput) {
         this.updateRemoteInput(remoteInput, dt, opponent, island, fxManager, onScreenShake, onQuake);
+      } else if (this.raceController) {
+        this.raceController(dt);
       } else {
         this.updateAI(opponent, island, dt, fxManager, onScreenShake, pickups, onQuake);
       }
@@ -2222,11 +2239,12 @@ export class Robot {
       let rescued = false;
       if (this.heldItem === "jetpack") {
         // Player and remote guest chain with Q. Bots spend one charge per hop.
+        // Race bots decide their own rescues (src/race.js), so skip the auto-burn.
         const want = this.isPlayer
           ? !!(keys && keys["KeyQ"])
           : remoteInput
             ? !!remoteInput.useItem
-            : this.jetpackBurn <= 0;
+            : !this.raceController && this.jetpackBurn <= 0;
         if (want) {
           if (this.isPlayer && keys) keys["KeyQ"] = false;
           if (remoteInput) remoteInput.useItem = false;

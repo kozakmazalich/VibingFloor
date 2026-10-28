@@ -20,6 +20,14 @@ class SoundSystem {
     this.musicLoadPromise = null; // in-flight fetch+decode
     this.musicSrc = null; // active looping BufferSource
     this._noiseBuf = null;
+
+    // Red Light / Green Light voice clips (race map 3). Decoded once, then
+    // fired as one-shots on each phase flip.
+    this.voiceBuffers = { green: null, red: null };
+    this.voicePromises = { green: null, red: null };
+    this.voiceSrc = null; // active one-shot source
+    this.voiceGain = null;
+    this.voiceReq = null; // most recently requested clip
   }
 
   init() {
@@ -48,6 +56,7 @@ class SoundSystem {
     this.muted = !this.muted;
     if (this.muted) {
       this.stopMusic();
+      this.stopVoice();
     } else {
       this.startMusic();
     }
@@ -730,6 +739,110 @@ class SoundSystem {
       this.musicTimer = null;
     }
     this.stopMusicNodes();
+  }
+
+  // =====================================================================
+  // LIGHT VOICES — "GREEN LIGHT" / "RED LIGHT" clips for race map 3.
+  // Fetched + decoded once, then played instantly on each phase flip.
+  // =====================================================================
+  preloadVoices() {
+    this.ensureContext();
+    if (!this.ctx) return;
+    this._loadVoice("green", "GREEN.mp3");
+    this._loadVoice("red", "RED.mp3");
+  }
+
+  _loadVoice(key, url) {
+    if (!this.ctx) return;
+    if (this.voiceBuffers[key] || this.voicePromises[key]) return;
+    this.voicePromises[key] = fetch(url)
+      .then((r) => {
+        if (!r.ok) throw new Error(`voice fetch ${r.status}`);
+        return r.arrayBuffer();
+      })
+      .then((buf) => this.ctx.decodeAudioData(buf))
+      .then((decoded) => {
+        this.voiceBuffers[key] = decoded;
+      })
+      .catch((err) => {
+        console.warn(`[audio] ${key} voice failed to load:`, err);
+        this.voicePromises[key] = null; // allow a retry
+      });
+  }
+
+  // Play the GREEN or RED light clip. One-shots replace each other so the clips
+  // never overlap. If still decoding, playback is deferred — and skipped if a
+  // newer light was requested in the meantime.
+  playVoice(key) {
+    if (this.muted) return;
+    this.ensureContext();
+    if (!this.ctx) return;
+    this.voiceReq = key;
+
+    const buf = this.voiceBuffers[key];
+    if (buf) {
+      this._startVoice(buf);
+      return;
+    }
+    const url = key === "green" ? "GREEN.mp3" : "RED.mp3";
+    this._loadVoice(key, url);
+    const p = this.voicePromises[key];
+    if (p) {
+      p.then(() => {
+        if (!this.muted && this.voiceReq === key && this.voiceBuffers[key]) {
+          this._startVoice(this.voiceBuffers[key]);
+        }
+      });
+    }
+  }
+
+  _startVoice(buffer) {
+    this.stopVoice();
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 1.0;
+    src.connect(gain);
+    gain.connect(this.ctx.destination);
+    try {
+      src.start(0);
+    } catch (e) {
+      /* already started */
+    }
+    this.voiceSrc = src;
+    this.voiceGain = gain;
+    src.onended = () => {
+      if (this.voiceSrc !== src) return;
+      this.voiceSrc = null;
+      if (this.voiceGain) {
+        try {
+          this.voiceGain.disconnect();
+        } catch (e) {
+          /* noop */
+        }
+        this.voiceGain = null;
+      }
+    };
+  }
+
+  stopVoice() {
+    if (this.voiceSrc) {
+      try {
+        this.voiceSrc.stop();
+        this.voiceSrc.disconnect();
+      } catch (e) {
+        /* noop */
+      }
+      this.voiceSrc = null;
+    }
+    if (this.voiceGain) {
+      try {
+        this.voiceGain.disconnect();
+      } catch (e) {
+        /* noop */
+      }
+      this.voiceGain = null;
+    }
   }
 
   _musicTick() {

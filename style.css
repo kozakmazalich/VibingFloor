@@ -66,13 +66,15 @@ body {
 }
 /* The exoplanet is the main-menu backdrop. The loading state used to be the
    only time this veil lifted; keep it lifted so the planet does not pop. */
+/* Veil 0.28 (was 0.18): backdrop ~12% darker so the buttons and the selected
+   fighter carry the accent. */
 #start-menu {
-  background: rgba(6, 8, 18, 0.18);
+  background: rgba(6, 8, 18, 0.28);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
 body.arena-loading #start-menu {
-  background: rgba(6, 8, 18, 0.18);
+  background: rgba(6, 8, 18, 0.28);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -146,6 +148,7 @@ body.arena-loading #start-menu {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
+  opacity: 0.85; /* slightly more transparent aurora / grid / scanlines */
 }
 
 .menu-aurora {
@@ -403,9 +406,64 @@ body.arena-loading #start-menu {
 }
 
 .fighter-tabs {
+  display: block;
+}
+
+.char-page {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.char-page.hidden {
+  display: none;
+}
+
+.char-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.char-pager-btn {
+  background: rgba(16, 24, 48, 0.85);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 8px;
+  color: #00e5ff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  width: 30px;
+  height: 26px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.char-pager-btn:hover {
+  border-color: #00e5ff;
+  background: rgba(0, 229, 255, 0.15);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.4);
+}
+
+.char-pager-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  box-shadow: none;
+  border-color: rgba(0, 229, 255, 0.15);
+}
+
+.char-pager-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #7fdbff;
+  min-width: 34px;
+  text-align: center;
 }
 
 .char-tab-btn {
@@ -869,15 +927,18 @@ body.arena-loading #start-menu {
   letter-spacing: 0.5px;
 }
 
-.vs-emblem {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 16px;
-  font-weight: 900;
-  color: #475569;
-  padding: 5px 10px;
-  border-radius: 6px;
+/* Solo showcase: the selected fighter as a spinning 3D model, frameless */
+.showcase-solo {
+  flex: 1;
+}
+
+.showcase-solo #menu-p1-avatar-canvas {
+  width: 150px;
+  height: 150px;
+  display: block;
   border: none;
-  background: rgba(15, 23, 42, 0.6);
+  border-radius: 0;
+  background: transparent;
 }
 
 /* =========================================
@@ -2131,16 +2192,16 @@ body.arena-loading #start-menu {
     border-radius: 14px;
   }
   .start-card .showcase-avatar {
-    width: 83px;
-    height: 83px;
+    width: 150px;
+    height: 150px;
   }
-  .start-card .combatant-name { font-size: 14px; }
-  .start-card .vs-emblem { font-size: 19px; padding: 7px 13px; }
+  .start-card .combatant-name { font-size: 15px; }
 
   /* Fighters panel: kill the dead space at the bottom by letting the tabs
      (grid) stretch to fill the panel instead of hugging their content. */
   .start-card .fighter-select-panel { display: flex; flex-direction: column; }
-  .start-card .fighter-tabs { flex: 1 1 auto; align-content: stretch; grid-auto-rows: 1fr; }
+  .start-card .fighter-tabs { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .start-card .char-page { flex: 1 1 auto; align-content: stretch; grid-auto-rows: 1fr; }
   .start-card .fighter-select-panel,
   .start-card .map-select-panel {
     align-self: stretch; /* fill the full row height — no dead space below */
@@ -2177,6 +2238,11 @@ body.arena-loading #start-menu {
   }
   .start-card .fighter-tabs {
     flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .start-card .char-page {
+    flex: 1 1 auto;
     align-content: stretch;
     grid-auto-rows: 1fr;
   }
@@ -2191,7 +2257,7 @@ body.arena-loading #start-menu {
      THREE columns (2 rows instead of 3) and tightening gaps — content only,
      component sizes stay recognisable. */
   @media (max-height: 780px) {
-    .start-card .fighter-tabs,
+    .start-card .char-page,
     .start-card .map-tabs {
       grid-template-columns: repeat(3, 1fr);
       gap: 7px;
@@ -2374,7 +2440,7 @@ body.arena-loading #start-menu {
   }
 
   /* Selector tab rows: shrink to fit instead of clipping */
-  .fighter-tabs,
+  .char-page,
   .map-tabs,
   .diff-tabs {
     gap: 6px;
@@ -2974,4 +3040,271 @@ body.arena-loading #start-menu {
     min-height: 0;
     max-height: none;
   }
+}
+
+/* =========================================================================
+   VIBER RACE — menu button, setup panel, race HUD, countdown
+   ========================================================================= */
+.cyber-btn-race {
+  background: linear-gradient(135deg, rgba(255, 45, 149, 0.3) 0%, rgba(40, 10, 34, 0.95) 100%),
+              repeating-linear-gradient(0deg, rgba(255, 45, 149, 0.05) 0px, rgba(255, 45, 149, 0.05) 2px, transparent 2px, transparent 4px);
+  box-shadow: 0 0 0 1px #ff2d95,
+              0 6px 20px rgba(0, 0, 0, 0.6),
+              0 0 18px rgba(255, 45, 149, 0.35),
+              inset 0 0 14px rgba(255, 45, 149, 0.18);
+  color: #ffffff;
+}
+.cyber-btn-race:hover {
+  background: linear-gradient(135deg, rgba(255, 45, 149, 0.48) 0%, rgba(56, 14, 46, 0.98) 100%),
+              repeating-linear-gradient(0deg, rgba(255, 45, 149, 0.07) 0px, rgba(255, 45, 149, 0.07) 2px, transparent 2px, transparent 4px);
+  box-shadow: 0 0 0 1.5px #ffffff,
+              0 8px 30px rgba(0, 0, 0, 0.7),
+              0 0 28px rgba(255, 45, 149, 0.65),
+              inset 0 0 18px rgba(255, 45, 149, 0.35);
+  transform: translateY(-2px);
+}
+.cyber-btn-race .btn-corner { border-color: #ff2d95; }
+.cyber-btn-race.btn-pulse::before {
+  box-shadow: 0 0 22px rgba(255, 45, 149, 0.65), 0 0 6px rgba(255, 45, 149, 0.6);
+}
+
+/* Desktop 2-col action grid: INITIALIZE BATTLE + VIBER RACE share the top row */
+@media (min-width: 861px) {
+  .start-card .menu-actions #btn-menu-play.cyber-btn-primary { grid-column: 1; }
+  .start-card .menu-actions #btn-menu-race { grid-column: 2; }
+}
+
+.neon-badge.magenta {
+  background: rgba(255, 45, 149, 0.15);
+  color: #ff2d95;
+  box-shadow: 0 0 10px rgba(255, 45, 149, 0.2);
+}
+.neon-badge.magenta .live-dot {
+  background: #ff2d95;
+  box-shadow: 0 0 8px #ff2d95;
+}
+
+.race-card {
+  max-width: 480px;
+  gap: 14px;
+}
+.race-select-panel {
+  width: 100%;
+  background: rgba(12, 16, 32, 0.75);
+  border-radius: 14px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.race-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.race-tabs.race-tabs-2 { grid-template-columns: 1fr 1fr; }
+.race-size-btn,
+.race-diff-btn {
+  background: rgba(16, 24, 48, 0.85);
+  border: none;
+  border-left: 3px solid transparent;
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  transition: background 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+  color: #e2e8f0;
+}
+.race-size-btn:hover,
+.race-diff-btn:hover {
+  background: rgba(24, 36, 68, 0.95);
+  transform: translateY(-1px);
+}
+.race-size-btn.active,
+.race-diff-btn.active {
+  background: rgba(255, 45, 149, 0.14);
+  border-left-color: #ff2d95;
+  box-shadow: 0 0 14px rgba(255, 45, 149, 0.25);
+}
+.race-size-btn.active .tab-name,
+.race-diff-btn.active .tab-name { color: #ff2d95; }
+.race-size-btn.active .tab-status-badge,
+.race-diff-btn.active .tab-status-badge {
+  background: #ff2d95;
+  color: #0a0a14;
+  box-shadow: 0 0 6px rgba(255, 45, 149, 0.6);
+}
+.race-rules {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  color: #94a3b8;
+}
+.race-rules > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Mode switching: battle-only vs race-only HUD pieces */
+.race-only { display: none !important; }
+body.race-mode .race-only { display: flex !important; }
+body.race-mode .race-status.race-only { display: flex !important; }
+body.race-mode .battle-only { display: none !important; }
+body.race-mode .scoreboard .team,
+body.race-mode .scoreboard .score-divider { display: none; }
+body.race-mode .survivors-strip {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+}
+body.race-mode #touch-push,
+body.race-mode #touch-spear,
+body.race-mode #touch-grenade { display: none; }
+body.race-mode .island-status { border-color: rgba(255, 45, 149, 0.28); }
+
+.race-status {
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.race-place-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: 'Orbitron', sans-serif;
+}
+.race-place-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: #ff2d95;
+}
+.race-place-value {
+  font-size: 34px;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 0 14px rgba(255, 45, 149, 0.7);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.race-place-value.bump { transform: scale(1.25); }
+.race-place-value.first {
+  color: #ffd700;
+  text-shadow: 0 0 16px rgba(255, 215, 0, 0.8);
+}
+.race-place-total {
+  font-size: 14px;
+  font-weight: 800;
+  color: #94a3b8;
+}
+.race-batt { color: #00e5ff; }
+.race-batt.full { text-shadow: 0 0 8px rgba(0, 229, 255, 0.9); }
+
+.race-map { color: #c9e4ff; font-size: 11px; line-height: 1.2; text-align: right; max-width: 155px; }
+.race-light { font-weight: 700; letter-spacing: 1px; }
+.race-light.green { color: #39ff14; text-shadow: 0 0 8px rgba(57, 255, 20, 0.8); }
+.race-light.red { color: #ff2d2d; text-shadow: 0 0 10px rgba(255, 45, 45, 0.9); animation: blink 0.5s infinite; }
+.race-light.meteor { color: #ff8c2a; text-shadow: 0 0 8px rgba(255, 140, 42, 0.8); }
+
+.race-track {
+  position: relative;
+  height: 14px;
+  margin-top: 2px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: visible;
+}
+.race-track-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(0, 229, 255, 0.15), rgba(0, 229, 255, 0.45));
+}
+.race-track-dots {
+  position: absolute;
+  inset: 0 14px 0 0;
+}
+.race-dot {
+  position: absolute;
+  top: 3px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+  background: currentColor;
+  opacity: 0.85;
+}
+.race-dot.you {
+  top: 1px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border: 2px solid #ffffff;
+  opacity: 1;
+  z-index: 2;
+}
+.race-track-flag {
+  position: absolute;
+  right: 0;
+  top: -3px;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.surv-chip.finished { box-shadow: 0 0 0 2px #ffd700, 0 0 10px rgba(255, 215, 0, 0.6); }
+.surv-chip .race-rank {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 2px;
+  border-radius: 7px;
+  background: #ffd700;
+  color: #0a0a14;
+  font: 800 9px/14px 'JetBrains Mono', monospace;
+  text-align: center;
+}
+
+.race-countdown {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  transform: translate(-50%, -50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(64px, 14vw, 150px);
+  font-weight: 900;
+  letter-spacing: 6px;
+  color: #ffffff;
+  text-shadow: 0 0 24px rgba(255, 45, 149, 0.9), 0 0 60px rgba(0, 229, 255, 0.6);
+  pointer-events: none;
+  z-index: 60;
+}
+.race-countdown.hidden { display: none; }
+.race-countdown.pop { animation: raceCountPop 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.race-countdown.go {
+  color: #39ff14;
+  text-shadow: 0 0 24px rgba(57, 255, 20, 0.9), 0 0 60px rgba(0, 229, 255, 0.6);
+}
+@keyframes raceCountPop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(1.8); }
+  25% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(0.96); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .race-countdown.pop { animation: none; }
 }

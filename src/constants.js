@@ -142,6 +142,24 @@ export const QUAKE_SHARDS_MIN = 3; // debris chunks per shattered tile
 export const QUAKE_SHARDS_MAX = 6;
 export const CONSUMABLE_COUNT = 4; // a few jetpack + quake pods per round (alternating)
 
+// VIBER RACE (obstacle-course race mode)
+export const RACE_PLAYER_SPEED_MULT = 1.35; // player run speed in race (~4 u/s vs ~3 in battle)
+export const RACE_RESPAWN_DELAY = 1.1; // seconds in the void before respawning at the last checkpoint
+export const RACE_RESPAWN_SHIELD = 1.2; // post-respawn grace: spinners ignore the racer
+export const RACE_COUNTDOWN = 3; // 3-2-1-GO
+export const RACE_BATTERY_RESPAWN = 8; // seconds before a collected battery reappears
+export const RACE_SPINNER_IMPULSE = 17; // base sweep knockback (+ up to 9 more at the bar tip)
+export const RACE_BOTS_TO_END = 3; // round ends when this many bots finish before the player
+
+// Race bot presets: run speed (u/s), chance to botch a gap/spinner, jetpack
+// skill (rescue + shortcut execution), chance to take a jetpack shortcut when
+// holding enough batteries, and how often they dash on safe straights.
+export const RACE_DIFFICULTIES = {
+  easy: { label: "EASY", speed: 3.25, mistake: 0.3, jetSkill: 0.3, shortcut: 0.25, dashRate: 0 },
+  normal: { label: "NORMAL", speed: 3.7, mistake: 0.12, jetSkill: 0.65, shortcut: 0.6, dashRate: 0.25 },
+  hard: { label: "HARD", speed: 4.0, mistake: 0.03, jetSkill: 0.95, shortcut: 0.95, dashRate: 0.6 },
+};
+
 // Falling / Void
 export const VOID_KILL_Y = -15.0; // GRAVITY is defined in the Jump block above (tuned for jump feel)
 

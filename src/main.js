@@ -4,6 +4,7 @@ import { COLORS } from "./constants.js";
 import { Game } from "./game.js";
 import { CHAR_TYPES } from "./robot.js";
 import { MAPS, scaledMap } from "./maps.js";
+import { buildViber, CHARACTERS } from "./vibers.js";
 import { createArenaLoader } from "./mapLoader.js";
 import { audio } from "./audio.js";
 import { isTouchDevice, setupTouchControls } from "./touch.js";
@@ -13,6 +14,7 @@ import { showPrizeDrum, updatePrizeDrum } from "../drum.js";
 import { openProfile, wireProfileButtons } from "./profile.js";
 import { addWin, setSyncedVibBalance } from "./staking.js";
 import { initPrivyAuth, creditWinToPrivyWallet } from "./privyAuth.js";
+import { formatRaceTime } from "./race.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -35,20 +37,51 @@ const onlineStatusEl = document.getElementById("online-status");
 // PeerJS networking (online 1v1). Inactive until the player uses it.
 const net = new Net();
 
+// VIBER RACE: setup panel + race HUD
+const raceMenuEl = document.getElementById("race-menu");
+const btnMenuRaceEl = document.getElementById("btn-menu-race");
+const btnRaceStartEl = document.getElementById("btn-race-start");
+const btnRaceBackEl = document.getElementById("btn-race-back");
+const raceSizeEls = Array.from(document.querySelectorAll(".race-size-btn"));
+const raceDiffEls = Array.from(document.querySelectorAll(".race-diff-btn"));
+const raceCountdownEl = document.getElementById("race-countdown");
+const raceMapEl = document.getElementById("race-map");
+const raceLightEl = document.getElementById("race-light");
+const racePlaceEl = document.getElementById("race-place");
+const racePlaceTotalEl = document.getElementById("race-place-total");
+const raceTimeEl = document.getElementById("race-time");
+const raceCpEl = document.getElementById("race-cp");
+const raceBattEl = document.getElementById("race-batt");
+const raceTrackFillEl = document.getElementById("race-track-fill");
+const raceTrackDotsEl = document.getElementById("race-track-dots");
+const hudTitleBadgeEl = document.getElementById("hud-title-badge");
+
 // Buttons: Start Menu
 const btnMenuPlayEl = document.getElementById("btn-menu-play");
 const btnMenuSoundEl = document.getElementById("btn-menu-sound");
 const menuSoundIconEl = document.getElementById("menu-sound-icon");
 const menuSoundTextEl = document.getElementById("menu-sound-text");
 
-// Fighter selection buttons (6 Viber robots)
+// Fighter selection buttons (6 Viber robots + 6 cutout agents on page 2)
 const btnCharJpgEl = document.getElementById("btn-char-jpg");
 const btnCharMossEl = document.getElementById("btn-char-moss");
 const btnCharMechaEl = document.getElementById("btn-char-mecha");
 const btnCharPhantomEl = document.getElementById("btn-char-phantom");
 const btnCharChogEl = document.getElementById("btn-char-chog");
 const btnCharMetaEl = document.getElementById("btn-char-meta");
-const menuP1AvatarEl = document.getElementById("menu-p1-avatar");
+const btnCharAgent103El = document.getElementById("btn-char-agent103");
+const btnCharAgent107El = document.getElementById("btn-char-agent107");
+const btnCharAgent111El = document.getElementById("btn-char-agent111");
+const btnCharAgent116El = document.getElementById("btn-char-agent116");
+const btnCharAgent120El = document.getElementById("btn-char-agent120");
+const btnCharAgent123El = document.getElementById("btn-char-agent123");
+const charPage1El = document.getElementById("char-page-1");
+const charPage2El = document.getElementById("char-page-2");
+const charPagerPrevEl = document.getElementById("char-pager-prev");
+const charPagerNextEl = document.getElementById("char-pager-next");
+const charPagerLabelEl = document.getElementById("char-pager-label");
+const menuP1AvatarEl = document.getElementById("menu-p1-avatar"); // legacy <img> (may be absent)
+const menuP1AvatarCanvasEl = document.getElementById("menu-p1-avatar-canvas");
 const menuP1NameEl = document.getElementById("menu-p1-name");
 const hudP1AvatarEl = document.getElementById("hud-p1-avatar");
 const hudP1NameEl = document.getElementById("hud-p1-name");
@@ -424,12 +457,16 @@ const game = new Game(scene, camera, {
   onGameStart: (info) => {
     startMenuEl.classList.add("hidden");
     onlineMenuEl.classList.add("hidden");
+    raceMenuEl.classList.add("hidden");
     pauseMenuEl.classList.add("hidden");
     winOverlayEl.classList.add("hidden");
     inGameHudEl.classList.remove("hidden");
 
+    const isRace = !!(info && info.race);
+    setRaceMode(isRace);
+
     // Rebuild the survivors strip for this match's roster
-    renderSurvivors(game.robots);
+    renderSurvivors(isRace ? info.racers : game.robots);
 
     if (info && info.online) {
       updateOnlineHud();
@@ -437,6 +474,7 @@ const game = new Game(scene, camera, {
 
     controls.autoRotate = false;
     arenaLoader.setVisible(false);
+    if (isRace) snapRaceCamera();
   },
 
   // Fired whenever the fighter roster changes (bot count / map rebuild)
@@ -470,7 +508,10 @@ const game = new Game(scene, camera, {
     winOverlayEl.classList.add("hidden");
     inGameHudEl.classList.add("hidden");
     onlineMenuEl.classList.add("hidden");
+    raceMenuEl.classList.add("hidden");
     startMenuEl.classList.remove("hidden");
+    setRaceMode(false);
+    game.onMenuSpace = null;
 
     // Leaving the menu always tears down any live P2P session
     net.leave();
@@ -484,14 +525,16 @@ const game = new Game(scene, camera, {
   },
 
   onStatusUpdate: (status) => {
-    tileCountEl.textContent = `${status.activeTiles}/${status.totalTiles || 100}`;
-    fallTimerEl.textContent = `${status.nextFallTimer.toFixed(1)}s`;
+    if (!status.race) {
+      tileCountEl.textContent = `${status.activeTiles}/${status.totalTiles || 100}`;
+      fallTimerEl.textContent = `${status.nextFallTimer.toFixed(1)}s`;
 
-    if (game.island.currentInterval) {
-      maxFallInterval = game.island.currentInterval;
+      if (game.island.currentInterval) {
+        maxFallInterval = game.island.currentInterval;
+      }
+      const pct = Math.max(0, Math.min(100, (status.nextFallTimer / maxFallInterval) * 100));
+      fallProgressBarEl.style.width = `${pct}%`;
     }
-    const pct = Math.max(0, Math.min(100, (status.nextFallTimer / maxFallInterval) * 100));
-    fallProgressBarEl.style.width = `${pct}%`;
 
     // Active Arsenal Cooldown HUD
     if (status.abilities) {
@@ -621,6 +664,11 @@ const game = new Game(scene, camera, {
       }
     }
 
+    if (status.race) {
+      updateRaceHud(status.race);
+      return;
+    }
+
     scoreP1El.textContent = status.scores.p1;
     scoreP2El.textContent = status.scores.p2;
 
@@ -701,7 +749,9 @@ const game = new Game(scene, camera, {
     winSubtitleEl.textContent = outcome.subText || "";
 
     if (winScoreEl) {
-      winScoreEl.innerHTML = `MATCH SCORE: <span class="tabular">${outcome.scores.p1} - ${outcome.scores.p2}</span>`;
+      winScoreEl.innerHTML = outcome.race
+        ? `FINISH TIME: <span class="tabular">${outcome.timeText}</span>`
+        : `MATCH SCORE: <span class="tabular">${outcome.scores.p1} - ${outcome.scores.p2}</span>`;
     }
 
     if (outcome.winnerId === 1) {
@@ -748,11 +798,59 @@ const game = new Game(scene, camera, {
     winOverlayEl.classList.add("hidden");
     pauseMenuEl.classList.add("hidden");
 
+    if (game.mode === "race" && game.race) {
+      renderSurvivors(game.race.racerRobots());
+      snapRaceCamera();
+      return;
+    }
+
     // Everyone is alive again — reset the survivors strip
     renderSurvivors(game.robots);
 
     // Snap the camera onto the player's spawn — follow takes over from here
     frameCameraOnPlayer();
+  },
+
+  // VIBER RACE: 3-2-1-GO overlay
+  onRaceCountdown: (label) => showRaceCountdown(label),
+
+  // VIBER RACE: checkpoint / battery / respawn / finish notifications
+  onRaceEvent: (e) => {
+    switch (e.type) {
+      case "checkpoint":
+        showToast(`✔ CHECKPOINT ${e.cp}/${e.total} — respawn point saved`);
+        break;
+      case "respawn":
+        showToast(`↺ Respawned at ${e.cp === 0 ? "the START" : `CHECKPOINT ${e.cp}`}`);
+        break;
+      case "battery": {
+        showToast(`⚡ Battery +1 (${e.count}/5) — press Q to jetpack`);
+        const block = document.getElementById("item-slot-block");
+        if (block) {
+          block.classList.add("flash");
+          setTimeout(() => block.classList.remove("flash"), 700);
+        }
+        break;
+      }
+      case "finish":
+        showToast(
+          e.isPlayer
+            ? `🏁 FINISHED #${e.place} — ${formatRaceTime(e.time)}`
+            : `🏁 ${e.name} finished #${e.place}`
+        );
+        break;
+      case "map":
+        showToast(`🗺 ${e.name} — ${e.tagline}`);
+        break;
+      case "redlight":
+        if (e.light === "red") showToast("🔴 RED LIGHT — freeze!");
+        else if (e.light === "green") showToast("🟢 GREEN LIGHT — run!");
+        else if (e.light === "shot") showToast("🔫 Shot! Back to your checkpoint");
+        break;
+      case "meteor":
+        showToast(e.direct ? "☄️ Direct hit! Back to your checkpoint" : "☄️ Meteor near miss");
+        break;
+    }
   },
 
   onCollision: (dist) => {
@@ -820,15 +918,572 @@ function updateCameraFollow(dt) {
   camera.position.z += mz;
 }
 
-// 9. Character Switching Logic (6 Viber fighters)
+// ------------------------------------------------------------------
+// VIBER RACE: chase camera behind the player looking down the track,
+// mode toggles, HUD and countdown.
+// ------------------------------------------------------------------
+const raceCamGoal = new THREE.Vector3();
+const raceLookGoal = new THREE.Vector3();
+const raceLook = new THREE.Vector3();
+let raceFollowY = 0;
+let countdownTimer = 0;
+
+function raceCameraGoals() {
+  const p = game.p1;
+  // Freeze while the player tumbles into the void; resume on respawn.
+  if (p.state !== "alive") return false;
+  const x = p.pos.x * 0.7;
+  raceCamGoal.set(x, raceFollowY + 6.6, p.pos.z + 10.2);
+  raceLookGoal.set(x, raceFollowY + 0.9, p.pos.z - 7);
+  return true;
+}
+
+function syncRaceBackdrop() {
+  // Grid / horizon / embers / key light travel with the camera down the track.
+  cyberGrid.position.z = Math.round((camera.position.z - 20) / 2) * 2;
+  if (horizonGrid) horizonGrid.position.z = camera.position.z - 20;
+  if (embers) embers.points.position.z = camera.position.z - 22;
+  dirLight.position.set(raceLook.x + 18, 30, raceLook.z + 14);
+  dirLight.target.position.set(raceLook.x, 0, raceLook.z);
+  dirLight.target.updateMatrixWorld();
+}
+
+function snapRaceCamera() {
+  raceFollowY = Math.max(0, game.p1.pos.y);
+  if (!raceCameraGoals()) return;
+  camera.position.copy(raceCamGoal);
+  raceLook.copy(raceLookGoal);
+  camera.lookAt(raceLook);
+  syncRaceBackdrop();
+}
+
+function updateRaceCamera(dt) {
+  const p = game.p1;
+  if (p.state === "alive") {
+    raceFollowY += (Math.max(0, Math.min(p.pos.y, 4)) - raceFollowY) * (1 - Math.exp(-dt * 3));
+  }
+  if (raceCameraGoals()) {
+    camera.position.lerp(raceCamGoal, 1 - Math.exp(-dt * 5));
+    raceLook.lerp(raceLookGoal, 1 - Math.exp(-dt * 7));
+  }
+  camera.lookAt(raceLook);
+  syncRaceBackdrop();
+}
+
+function setRaceMode(on) {
+  document.body.classList.toggle("race-mode", on);
+  controls.enabled = !on;
+  haloGroup.visible = !on;
+  if (hudTitleBadgeEl) hudTitleBadgeEl.textContent = on ? "VIBER RACE" : "3D ARENA";
+  raceHudCache.place = -1;
+  raceHudCache.finished = "";
+  raceHudCache.dots = [];
+  if (raceTrackDotsEl) raceTrackDotsEl.innerHTML = "";
+  if (!on) {
+    cyberGrid.position.z = 0;
+    if (horizonGrid) horizonGrid.position.z = 0;
+    if (embers) embers.points.position.z = 0;
+    dirLight.position.set(18, 30, 14);
+    dirLight.target.position.set(0, 0, 0);
+    dirLight.target.updateMatrixWorld();
+    if (raceCountdownEl) raceCountdownEl.classList.add("hidden");
+  }
+}
+
+function showRaceCountdown(label) {
+  if (!raceCountdownEl) return;
+  raceCountdownEl.textContent = label;
+  raceCountdownEl.classList.remove("hidden", "pop", "go");
+  void raceCountdownEl.offsetWidth; // restart the pop animation
+  raceCountdownEl.classList.add("pop");
+  const go = label === "GO!";
+  if (go) raceCountdownEl.classList.add("go");
+  clearTimeout(countdownTimer);
+  countdownTimer = setTimeout(() => raceCountdownEl.classList.add("hidden"), go ? 700 : 1100);
+}
+
+// Only touch the DOM when a value actually changes (status arrives every frame).
+const raceHudCache = { place: -1, total: -1, time: "", cp: "", batt: "", dots: [], finished: "", map: "", light: "" };
+
+function updateRaceHud(r) {
+  if (r.map !== raceHudCache.map && raceMapEl) {
+    raceHudCache.map = r.map;
+    raceMapEl.textContent = r.map || "—";
+  }
+  // Map signal: Red Light Green Light state, or a meteor-shower hint.
+  const light = r.hazard === "redlight" ? r.light : r.hazard === "islands" ? "meteor" : null;
+  if (light !== raceHudCache.light && raceLightEl) {
+    raceHudCache.light = light;
+    if (!light) {
+      raceLightEl.textContent = "—";
+      raceLightEl.className = "status-value race-light";
+    } else if (light === "green") {
+      raceLightEl.textContent = "GREEN LIGHT";
+      raceLightEl.className = "status-value race-light green";
+    } else if (light === "red") {
+      raceLightEl.textContent = "RED LIGHT";
+      raceLightEl.className = "status-value race-light red";
+    } else {
+      raceLightEl.textContent = "☄ METEORS";
+      raceLightEl.className = "status-value race-light meteor";
+    }
+  }
+  if (r.place !== raceHudCache.place) {
+    const prev = raceHudCache.place;
+    raceHudCache.place = r.place;
+    racePlaceEl.textContent = r.place;
+    racePlaceEl.classList.toggle("first", r.place === 1);
+    if (prev > 0) {
+      racePlaceEl.classList.add("bump");
+      setTimeout(() => racePlaceEl.classList.remove("bump"), 180);
+    }
+  }
+  if (r.total !== raceHudCache.total) {
+    raceHudCache.total = r.total;
+    racePlaceTotalEl.textContent = `/ ${r.total}`;
+  }
+  const time = formatRaceTime(r.time);
+  if (time !== raceHudCache.time) {
+    raceHudCache.time = time;
+    raceTimeEl.textContent = time;
+  }
+  const cp = `${r.cp} / ${r.cpTotal}`;
+  if (cp !== raceHudCache.cp) {
+    raceHudCache.cp = cp;
+    raceCpEl.textContent = cp;
+  }
+  const batt = `${r.batteries} / ${r.maxBatteries}`;
+  if (batt !== raceHudCache.batt) {
+    raceHudCache.batt = batt;
+    raceBattEl.textContent = batt;
+    raceBattEl.classList.toggle("full", r.batteries >= r.maxBatteries);
+  }
+  raceTrackFillEl.style.width = `${(r.progress * 100).toFixed(1)}%`;
+
+  // Progress dots: one per racer, the player's drawn on top.
+  if (raceHudCache.dots.length !== r.racers.length) {
+    raceTrackDotsEl.innerHTML = "";
+    raceHudCache.dots = r.racers.map((rr) => {
+      const dot = document.createElement("span");
+      dot.className = "race-dot" + (rr.isPlayer ? " you" : "");
+      dot.style.color = `#${rr.color.toString(16).padStart(6, "0")}`;
+      raceTrackDotsEl.appendChild(dot);
+      return dot;
+    });
+  }
+  r.racers.forEach((rr, i) => {
+    raceHudCache.dots[i].style.left = `${(rr.progress * 100).toFixed(1)}%`;
+  });
+
+  // Survivors strip doubles as the racer strip: finished racers get a rank.
+  const finishedSig = r.racers.map((rr) => (rr.finished ? rr.placement : 0)).join(",");
+  if (finishedSig !== raceHudCache.finished && survivorsStripEl) {
+    raceHudCache.finished = finishedSig;
+    for (const rr of r.racers) {
+      const chip = survivorsStripEl.querySelector(`.surv-chip[data-id="${rr.id}"]`);
+      if (!chip) continue;
+      chip.classList.remove("out");
+      chip.classList.toggle("finished", rr.finished);
+      let badge = chip.querySelector(".race-rank");
+      if (rr.finished) {
+        if (!badge) {
+          badge = document.createElement("span");
+          badge.className = "race-rank";
+          chip.appendChild(badge);
+        }
+        badge.textContent = rr.placement;
+      } else if (badge) {
+        badge.remove();
+      }
+    }
+  }
+}
+
+// --- 3D Showcase: the selected fighter on a neon pedestal under the title ---
+// Scene graph:  actor (hop height + turntable spin)
+//                 sway  (side-to-side lean, pivot at the feet)
+//                   squash (breathing / landing squash, pivot at the feet)
+//                     viber.root (normalized so the feet sit at y = 0)
+// The pedestal is static; only its glow materials pulse.
+const showcaseCanvas = menuP1AvatarCanvasEl;
+let showcaseRenderer = null;
+let showcaseScene = null;
+let showcaseCamera = null;
+let showcaseModel = null; // viber parts (armL/R, legL/R, head) for posing
+let showcaseRoot = null;
+
+const SHOWCASE_HEIGHT = 2.3; // robot height in showcase units
+const PEDESTAL_TOP = -1.3; // world y of the pedestal's top face
+const SHOWCASE_TURN_SPEED = 0.6; // rad/s turntable
+const HOP_VELOCITY = 5.2; // launch speed -> ~0.75 high, ~0.58s airtime
+const HOP_GRAVITY = 18;
+const DANCE_TIME = 2.6;
+
+const showcase = {
+  actor: null,
+  sway: null,
+  squash: null,
+  pedestal: null, // { topMat, ringMat, baseRingMat, hexMat, beamMat, shadow }
+  last: 0,
+  spin: 0,
+  action: "idle", // "idle" | "crouch" | "air" | "dance"
+  actionT: 0,
+  nextActionIn: 1.6,
+  cycle: 0, // jump, jump, dance, ...
+  hopY: 0,
+  hopV: 0,
+  land: 0, // landing squash timer (s)
+  pop: 0, // character-swap pop-in timer (s)
+  flash: 0, // pedestal flash on landing
+};
+const SHOWCASE_CYCLE = ["jump", "jump", "dance"];
+window.__showcase = showcase; // debug/test hook (like window.game)
+
+function makeBeamTexture() {
+  const c = document.createElement("canvas");
+  c.width = 4;
+  c.height = 64;
+  const g = c.getContext("2d");
+  const grd = g.createLinearGradient(0, 0, 0, 64);
+  grd.addColorStop(0, "rgba(255,255,255,0)");
+  grd.addColorStop(1, "rgba(255,255,255,1)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 4, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Static neon-cyberpunk pedestal: dark metal drum, glowing faceplate with a
+// hex core, cyan top ring, magenta base ring, faint holo beam and a contact
+// shadow that shrinks while the robot is in the air.
+function buildShowcasePedestal() {
+  const group = new THREE.Group();
+  group.position.y = PEDESTAL_TOP;
+
+  const drum = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.22, 1.38, 0.34, 48),
+    new THREE.MeshStandardMaterial({ color: 0x121628, metalness: 0.85, roughness: 0.32, emissive: 0x00e5ff, emissiveIntensity: 0.06 })
+  );
+  drum.position.y = -0.2;
+  group.add(drum);
+
+  const foot = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.42, 1.5, 0.1, 48),
+    new THREE.MeshStandardMaterial({ color: 0x0b0e1a, metalness: 0.8, roughness: 0.4 })
+  );
+  foot.position.y = -0.42;
+  group.add(foot);
+
+  const topMat = new THREE.MeshStandardMaterial({ color: 0x0c1122, metalness: 0.6, roughness: 0.3, emissive: 0x00e5ff, emissiveIntensity: 0.35 });
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(1.16, 1.2, 0.06, 48), topMat);
+  top.position.y = -0.03;
+  group.add(top);
+
+  const hexMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.22, depthWrite: false, blending: THREE.AdditiveBlending });
+  const hex = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.86, 6), hexMat);
+  hex.rotation.x = -Math.PI / 2;
+  hex.position.y = 0.004;
+  group.add(hex);
+
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.19, 0.035, 8, 72), ringMat);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.0;
+  group.add(ring);
+
+  const baseRingMat = new THREE.MeshBasicMaterial({ color: 0xff2d95 });
+  const baseRing = new THREE.Mesh(new THREE.TorusGeometry(1.44, 0.028, 8, 72), baseRingMat);
+  baseRing.rotation.x = Math.PI / 2;
+  baseRing.position.y = -0.37;
+  group.add(baseRing);
+
+  const beamMat = new THREE.MeshBasicMaterial({
+    color: 0x00e5ff,
+    map: makeBeamTexture(),
+    transparent: true,
+    opacity: 0.16,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(1.12, 1.16, 1.4, 48, 1, true), beamMat);
+  beam.position.y = 0.7;
+  group.add(beam);
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.75, 32),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.008;
+  group.add(shadow);
+
+  return { group, topMat, ringMat, baseRingMat, hexMat, beamMat, shadow };
+}
+
+function initShowcase3D() {
+  if (!showcaseCanvas) return;
+  try {
+    showcaseRenderer = new THREE.WebGLRenderer({ canvas: showcaseCanvas, alpha: true, antialias: false });
+    showcaseRenderer.setSize(showcaseCanvas.width, showcaseCanvas.height, false);
+    showcaseRenderer.setPixelRatio(1);
+    showcaseRenderer.setClearColor(0x000000, 0); // transparent — no background
+  } catch (err) {
+    console.error("showcase renderer failed", err);
+    return;
+  }
+
+  showcaseScene = new THREE.Scene();
+
+  // Slightly above the pedestal so its glowing top face reads as a disc.
+  showcaseCamera = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+  showcaseCamera.position.set(0, 1.0, 7.6);
+  showcaseCamera.lookAt(0, -0.15, 0);
+
+  // Cool key + neon rim lighting so the model pops and matches the arena look.
+  showcaseScene.add(new THREE.AmbientLight(0x7fb6ff, 0.85));
+  const key = new THREE.DirectionalLight(0xffffff, 2.6);
+  key.position.set(2.5, 4, 3);
+  showcaseScene.add(key);
+  const rim = new THREE.DirectionalLight(0x00e5ff, 1.2);
+  rim.position.set(-3, 1, -2);
+  showcaseScene.add(rim);
+  const under = new THREE.PointLight(0x00e5ff, 2.2, 3.5, 2);
+  under.position.set(0, PEDESTAL_TOP + 0.35, 1.1);
+  showcaseScene.add(under);
+
+  showcase.pedestal = buildShowcasePedestal();
+  showcaseScene.add(showcase.pedestal.group);
+
+  showcase.actor = new THREE.Group();
+  showcase.actor.position.y = PEDESTAL_TOP;
+  showcase.sway = new THREE.Group();
+  showcase.squash = new THREE.Group();
+  showcase.actor.add(showcase.sway);
+  showcase.sway.add(showcase.squash);
+  showcaseScene.add(showcase.actor);
+}
+
+function setShowcaseCharacter(type) {
+  const meta = CHAR_TYPES[type] || CHAR_TYPES.robot1_jpg;
+  const def = CHARACTERS[meta.idx] || CHARACTERS[0];
+
+  if (!showcaseScene) return;
+
+  // Drop the previous model (pedestal + animation loop stay).
+  if (showcaseRoot) {
+    showcase.squash.remove(showcaseRoot);
+    showcaseRoot.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) {
+        (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose && m.dispose());
+      }
+    });
+    showcaseRoot = null;
+  }
+
+  const viber = buildViber(def);
+  showcaseModel = viber;
+
+  // Normalize height and stand the feet on the pedestal (local y = 0),
+  // centred over it horizontally.
+  const box = new THREE.Box3().setFromObject(viber.root);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  viber.root.scale.multiplyScalar(SHOWCASE_HEIGHT / (size.y || 1));
+  const b2 = new THREE.Box3().setFromObject(viber.root);
+  viber.root.position.set(-(b2.min.x + b2.max.x) / 2, -b2.min.y, -(b2.min.z + b2.max.z) / 2);
+
+  showcaseRoot = viber.root;
+  showcase.squash.add(showcaseRoot);
+
+  // Pop in + a greeting hop so the swap reads instantly.
+  showcase.pop = 0.3;
+  if (showcase.action === "idle") startShowcaseAction("jump");
+}
+
+function startShowcaseAction(kind) {
+  showcase.actionT = 0;
+  if (kind === "jump") {
+    showcase.action = "crouch";
+  } else if (kind === "dance") {
+    showcase.action = "dance";
+  } else {
+    showcase.action = "idle";
+  }
+}
+
+const easeInOut = (x) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2);
+
+// Pose the robot for this frame: idle breathing/sway always, plus the active
+// hop or dance layered on top. Every joint is set absolutely each frame.
+function animateShowcase(t, dt) {
+  const s = showcase;
+  const v = showcaseModel;
+  s.actionT += dt;
+
+  // Idle base (always on)
+  const breath = Math.sin(t * 2.2);
+  let scaleY = 1 + 0.025 * breath;
+  let scaleXZ = 1 - 0.012 * breath;
+  let swayZ = 0.05 * Math.sin(t * 1.3);
+  let extraSpin = 0;
+  let bounce = 0;
+  let armLX = 0.1 * Math.sin(t * 2.2);
+  let armRX = -armLX;
+  let armLZ = -0.06;
+  let armRZ = 0.06;
+  let legLX = 0;
+  let legRX = 0;
+  let headZ = 0.03 * Math.sin(t * 1.3 + 0.6);
+
+  // Scheduler: after a gap, play the next action in the jump/jump/dance cycle.
+  if (s.action === "idle") {
+    s.nextActionIn -= dt;
+    if (s.nextActionIn <= 0) {
+      startShowcaseAction(SHOWCASE_CYCLE[s.cycle % SHOWCASE_CYCLE.length]);
+      s.cycle++;
+    }
+  }
+
+  if (s.action === "crouch") {
+    // Anticipation: quick squat before take-off
+    const k = Math.min(1, s.actionT / 0.12);
+    scaleY *= 1 - 0.14 * k;
+    scaleXZ *= 1 + 0.08 * k;
+    armLZ = armRZ = 0;
+    armLX = armRX = 0.5 * k;
+    if (s.actionT >= 0.12) {
+      s.action = "air";
+      s.actionT = 0;
+      s.hopV = HOP_VELOCITY;
+    }
+  } else if (s.action === "air") {
+    s.hopV -= HOP_GRAVITY * dt;
+    s.hopY += s.hopV * dt;
+    const up = Math.max(0, s.hopV / HOP_VELOCITY); // 1 at launch -> 0 at apex
+    scaleY *= 1 + 0.1 * up; // stretch on the way up
+    scaleXZ *= 1 - 0.05 * up;
+    armLZ = -2.3;
+    armRZ = 2.3; // arms up
+    legLX = -0.45;
+    legRX = 0.45;
+    if (s.hopY <= 0 && s.hopV < 0) {
+      s.hopY = 0;
+      s.hopV = 0;
+      s.land = 0.22;
+      s.flash = 1;
+      s.action = "idle";
+      s.nextActionIn = 2.2 + Math.random() * 0.8;
+    }
+  } else if (s.action === "dance") {
+    const p = s.actionT / DANCE_TIME;
+    const beat = s.actionT * Math.PI * 4; // 2 beats per second
+    bounce = Math.abs(Math.sin(beat)) * 0.12;
+    swayZ = 0.16 * Math.sin(beat);
+    headZ = 0.14 * Math.sin(beat + 0.5);
+    // Full extra spin in the middle of the routine
+    extraSpin = Math.PI * 2 * easeInOut(Math.min(1, Math.max(0, (p - 0.35) / 0.4)));
+    if (p < 0.5) {
+      armRZ = 2.5 + 0.35 * Math.sin(s.actionT * 14); // right-hand wave
+      armLZ = -0.3 - 0.25 * Math.sin(beat);
+    } else {
+      const pump = Math.sin(beat);
+      armLZ = -1.6 - 0.8 * pump; // both arms pump
+      armRZ = 1.6 - 0.8 * pump;
+    }
+    legLX = 0.4 * Math.max(0, Math.sin(beat));
+    legRX = 0.4 * Math.max(0, -Math.sin(beat));
+    if (p >= 1) {
+      s.action = "idle";
+      s.nextActionIn = 2.0 + Math.random() * 0.8;
+    }
+  }
+
+  // Landing squash springs back over ~0.22s
+  if (s.land > 0) {
+    s.land = Math.max(0, s.land - dt);
+    const k = s.land / 0.22;
+    scaleY *= 1 - 0.2 * k;
+    scaleXZ *= 1 + 0.12 * k;
+  }
+
+  // Character swap pop-in (slight overshoot)
+  let pop = 1;
+  if (s.pop > 0) {
+    s.pop = Math.max(0, s.pop - dt);
+    const x = 1 - s.pop / 0.3;
+    pop = 1 + 0.12 * Math.sin(x * Math.PI) - 0.25 * (1 - x) * (1 - x);
+  }
+
+  s.spin += SHOWCASE_TURN_SPEED * dt;
+  s.actor.position.y = PEDESTAL_TOP + s.hopY + bounce;
+  s.actor.rotation.y = s.spin + extraSpin;
+  s.sway.rotation.z = swayZ;
+  s.squash.scale.set(scaleXZ * pop, scaleY * pop, scaleXZ * pop);
+
+  if (v) {
+    if (v.armL) v.armL.rotation.set(armLX, 0, armLZ);
+    if (v.armR) v.armR.rotation.set(armRX, 0, armRZ);
+    if (v.legL) v.legL.rotation.x = legLX;
+    if (v.legR) v.legR.rotation.x = legRX;
+    if (v.head) v.head.rotation.z = headZ;
+  }
+
+  // Pedestal pulse (+ a flash when the robot lands)
+  const ped = s.pedestal;
+  s.flash = Math.max(0, s.flash - dt * 3);
+  const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+  ped.topMat.emissiveIntensity = 0.28 + 0.22 * pulse + 0.6 * s.flash;
+  ped.hexMat.opacity = 0.14 + 0.14 * pulse + 0.4 * s.flash;
+  ped.beamMat.opacity = 0.1 + 0.08 * pulse + 0.15 * s.flash;
+  ped.baseRingMat.color.setHex(s.flash > 0.5 ? 0xffffff : 0xff2d95);
+  const air = Math.min(1, (s.hopY + bounce) / 0.8);
+  ped.shadow.scale.setScalar(1 - 0.45 * air);
+  ped.shadow.material.opacity = 0.45 * (1 - 0.6 * air);
+}
+
+function updateShowcase3D(t) {
+  if (!showcaseRenderer || !showcaseScene || !showcaseRoot) return;
+  // The canvas lives in the start menu: skip all work while it's hidden.
+  if (startMenuEl.classList.contains("hidden")) {
+    showcase.last = t;
+    return;
+  }
+  const dt = Math.min(0.05, Math.max(0, t - (showcase.last || t)));
+  showcase.last = t;
+  animateShowcase(t, dt);
+  showcaseRenderer.render(showcaseScene, showcaseCamera);
+}
+
+initShowcase3D();
+
+// 9. Character Switching Logic (6 Viber fighters + 6 cutout agents, 2 pages)
 const charButtons = [
-  { el: btnCharJpgEl, type: "robot1_jpg" },
-  { el: btnCharMossEl, type: "moss" },
-  { el: btnCharMechaEl, type: "mecha" },
-  { el: btnCharPhantomEl, type: "phantom" },
-  { el: btnCharChogEl, type: "chog" },
-  { el: btnCharMetaEl, type: "meta" },
+  { el: btnCharJpgEl, type: "robot1_jpg", page: 1 },
+  { el: btnCharMossEl, type: "moss", page: 1 },
+  { el: btnCharMechaEl, type: "mecha", page: 1 },
+  { el: btnCharPhantomEl, type: "phantom", page: 1 },
+  { el: btnCharChogEl, type: "chog", page: 1 },
+  { el: btnCharMetaEl, type: "meta", page: 1 },
+  { el: btnCharAgent103El, type: "agent103", page: 2 },
+  { el: btnCharAgent107El, type: "agent107", page: 2 },
+  { el: btnCharAgent111El, type: "agent111", page: 2 },
+  { el: btnCharAgent116El, type: "agent116", page: 2 },
+  { el: btnCharAgent120El, type: "agent120", page: 2 },
+  { el: btnCharAgent123El, type: "agent123", page: 2 },
 ];
+
+let charPage = 1;
+function showCharPage(page) {
+  charPage = page;
+  if (charPage1El) charPage1El.classList.toggle("hidden", page !== 1);
+  if (charPage2El) charPage2El.classList.toggle("hidden", page !== 2);
+  if (charPagerLabelEl) charPagerLabelEl.textContent = `${page} / 2`;
+  if (charPagerPrevEl) charPagerPrevEl.disabled = page === 1;
+  if (charPagerNextEl) charPagerNextEl.disabled = page === 2;
+}
 
 function selectCharacter(type) {
   audio.playClick();
@@ -846,12 +1501,18 @@ function selectCharacter(type) {
   if (hudP1AvatarEl) hudP1AvatarEl.src = meta.portrait;
   if (hudP1NameEl) hudP1NameEl.textContent = meta.name;
 
+  setShowcaseCharacter(type);
   game.setPlayerCharacter(type);
 }
 
 charButtons.forEach(({ el, type }) => {
   if (el) el.addEventListener("click", () => selectCharacter(type));
 });
+
+// Pagination: ◀ / ▶ switch between the two selector pages.
+if (charPagerPrevEl) charPagerPrevEl.addEventListener("click", () => { audio.playClick(); showCharPage(Math.max(1, charPage - 1)); });
+if (charPagerNextEl) charPagerNextEl.addEventListener("click", () => { audio.playClick(); showCharPage(Math.min(2, charPage + 1)); });
+showCharPage(1);
 
 // Select Crimson Miner by default
 selectCharacter("robot1_jpg");
@@ -904,7 +1565,7 @@ const DIFF_ORDER = ["easy", "normal", "hard"];
 // to one rAF per frame — an unthrottled pointermove + getBoundingClientRect()
 // runs layout on every mousemove (hundreds/s on macOS trackpads) and can stall
 // the UI. We cache rects and only refresh them on scroll/resize.
-const spotlightSelector = ".char-tab-btn, .map-tab-btn, .diff-tab-btn, .bot-tab-btn, .cyber-btn";
+const spotlightSelector = ".char-tab-btn, .map-tab-btn, .diff-tab-btn, .bot-tab-btn, .race-size-btn, .race-diff-btn, .cyber-btn";
 let spotlightEl = null;
 let spotlightRect = null;
 let spotlightQueued = false;
@@ -1045,6 +1706,74 @@ if (menuActionsEl) {
   });
 }
 
+// UI Event Listeners: VIBER RACE setup panel
+const RACE_DIFFS = ["easy", "normal", "hard"];
+let raceRacers = 5;
+let raceDifficulty = "normal";
+
+function markTabs(els, isActive) {
+  els.forEach((btn) => {
+    const on = isActive(btn);
+    btn.classList.toggle("active", on);
+    const badge = btn.querySelector(".tab-status-badge");
+    if (badge) badge.textContent = on ? "ACTIVE" : "SELECT";
+  });
+}
+
+function selectRaceSize(n, silent = false) {
+  if (!silent) audio.playClick();
+  raceRacers = n === 10 ? 10 : 5;
+  markTabs(raceSizeEls, (btn) => Number(btn.dataset.racers) === raceRacers);
+}
+
+function selectRaceDifficulty(level, silent = false) {
+  if (!RACE_DIFFS.includes(level)) return;
+  if (!silent) audio.playClick();
+  raceDifficulty = level;
+  markTabs(raceDiffEls, (btn) => btn.dataset.diff === level);
+}
+
+function startRaceFromMenu() {
+  try {
+    audio.playClick();
+  } catch (e) {
+    /* audio blocked — not fatal */
+  }
+  game.onMenuSpace = null;
+  try {
+    game.startRace({ racers: raceRacers, difficulty: raceDifficulty });
+  } catch (e) {
+    console.error("startRace failed:", e);
+  }
+}
+
+raceSizeEls.forEach((btn) => btn.addEventListener("click", () => selectRaceSize(Number(btn.dataset.racers))));
+raceDiffEls.forEach((btn) => btn.addEventListener("click", () => selectRaceDifficulty(btn.dataset.diff)));
+
+btnMenuRaceEl.addEventListener("click", () => {
+  audio.playClick();
+  // Start from the battle difficulty the player already picked.
+  selectRaceDifficulty(game.difficulty || "normal", true);
+  startMenuEl.classList.add("hidden");
+  raceMenuEl.classList.remove("hidden");
+  game.onMenuSpace = startRaceFromMenu; // SPACE starts the race from this panel
+});
+
+btnRaceStartEl.addEventListener("click", (e) => {
+  e.preventDefault();
+  startRaceFromMenu();
+});
+
+btnRaceBackEl.addEventListener("click", () => {
+  audio.playClick();
+  game.onMenuSpace = null;
+  raceMenuEl.classList.add("hidden");
+  startMenuEl.classList.remove("hidden");
+});
+
+selectRaceSize(5, true);
+selectRaceDifficulty("normal", true);
+
 // UI Event Listeners: Online 1v1 panel
 btnMenuOnlineEl.addEventListener("click", () => {
   audio.playClick();
@@ -1098,7 +1827,8 @@ if (onlineCodeInputEl) {
 // ---------------------------------------------------------------------------
 {
   const SELECTOR =
-    "#btn-menu-play, #btn-menu-online, #btn-menu-profile, #btn-menu-sound, " +
+    "#btn-menu-play, #btn-menu-race, #btn-menu-online, #btn-menu-profile, #btn-menu-sound, " +
+    "#btn-race-start, #btn-race-back, .race-size-btn, .race-diff-btn, " +
     ".char-tab-btn, .map-tab-btn, .diff-tab-btn, .bot-tab-btn, " +
     "#btn-online-host, #btn-online-join, #btn-online-back, " +
     "#btn-pause-resume, #btn-pause-restart, #btn-pause-menu, " +
@@ -1227,7 +1957,9 @@ btnHudRestartEl.addEventListener("click", () => {
 
 btnResetCamEl.addEventListener("click", () => {
   audio.playClick();
-  if (game.state === "playing" || game.state === "paused" || game.state === "round_over") {
+  if (game.mode === "race" && game.state !== "menu") {
+    snapRaceCamera();
+  } else if (game.state === "playing" || game.state === "paused" || game.state === "round_over") {
     frameCameraOnPlayer();
   } else {
     camera.position.copy(DEFAULT_CAM_POS);
@@ -1287,11 +2019,16 @@ function animate() {
     embers.geo.attributes.position.needsUpdate = true;
   }
 
-  // Follow the player with the orbit pivot (frozen when paused / falling)
-  updateCameraFollow(dt);
+  if (game.mode === "race" && game.state !== "menu") {
+    // VIBER RACE: scripted chase camera (orbit controls are parked)
+    updateRaceCamera(dt);
+  } else {
+    // Follow the player with the orbit pivot (frozen when paused / falling)
+    updateCameraFollow(dt);
 
-  // Update controls
-  controls.update();
+    // Update controls
+    controls.update();
+  }
 
   // Apply subtle screen shake
   if (screenShakeAmount > 0.001) {
@@ -1306,6 +2043,9 @@ function animate() {
 
   // Render scene
   renderer.render(scene, camera);
+
+  // 3D fighter showcase (spins the selected character in the menu)
+  updateShowcase3D(now);
 
   // Prize drum overlay (only draws while active — driven by this loop)
   updatePrizeDrum();

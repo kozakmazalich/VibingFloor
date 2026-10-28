@@ -34,6 +34,7 @@ import { PickupManager } from "./pickups.js";
 import { ConsumableManager } from "./consumables.js";
 import { audio } from "./audio.js";
 import { MAPS, scaledMap } from "./maps.js";
+import { RaceMode } from "./race.js";
 
 const round2 = (v) => Math.round(v * 100) / 100;
 
@@ -71,7 +72,9 @@ export class Game {
     this.keys = {};
 
     // Online 1v1 (PeerJS) state
-    this.mode = "cpu"; // "cpu" | "online"
+    this.mode = "cpu"; // "cpu" | "online" | "race" (VIBER RACE, see src/race.js)
+    this.race = null; // RaceMode, created on the first race
+    this.onMenuSpace = null; // optional menu override for SPACE (race setup panel)
     this.netRole = null; // "host" | "guest" | null
     this.net = null; // Net instance (wired by main.js)
     this.remoteInput = { mx: 0, mz: 0, jump: false, push: false, spear: false, grenade: false, dash: false };
@@ -341,9 +344,12 @@ export class Game {
       this._loaderShownAt = 0;
       const start = this._startAfterLoad;
       this._startAfterLoad = false;
+      const race = this._raceAfterLoad;
+      this._raceAfterLoad = null;
       // Finish a deferred Play before dropping the LOADING label, so a tap
       // during a swap never starts on a half-cleared arena.
       if (start) this._beginMatch();
+      else if (race) this._beginRace(race);
       if (this.ui.onArenaLoading) this.ui.onArenaLoading(false);
     }
   }
@@ -575,7 +581,8 @@ export class Game {
       if (e.code === "Space") {
         e.preventDefault();
         if (this.state === "menu") {
-          this.startGame();
+          if (this.onMenuSpace) this.onMenuSpace();
+          else this.startGame();
           return;
         }
       }
@@ -631,6 +638,35 @@ export class Game {
       return;
     }
     this._beginMatch();
+  }
+
+  // VIBER RACE: obstacle-course race. opts = { racers: 5 | 10, difficulty }.
+  // Waits for an in-flight arena build like startGame (the build would
+  // otherwise reset the borrowed player robot mid-race).
+  startRace(opts = {}) {
+    if (this._arenaBusy) {
+      this._raceAfterLoad = opts;
+      return;
+    }
+    this._beginRace(opts);
+  }
+
+  _beginRace(opts) {
+    if (this.mode === "race" && this.race) this.race.exit();
+    if (!this.race) this.race = new RaceMode(this);
+    this.mode = "race";
+    this.netRole = null;
+    this.island.remoteAuthoritative = false;
+    this.race.enter(opts);
+
+    if (this.ui.onGameStart) {
+      this.ui.onGameStart({
+        round: this.roundNumber,
+        scores: this.scores,
+        race: true,
+        racers: this.race.racerRobots(),
+      });
+    }
   }
 
   _beginMatch() {
@@ -726,6 +762,7 @@ export class Game {
   }
 
   goToMenu() {
+    if (this.mode === "race" && this.race) this.race.exit();
     this.state = "menu";
     this.mode = "cpu";
     this.netRole = null;
@@ -772,6 +809,10 @@ export class Game {
   }
 
   restartRound(advanceRound = true) {
+    if (this.mode === "race" && this.race) {
+      this.race.restart();
+      return;
+    }
     if (this.mode === "online" && this.netRole === "guest") {
       // The guest never restarts the sim locally — ask the host instead.
       if (this.net) this.net.send({ t: "restart" });
@@ -1639,6 +1680,12 @@ export class Game {
         this.roundEndOutcome = null;
         if (this.ui.onRoundEnd) this.ui.onRoundEnd(outcome);
       }
+    }
+
+    // VIBER RACE runs its own simulation (course, racers, HUD status).
+    if (this.mode === "race" && this.race) {
+      this.race.update(dt);
+      return;
     }
 
     // ONLINE GUEST: thin client — no authoritative physics, but with LOCAL

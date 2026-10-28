@@ -201,10 +201,203 @@ export const CHARACTERS = [
       { w: 0.22, h: 0.10, d: 0.24, x: 0.00, y: -0.21, z: 0.02, c: 0xeaff3a },
     ],
   },
+  // PAGE 2 FIGHTERS — AGENT VIBERS. Each body is rebuilt box-for-box from its
+  // cutout PNG (assets/robots-cutout copy/vibe-vibers-agent-*.png, the source
+  // of truth): per-robot head / torso / arm / leg proportions plus every
+  // visible detail. Built by buildAgentViber (customBuild: "agent").
+  // Units: head width = 1. x < 0 is the viewer's left in the PNG (the face
+  // looks +Z). Part fields: on = head | torso | arms | armL | armR | legs |
+  // legL | legR ("arms"/"legs" mirror x outward); x, y relative to the parent
+  // centre; front = how far the part's face sits proud of the parent's front
+  // face (else z); glow = emissive boost for bright eyes/pupils.
+  {
+    id: "agent103", name: "AGENT 103",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 0.95, d: 0.9, c: 0x9a8a5c },
+      torso: { w: 0.84, h: 0.46, d: 0.7, c: 0x9a8a5c },
+      arms: { w: 0.3, h: 0.5, d: 0.42, c: 0x262c33 },
+      legs: { w: 0.3, h: 0.3, d: 0.36, x: 0.2, c: 0x9a8a5c },
+      parts: [
+        // Stacked block ears
+        { on: "head", w: 0.24, h: 0.2, d: 0.24, x: -0.3, y: 0.575, z: 0, c: 0x9a8a5c },
+        { on: "head", w: 0.14, h: 0.14, d: 0.14, x: -0.36, y: 0.745, z: -0.02, c: 0x9a8a5c },
+        { on: "head", w: 0.24, h: 0.2, d: 0.24, x: 0.3, y: 0.575, z: 0, c: 0x9a8a5c },
+        { on: "head", w: 0.14, h: 0.14, d: 0.14, x: 0.36, y: 0.745, z: -0.02, c: 0x9a8a5c },
+        // Big black eye frames with white pupils glancing left
+        { on: "head", w: 0.38, h: 0.35, d: 0.1, x: -0.32, y: -0.1, front: 0.06, c: 0x15191a },
+        { on: "head", w: 0.38, h: 0.35, d: 0.1, x: 0.3, y: -0.12, front: 0.06, c: 0x15191a },
+        { on: "head", w: 0.15, h: 0.15, d: 0.06, x: -0.39, y: -0.13, front: 0.1, c: 0xeef2fc, glow: 0.45 },
+        { on: "head", w: 0.15, h: 0.15, d: 0.06, x: 0.23, y: -0.15, front: 0.1, c: 0xeef2fc, glow: 0.45 },
+        // Grinning mouth: white interior with four slate teeth bars
+        { on: "torso", w: 0.64, h: 0.36, d: 0.06, x: 0, y: 0.03, front: 0.02, c: 0xe8eef8, glow: 0.2 },
+        { on: "torso", w: 0.13, h: 0.42, d: 0.1, x: -0.25, y: 0.06, front: 0.06, c: 0x262c33 },
+        { on: "torso", w: 0.13, h: 0.42, d: 0.1, x: -0.08, y: 0.06, front: 0.06, c: 0x262c33 },
+        { on: "torso", w: 0.13, h: 0.42, d: 0.1, x: 0.09, y: 0.06, front: 0.06, c: 0x262c33 },
+        { on: "torso", w: 0.13, h: 0.42, d: 0.1, x: 0.26, y: 0.06, front: 0.06, c: 0x1c2026 },
+        // Cream hands, black boots
+        { on: "arms", w: 0.31, h: 0.2, d: 0.43, y: -0.15, c: 0xccc6c0 },
+        { on: "legs", w: 0.32, h: 0.12, d: 0.38, y: -0.09, c: 0x15171a },
+      ],
+    },
+  },
+  {
+    id: "agent107", name: "AGENT 107",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 0.9, d: 0.9, c: 0x452c25 },
+      torso: { w: 0.88, h: 0.48, d: 0.75, c: 0x452c25 },
+      arms: { w: 0.28, h: 0.42, d: 0.4, c: 0x452c25, drop: 0.04 },
+      legs: { w: 0.34, h: 0.14, d: 0.4, x: 0.2, c: 0x6a5c4e },
+      parts: [
+        // Off-white cap with a black front brim and blue-grey badge
+        { on: "head", w: 1.08, h: 0.42, d: 1.0, x: 0, y: 0.54, z: -0.02, c: 0xdcd6cb },
+        { on: "head", w: 1.06, h: 0.15, d: 0.3, x: 0, y: 0.255, front: 0.14, c: 0x14181a },
+        { on: "head", w: 0.3, h: 0.16, d: 0.1, x: -0.09, y: 0.4, front: 0.09, c: 0xb4bac6 },
+        // Pale band under the brim
+        { on: "head", w: 1.0, h: 0.14, d: 0.06, x: 0, y: 0.115, front: 0.02, c: 0xccc6c0 },
+        // Huge black eyes with teal pupils
+        { on: "head", w: 0.47, h: 0.42, d: 0.1, x: -0.255, y: -0.17, front: 0.05, c: 0x14181a },
+        { on: "head", w: 0.47, h: 0.42, d: 0.1, x: 0.255, y: -0.17, front: 0.05, c: 0x14181a },
+        { on: "head", w: 0.16, h: 0.16, d: 0.06, x: -0.36, y: -0.22, front: 0.09, c: 0x7ee4d8, glow: 0.55 },
+        { on: "head", w: 0.16, h: 0.16, d: 0.06, x: 0.15, y: -0.23, front: 0.09, c: 0x7ee4d8, glow: 0.55 },
+        // Chest button + taupe base plate
+        { on: "torso", w: 0.15, h: 0.15, d: 0.12, x: -0.08, y: 0.04, front: 0.07, c: 0xb4bac6 },
+        { on: "torso", w: 0.94, h: 0.1, d: 0.8, x: 0, y: -0.21, z: 0, c: 0x605448 },
+        // Left hand: small grey cube
+        { on: "armL", w: 0.22, h: 0.16, d: 0.26, x: 0, y: -0.25, z: 0.04, c: 0x9c9c96 },
+        // Right arm: grey elbow, big cream fist gripping a blue-grey block
+        { on: "armR", w: 0.16, h: 0.2, d: 0.16, x: 0.1, y: 0.12, z: -0.14, c: 0xb4bac6 },
+        { on: "armR", w: 0.38, h: 0.26, d: 0.44, x: -0.02, y: -0.3, z: 0.1, c: 0xdcd6cb },
+        { on: "armR", w: 0.22, h: 0.3, d: 0.14, x: -0.08, y: -0.32, z: 0.36, c: 0xb4bac6 },
+      ],
+    },
+  },
+  {
+    id: "agent111", name: "AGENT 111",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 1.0, d: 0.95, c: 0xd69456 },
+      torso: { w: 0.85, h: 0.44, d: 0.72, c: 0xd69456 },
+      arms: { w: 0.3, h: 0.46, d: 0.4, c: 0x5a6678 },
+      legs: { w: 0.2, h: 0.16, d: 0.24, x: 0.2, c: 0x1c1f24 },
+      parts: [
+        // Antenna with a green tip
+        { on: "head", w: 0.12, h: 0.36, d: 0.12, x: 0.05, y: 0.68, z: 0, c: 0x14181a },
+        { on: "head", w: 0.16, h: 0.16, d: 0.16, x: 0.05, y: 0.92, z: 0, c: 0xa8ea9c, glow: 0.5 },
+        // Mismatched eyes: green frame (left) + slate frame (right), cream pupils
+        { on: "head", w: 0.5, h: 0.56, d: 0.1, x: -0.27, y: -0.16, front: 0.05, c: 0xa8ea9c, glow: 0.3 },
+        { on: "head", w: 0.48, h: 0.54, d: 0.1, x: 0.27, y: -0.18, front: 0.05, c: 0x5a6678 },
+        { on: "head", w: 0.27, h: 0.28, d: 0.06, x: -0.32, y: -0.17, front: 0.09, c: 0xd8d2c8, glow: 0.25 },
+        { on: "head", w: 0.27, h: 0.28, d: 0.06, x: 0.22, y: -0.2, front: 0.09, c: 0xd8d2c8, glow: 0.25 },
+        { on: "head", w: 0.12, h: 0.14, d: 0.1, x: -0.02, y: -0.33, front: 0.1, c: 0x14181a },
+        // Slate collar, cream chest panel with slate bar + button, slate hips
+        { on: "torso", w: 0.95, h: 0.08, d: 0.8, x: 0, y: 0.2, z: 0, c: 0x5a6678 },
+        { on: "torso", w: 0.6, h: 0.3, d: 0.06, x: -0.04, y: 0.0, front: 0.02, c: 0xd8d2c8, glow: 0.15 },
+        { on: "torso", w: 0.3, h: 0.07, d: 0.08, x: 0.1, y: 0.1, front: 0.05, c: 0x5a6678 },
+        { on: "torso", w: 0.15, h: 0.14, d: 0.1, x: -0.06, y: -0.02, front: 0.08, c: 0x5a6678 },
+        { on: "torso", w: 0.7, h: 0.08, d: 0.64, x: 0, y: -0.24, z: 0, c: 0x5a6678 },
+        // Orange shoulders over slate arms
+        { on: "arms", w: 0.31, h: 0.22, d: 0.41, y: 0.12, c: 0xd69456 },
+      ],
+    },
+  },
+  {
+    id: "agent116", name: "AGENT 116",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 1.0, d: 0.92, c: 0xb83826 },
+      torso: { w: 0.85, h: 0.48, d: 0.72, c: 0xb83826 },
+      arms: { w: 0.3, h: 0.5, d: 0.42, c: 0xb83826 },
+      legs: { w: 0.3, h: 0.22, d: 0.34, x: 0.2, c: 0xb83826 },
+      parts: [
+        // Stacked block ears
+        { on: "head", w: 0.24, h: 0.2, d: 0.24, x: -0.3, y: 0.6, z: 0, c: 0xb83826 },
+        { on: "head", w: 0.14, h: 0.14, d: 0.14, x: -0.36, y: 0.77, z: -0.02, c: 0xb83826 },
+        { on: "head", w: 0.24, h: 0.2, d: 0.24, x: 0.3, y: 0.6, z: 0, c: 0xb83826 },
+        { on: "head", w: 0.14, h: 0.14, d: 0.14, x: 0.36, y: 0.77, z: -0.02, c: 0xb83826 },
+        // Green-framed left eye with cream pupil
+        { on: "head", w: 0.54, h: 0.54, d: 0.1, x: -0.3, y: -0.03, front: 0.05, c: 0xa8ea9c, glow: 0.3 },
+        { on: "head", w: 0.28, h: 0.28, d: 0.06, x: -0.34, y: -0.06, front: 0.09, c: 0xd8d2c8, glow: 0.25 },
+        // Cream scar stripe crossing the small black right eye
+        { on: "head", w: 0.15, h: 0.88, d: 0.06, x: 0.29, y: 0.0, front: 0.02, c: 0xd8d2c8 },
+        { on: "head", w: 0.3, h: 0.26, d: 0.1, x: 0.24, y: -0.1, front: 0.06, c: 0x15181a },
+        { on: "head", w: 0.19, h: 0.16, d: 0.1, x: 0.0, y: -0.28, front: 0.08, c: 0x15181a },
+        // Taupe pocket with a rust nub and a cream button
+        { on: "torso", w: 0.36, h: 0.29, d: 0.06, x: -0.1, y: -0.03, front: 0.02, c: 0x605448 },
+        { on: "torso", w: 0.13, h: 0.1, d: 0.08, x: -0.07, y: 0.15, front: 0.04, c: 0x9c5a48 },
+        { on: "torso", w: 0.15, h: 0.15, d: 0.12, x: 0.1, y: -0.12, front: 0.08, c: 0xd8d2c8 },
+        // Black cuffs + cream hands, cream boots
+        { on: "arms", w: 0.31, h: 0.1, d: 0.43, y: -0.06, c: 0x15181a },
+        { on: "arms", w: 0.31, h: 0.14, d: 0.43, y: -0.18, c: 0xd8d2c8 },
+        { on: "legs", w: 0.36, h: 0.12, d: 0.44, y: -0.05, z: 0.05, c: 0xdcd6cb },
+      ],
+    },
+  },
+  {
+    id: "agent120", name: "AGENT 120",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 1.2, d: 0.9, c: 0x452c25 },
+      torso: { w: 0.62, h: 0.48, d: 0.55, c: 0x262c33 },
+      arms: { w: 0.42, h: 0.5, d: 0.55, c: 0x452c25 },
+      legs: { w: 0.15, h: 0.24, d: 0.15, x: 0.15, c: 0x2c3038 },
+      parts: [
+        // Flat raised crown block + blue headband
+        { on: "head", w: 0.74, h: 0.14, d: 0.66, x: 0, y: 0.67, z: 0, c: 0x52342b },
+        { on: "head", w: 1.02, h: 0.13, d: 0.92, x: 0, y: 0.36, z: 0, c: 0x3054c0, glow: 0.15 },
+        // Green-framed eyes with cream pupils
+        { on: "head", w: 0.46, h: 0.55, d: 0.1, x: -0.255, y: -0.12, front: 0.05, c: 0xa8ea9c, glow: 0.3 },
+        { on: "head", w: 0.46, h: 0.55, d: 0.1, x: 0.255, y: -0.12, front: 0.05, c: 0xa8ea9c, glow: 0.3 },
+        { on: "head", w: 0.21, h: 0.24, d: 0.06, x: -0.29, y: -0.14, front: 0.09, c: 0xe4ded2, glow: 0.25 },
+        { on: "head", w: 0.21, h: 0.24, d: 0.06, x: 0.21, y: -0.14, front: 0.09, c: 0xe4ded2, glow: 0.25 },
+        // Black mouth block
+        { on: "head", w: 0.26, h: 0.13, d: 0.1, x: -0.1, y: -0.46, front: 0.08, c: 0x15181a },
+        // Black chest bar + tan shoulder nubs on the navy vest
+        { on: "torso", w: 0.58, h: 0.18, d: 0.14, x: 0, y: 0.06, front: 0.1, c: 0x15181a },
+        { on: "torso", w: 0.12, h: 0.07, d: 0.3, x: -0.3, y: 0.2, z: 0, c: 0x8a7a60 },
+        { on: "torso", w: 0.12, h: 0.07, d: 0.3, x: 0.3, y: 0.2, z: 0, c: 0x8a7a60 },
+        // Big brown arms with cream cuffs, black boots on thin legs
+        { on: "arms", w: 0.43, h: 0.12, d: 0.56, y: -0.19, c: 0xe4ded2 },
+        { on: "legs", w: 0.25, h: 0.12, d: 0.34, y: -0.06, z: 0.06, c: 0x15171a },
+      ],
+    },
+  },
+  {
+    id: "agent123", name: "AGENT 123",
+    customBuild: "agent",
+    agent: {
+      head: { w: 1.0, h: 0.9, d: 0.9, c: 0x9280c2 },
+      torso: { w: 0.88, h: 0.44, d: 0.72, c: 0x9280c2 },
+      arms: { w: 0.26, h: 0.48, d: 0.4, c: 0xe4ded2 },
+      legs: { w: 0.25, h: 0.26, d: 0.3, x: 0.2, c: 0x2a2e36 },
+      parts: [
+        // Cream hat with a nub, tan tuft behind
+        { on: "head", w: 0.6, h: 0.38, d: 0.6, x: 0.05, y: 0.64, z: -0.06, c: 0xe4ded2 },
+        { on: "head", w: 0.12, h: 0.1, d: 0.12, x: 0.08, y: 0.88, z: -0.06, c: 0xe4ded2 },
+        { on: "head", w: 0.18, h: 0.2, d: 0.2, x: -0.36, y: 0.52, z: -0.3, c: 0xba9c78 },
+        // Wrap-around black mask with periwinkle eye slits
+        { on: "head", w: 1.04, h: 0.5, d: 0.94, x: 0, y: -0.18, z: 0, c: 0x15181a },
+        { on: "head", w: 0.24, h: 0.12, d: 0.06, x: -0.27, y: -0.02, front: 0.05, c: 0x96b4fc, glow: 0.55 },
+        { on: "head", w: 0.24, h: 0.12, d: 0.06, x: 0.22, y: -0.06, front: 0.05, c: 0x96b4fc, glow: 0.55 },
+        // Cream moustache bar over a periwinkle strip
+        { on: "head", w: 0.5, h: 0.12, d: 0.06, x: -0.06, y: -0.3, front: 0.05, c: 0x96b4fc, glow: 0.3 },
+        { on: "head", w: 0.47, h: 0.17, d: 0.14, x: -0.09, y: -0.33, front: 0.13, c: 0xe4ded2 },
+        // Periwinkle chest panel, tan belt, slate hips
+        { on: "torso", w: 0.56, h: 0.36, d: 0.06, x: -0.04, y: 0.04, front: 0.02, c: 0x96b4fc, glow: 0.2 },
+        { on: "torso", w: 0.9, h: 0.11, d: 0.82, x: 0, y: -0.17, z: 0.02, c: 0xba9c78 },
+        { on: "torso", w: 0.52, h: 0.1, d: 0.6, x: 0, y: -0.25, z: 0, c: 0x2a2e36 },
+        // Cream arms with tan cuffs, dark boots
+        { on: "arms", w: 0.27, h: 0.11, d: 0.41, y: -0.185, c: 0xba9c78 },
+        { on: "legs", w: 0.27, h: 0.1, d: 0.32, y: -0.08, c: 0x1c1e24 },
+      ],
+    },
+  },
 ];
 
 export function buildViber(def) {
   if (def.customBuild === "meta") return buildMetaViber(def);
+  if (def.customBuild === "agent") return buildAgentViber(def);
   const C = def.colors;
   const mats = [];
   function M(color, opts) {
@@ -364,6 +557,101 @@ function buildMetaViber(def) {
   addExtras(torso, def.bodyExtras);
   addExtras(armL, def.armExtrasL);
   addExtras(armR, def.armExtrasR);
+
+  root.scale.setScalar(0.8);
+  return { root, bodyPivot, head, body: torso, mats, legL, legR, armL, armR, visorMat: null, eyeMat: null };
+}
+
+// AGENT VIBER build: proportions and parts come straight from the per-robot
+// `agent` spec (measured off each cutout PNG). Stacks legs -> torso -> head
+// from y = 0, hangs the arms off the torso shoulders, then attaches parts.
+// Same return shape as the other builders (walk cycle swings legL/R, armL/R;
+// the jetpack anchors on `body`).
+function buildAgentViber(def) {
+  const S = def.agent;
+  const mats = [];
+  const matCache = new Map();
+  function getMat(c, glow) {
+    const key = c + "_" + (glow || 0);
+    if (!matCache.has(key)) {
+      const opts = { color: c };
+      if (glow) {
+        opts.emissive = c;
+        opts.emissiveIntensity = glow;
+      }
+      const m = new THREE.MeshLambertMaterial(opts);
+      mats.push(m);
+      matCache.set(key, m);
+    }
+    return matCache.get(key);
+  }
+
+  const { head: H, torso: T, arms: A, legs: L } = S;
+  const root = new THREE.Group();
+  const bodyPivot = new THREE.Group();
+  root.add(bodyPivot);
+
+  const legX = L.x ?? 0.2;
+  const legL = new THREE.Group();
+  const legR = new THREE.Group();
+  legL.position.set(-legX, L.h, 0);
+  legR.position.set(legX, L.h, 0);
+  for (const leg of [legL, legR]) {
+    const m = mkBox(L.w, L.h, L.d, getMat(L.c));
+    m.position.y = -L.h / 2;
+    leg.add(m);
+  }
+  root.add(legL, legR);
+
+  const torso = mkBox(T.w, T.h, T.d, getMat(T.c));
+  torso.position.y = L.h + T.h / 2;
+  bodyPivot.add(torso);
+
+  const head = new THREE.Group();
+  head.position.y = L.h + T.h + H.h / 2;
+  head.add(mkBox(H.w, H.h, H.d, getMat(H.c)));
+  bodyPivot.add(head);
+
+  const armX = T.w / 2 + A.w / 2 + 0.01;
+  const shoulderY = L.h + T.h - (A.drop || 0);
+  const armL = new THREE.Group();
+  const armR = new THREE.Group();
+  armL.position.set(-armX, shoulderY, 0);
+  armR.position.set(armX, shoulderY, 0);
+  for (const arm of [armL, armR]) {
+    const m = mkBox(A.w, A.h, A.d, getMat(A.c));
+    m.position.y = -A.h / 2;
+    arm.add(m);
+  }
+  bodyPivot.add(armL, armR);
+
+  // Parent -> { group, depth of its main box, y origin of part coords }.
+  const slots = {
+    head: { g: head, d: H.d, y0: 0 },
+    torso: { g: torso, d: T.d, y0: 0 },
+    armL: { g: armL, d: A.d, y0: -A.h / 2 },
+    armR: { g: armR, d: A.d, y0: -A.h / 2 },
+    legL: { g: legL, d: L.d, y0: -L.h / 2 },
+    legR: { g: legR, d: L.d, y0: -L.h / 2 },
+  };
+  function place(slotName, p, mirror) {
+    const slot = slots[slotName];
+    const b = mkBox(p.w, p.h, p.d, getMat(p.c, p.glow));
+    const z = p.front != null ? slot.d / 2 + p.front - p.d / 2 : p.z || 0;
+    b.position.set((p.x || 0) * mirror, slot.y0 + (p.y || 0), z);
+    slot.g.add(b);
+  }
+  for (const p of S.parts || []) {
+    if (p.on === "arms") {
+      place("armL", p, -1);
+      place("armR", p, 1);
+    } else if (p.on === "legs") {
+      place("legL", p, -1);
+      place("legR", p, 1);
+    } else if (slots[p.on]) {
+      place(p.on, p, 1);
+    }
+  }
 
   root.scale.setScalar(0.8);
   return { root, bodyPivot, head, body: torso, mats, legL, legR, armL, armR, visorMat: null, eyeMat: null };
