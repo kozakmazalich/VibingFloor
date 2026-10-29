@@ -38,8 +38,8 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // Race-map hazard tunables (Red Light Green Light + Meteor Shower).
 // ---------------------------------------------------------------------------
 const RL_GREEN_DUR = 4.0; // seconds of GREEN LIGHT (run)
-const RL_RED_DUR = 2.4; // seconds of RED LIGHT (freeze)
-const RL_GRACE = 0.3; // grace after RED starts before shooting
+const RL_RED_DUR = 5.0; // seconds of RED LIGHT (announcement + scan)
+const RL_REACTION = 2.6; // hear "RED LIGHT" and STOP before the scan starts
 const RL_MOVE_SPEED = 0.35; // horizontal speed above this counts as moving
 const RL_SHOT_CD = 0.6; // min seconds between two shots on the same racer
 
@@ -95,7 +95,7 @@ export class RaceMode {
     this.mapObjects = null; // per-map meshes (META VIBER, light panel)
     this.light = "green"; // redlight map: "green" | "red"
     this.lightT = 0; // seconds into the current light phase
-    this._redAnnounceT = -1; // countdown to the RED voice (after the scan shot)
+    this._redScanned = false; // has the scan/laser started for this RED phase?
     this.meteors = []; // meteor-shower map
     this._meteorTimer = 0;
     this._lasers = []; // green META laser flashes (redlight map)
@@ -235,7 +235,7 @@ export class RaceMode {
     // Reset the map hazard (light cycle, meteors) for a fresh race.
     this.light = "green";
     this.lightT = 0;
-    this._redAnnounceT = -1;
+    this._redScanned = false;
     this._meteorTimer = 0;
     this.raceHoleSoundCd = 0;
     this._clearLasers();
@@ -290,7 +290,7 @@ export class RaceMode {
     this._meteorTimer = 0;
     this.light = "green";
     this.lightT = 0;
-    this._redAnnounceT = -1;
+    this._redScanned = false;
     if (!this.mapDef) return;
     this.mapObjects = {};
     if (this.mapDef.hazard === "redlight") this._setupRedLight();
@@ -403,21 +403,20 @@ export class RaceMode {
       if (this.light === "green" && this.lightT >= RL_GREEN_DUR) {
         this.light = "red";
         this.lightT = 0;
+        this._redScanned = false;
         audio.playWarning();
-        this._fireScanLaser(); // the META VIBER shoots first...
-        this._redAnnounceT = 0.12; // ...then the RED call-out lands just after the shot
+        // ANNOUNCE FIRST: the doll calls "RED LIGHT" the instant it turns, so
+        // racers hear it and have time to freeze before the scan begins.
+        audio.playVoice("red");
         if (this.game.ui.onRaceEvent) this.game.ui.onRaceEvent({ type: "redlight", light: "red" });
       } else if (this.light === "red") {
-        // Fire the RED voice a beat AFTER the warning shot (not before it).
-        if (this._redAnnounceT > 0) {
-          this._redAnnounceT -= dt;
-          if (this._redAnnounceT <= 0) {
-            this._redAnnounceT = -1;
-            audio.playVoice("red");
+        // Reaction window: the call-out has just played — give racers time to
+        // stop. Only AFTER it does the doll start scanning/shooting.
+        if (this.lightT >= RL_REACTION) {
+          if (!this._redScanned) {
+            this._redScanned = true;
+            this._fireScanLaser(); // scan begins (after the voice)
           }
-        }
-        // After a short grace, any racer still moving gets shot back.
-        if (this.lightT > RL_GRACE) {
           for (const rc of this.racers) {
             rc.shotCd = Math.max(0, rc.shotCd - dt);
             if (rc.shotCd > 0 || rc.finished) continue;
@@ -429,7 +428,7 @@ export class RaceMode {
         if (this.lightT >= RL_RED_DUR) {
           this.light = "green";
           this.lightT = 0;
-          this._redAnnounceT = -1; // cancel any pending RED call-out
+          this._redScanned = false;
           audio.playPickup();
           audio.playVoice("green"); // GREEN LIGHT voice, synced to it turning away
           if (this.game.ui.onRaceEvent) this.game.ui.onRaceEvent({ type: "redlight", light: "green" });
