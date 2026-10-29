@@ -28,6 +28,13 @@ class SoundSystem {
     this.voiceSrc = null; // active one-shot source
     this.voiceGain = null;
     this.voiceReq = null; // most recently requested clip
+
+    // Per-source switches + levels (the map-3 HUD exposes music/voice on-off).
+    this.musicEnabled = true;
+    this.musicVolume = 0.5;
+    this.voiceEnabled = true;
+    this.voiceVolume = 1.15; // louder than the music (music ducks under it)
+    this._voiceDuckTimer = null;
   }
 
   init() {
@@ -661,6 +668,7 @@ class SoundSystem {
   // seamlessly; the previous synthesized loop is kept below but unused.
   startMusic() {
     if (this.musicRunning) return;
+    if (!this.musicEnabled) return;
     if (!this.ctx) this.init(); // do NOT call ensureContext here (it calls us back)
     if (!this.ctx || this.muted) return;
 
@@ -694,7 +702,7 @@ class SoundSystem {
     if (!this.ctx || !this.musicBuffer) return;
     this.stopMusicNodes(); // clear any previous source
     this.musicBus = this.ctx.createGain();
-    this.musicBus.gain.value = 0.5; // track volume
+    this.musicBus.gain.value = this.musicVolume; // track volume
     this.musicBus.connect(this.ctx.destination);
 
     const src = this.ctx.createBufferSource();
@@ -752,6 +760,28 @@ class SoundSystem {
     this._loadVoice("red", "RED.mp3");
   }
 
+  // Music + voice on/off (exposed by the map-3 HUD clicker).
+  setMusicEnabled(on) {
+    this.musicEnabled = !!on;
+    if (!this.musicEnabled) this.stopMusic();
+    else if (!this.muted) this.startMusic();
+    return this.musicEnabled;
+  }
+
+  toggleMusicEnabled() {
+    return this.setMusicEnabled(!this.musicEnabled);
+  }
+
+  setVoiceEnabled(on) {
+    this.voiceEnabled = !!on;
+    if (!this.voiceEnabled) this.stopVoice();
+    return this.voiceEnabled;
+  }
+
+  toggleVoiceEnabled() {
+    return this.setVoiceEnabled(!this.voiceEnabled);
+  }
+
   _loadVoice(key, url) {
     if (!this.ctx) return;
     if (this.voiceBuffers[key] || this.voicePromises[key]) return;
@@ -763,6 +793,7 @@ class SoundSystem {
       .then((buf) => this.ctx.decodeAudioData(buf))
       .then((decoded) => {
         this.voiceBuffers[key] = decoded;
+        console.info(`[audio] ${key} voice ready (${decoded.duration.toFixed(2)}s)`);
       })
       .catch((err) => {
         console.warn(`[audio] ${key} voice failed to load:`, err);
@@ -774,7 +805,7 @@ class SoundSystem {
   // never overlap. If still decoding, playback is deferred — and skipped if a
   // newer light was requested in the meantime.
   playVoice(key) {
-    if (this.muted) return;
+    if (this.muted || !this.voiceEnabled) return;
     this.ensureContext();
     if (!this.ctx) return;
     this.voiceReq = key;
@@ -789,7 +820,7 @@ class SoundSystem {
     const p = this.voicePromises[key];
     if (p) {
       p.then(() => {
-        if (!this.muted && this.voiceReq === key && this.voiceBuffers[key]) {
+        if (!this.muted && this.voiceEnabled && this.voiceReq === key && this.voiceBuffers[key]) {
           this._startVoice(this.voiceBuffers[key]);
         }
       });
@@ -801,7 +832,7 @@ class SoundSystem {
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     const gain = this.ctx.createGain();
-    gain.gain.value = 1.0;
+    gain.gain.value = this.voiceVolume; // louder than the music bed
     src.connect(gain);
     gain.connect(this.ctx.destination);
     try {
@@ -812,20 +843,35 @@ class SoundSystem {
     this.voiceSrc = src;
     this.voiceGain = gain;
     src.onended = () => {
-      if (this.voiceSrc !== src) return;
-      this.voiceSrc = null;
-      if (this.voiceGain) {
-        try {
-          this.voiceGain.disconnect();
-        } catch (e) {
-          /* noop */
-        }
-        this.voiceGain = null;
-      }
+      if (this.voiceSrc === src) this.voiceSrc = null;
     };
+
+    // Duck the music while the tag speaks, then bring it back. A timed restore
+    // is used because the clips carry trailing silence after the spoken line.
+    this._duckMusic(true);
+    clearTimeout(this._voiceDuckTimer);
+    this._voiceDuckTimer = setTimeout(() => {
+      this._voiceDuckTimer = null;
+      this._duckMusic(false);
+    }, 2900);
+  }
+
+  // Lower the music bed while a voice tag plays so the tag is always on top.
+  _duckMusic(on) {
+    if (!this.musicBus || !this.ctx) return;
+    const now = this.ctx.currentTime;
+    const target = on ? Math.max(0.03, this.musicVolume * 0.12) : this.musicVolume;
+    try {
+      this.musicBus.gain.cancelScheduledValues(now);
+      this.musicBus.gain.setTargetAtTime(target, now, 0.06);
+    } catch (e) {
+      this.musicBus.gain.value = target;
+    }
   }
 
   stopVoice() {
+    clearTimeout(this._voiceDuckTimer);
+    this._voiceDuckTimer = null;
     if (this.voiceSrc) {
       try {
         this.voiceSrc.stop();
@@ -843,6 +889,7 @@ class SoundSystem {
       }
       this.voiceGain = null;
     }
+    this._duckMusic(false);
   }
 
   _musicTick() {

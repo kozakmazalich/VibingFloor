@@ -8,7 +8,7 @@ import { cpSync, mkdirSync, rmSync } from "node:fs";
 rmSync("www", { recursive: true, force: true });
 mkdirSync("www", { recursive: true });
 
-for (const file of ["index.html", "style.css", "drum.js"]) {
+for (const file of ["index.html", "style.css", "drum.js", "RED.mp3", "GREEN.mp3"]) {
   cpSync(file, `www/${file}`);
 }
 cpSync("src", "www/src", { recursive: true });

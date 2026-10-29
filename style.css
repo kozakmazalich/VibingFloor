@@ -3264,6 +3264,40 @@ body.race-mode .island-status { border-color: rgba(255, 45, 149, 0.28); }
   color: #ffffff;
 }
 
+/* Map 3: music / voice tag on-off clickers */
+.race-audio-controls {
+  display: none;
+  gap: 6px;
+  margin-top: 8px;
+}
+.race-audio-controls.show {
+  display: flex;
+}
+.race-audio-btn {
+  flex: 1;
+  background: rgba(16, 24, 48, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 6px 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.race-audio-btn:hover {
+  border-color: rgba(0, 229, 255, 0.5);
+  color: #c9e4ff;
+}
+.race-audio-btn.active {
+  color: #39ff14;
+  border-color: rgba(57, 255, 20, 0.6);
+  background: rgba(57, 255, 20, 0.12);
+  box-shadow: 0 0 10px rgba(57, 255, 20, 0.25);
+}
+
 .surv-chip.finished { box-shadow: 0 0 0 2px #ffd700, 0 0 10px rgba(255, 215, 0, 0.6); }
 .surv-chip .race-rank {
   position: absolute;

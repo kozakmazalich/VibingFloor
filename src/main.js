@@ -56,6 +56,32 @@ const raceTrackFillEl = document.getElementById("race-track-fill");
 const raceTrackDotsEl = document.getElementById("race-track-dots");
 const hudTitleBadgeEl = document.getElementById("hud-title-badge");
 
+// Map 3 audio clickers (music / voice tag on-off)
+const raceAudioControlsEl = document.getElementById("race-audio-controls");
+const raceToggleMusicEl = document.getElementById("race-toggle-music");
+const raceToggleVoiceEl = document.getElementById("race-toggle-voice");
+let lastRaceLight = "green";
+
+function syncRaceAudioButtons() {
+  if (raceToggleMusicEl) raceToggleMusicEl.classList.toggle("active", audio.musicEnabled);
+  if (raceToggleVoiceEl) raceToggleVoiceEl.classList.toggle("active", audio.voiceEnabled);
+}
+if (raceToggleMusicEl) {
+  raceToggleMusicEl.addEventListener("click", () => {
+    audio.toggleMusicEnabled();
+    syncRaceAudioButtons();
+  });
+}
+if (raceToggleVoiceEl) {
+  raceToggleVoiceEl.addEventListener("click", () => {
+    const on = audio.toggleVoiceEnabled();
+    syncRaceAudioButtons();
+    // Immediate confirmation when switching the voice tags back on.
+    if (on) audio.playVoice(lastRaceLight === "red" ? "red" : "green");
+  });
+}
+syncRaceAudioButtons();
+
 // Buttons: Start Menu
 const btnMenuPlayEl = document.getElementById("btn-menu-play");
 const btnMenuSoundEl = document.getElementById("btn-menu-sound");
@@ -1003,15 +1029,22 @@ function showRaceCountdown(label) {
 }
 
 // Only touch the DOM when a value actually changes (status arrives every frame).
-const raceHudCache = { place: -1, total: -1, time: "", cp: "", batt: "", dots: [], finished: "", map: "", light: "" };
+const raceHudCache = { place: -1, total: -1, time: "", cp: "", batt: "", dots: [], finished: "", map: "", hazard: "", light: "" };
 
 function updateRaceHud(r) {
   if (r.map !== raceHudCache.map && raceMapEl) {
     raceHudCache.map = r.map;
     raceMapEl.textContent = r.map || "—";
   }
+  // Music / voice tag clickers are shown only on RED LIGHT GREEN LIGHT (map 3).
+  if (r.hazard !== raceHudCache.hazard) {
+    raceHudCache.hazard = r.hazard;
+    if (raceAudioControlsEl) raceAudioControlsEl.classList.toggle("show", r.hazard === "redlight");
+    syncRaceAudioButtons();
+  }
   // Map signal: Red Light Green Light state, or a meteor-shower hint.
   const light = r.hazard === "redlight" ? r.light : r.hazard === "islands" ? "meteor" : null;
+  if (r.hazard === "redlight" && (r.light === "red" || r.light === "green")) lastRaceLight = r.light;
   if (light !== raceHudCache.light && raceLightEl) {
     raceHudCache.light = light;
     if (!light) {
