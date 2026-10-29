@@ -95,6 +95,7 @@ export class RaceMode {
     this.mapObjects = null; // per-map meshes (META VIBER, light panel)
     this.light = "green"; // redlight map: "green" | "red"
     this.lightT = 0; // seconds into the current light phase
+    this._redAnnounceT = -1; // countdown to the RED voice (after the scan shot)
     this.meteors = []; // meteor-shower map
     this._meteorTimer = 0;
     this._lasers = []; // green META laser flashes (redlight map)
@@ -234,6 +235,7 @@ export class RaceMode {
     // Reset the map hazard (light cycle, meteors) for a fresh race.
     this.light = "green";
     this.lightT = 0;
+    this._redAnnounceT = -1;
     this._meteorTimer = 0;
     this.raceHoleSoundCd = 0;
     this._clearLasers();
@@ -288,6 +290,7 @@ export class RaceMode {
     this._meteorTimer = 0;
     this.light = "green";
     this.lightT = 0;
+    this._redAnnounceT = -1;
     if (!this.mapDef) return;
     this.mapObjects = {};
     if (this.mapDef.hazard === "redlight") this._setupRedLight();
@@ -401,9 +404,18 @@ export class RaceMode {
         this.light = "red";
         this.lightT = 0;
         audio.playWarning();
-        audio.playVoice("red"); // RED LIGHT voice, synced to the META VIBER turning around
+        this._fireScanLaser(); // the META VIBER shoots first...
+        this._redAnnounceT = 0.12; // ...then the RED call-out lands just after the shot
         if (this.game.ui.onRaceEvent) this.game.ui.onRaceEvent({ type: "redlight", light: "red" });
       } else if (this.light === "red") {
+        // Fire the RED voice a beat AFTER the warning shot (not before it).
+        if (this._redAnnounceT > 0) {
+          this._redAnnounceT -= dt;
+          if (this._redAnnounceT <= 0) {
+            this._redAnnounceT = -1;
+            audio.playVoice("red");
+          }
+        }
         // After a short grace, any racer still moving gets shot back.
         if (this.lightT > RL_GRACE) {
           for (const rc of this.racers) {
@@ -417,6 +429,7 @@ export class RaceMode {
         if (this.lightT >= RL_RED_DUR) {
           this.light = "green";
           this.lightT = 0;
+          this._redAnnounceT = -1; // cancel any pending RED call-out
           audio.playPickup();
           audio.playVoice("green"); // GREEN LIGHT voice, synced to it turning away
           if (this.game.ui.onRaceEvent) this.game.ui.onRaceEvent({ type: "redlight", light: "green" });
@@ -457,17 +470,27 @@ export class RaceMode {
     }
   }
 
-  // A green laser beam from the META VIBER's eyes to a moving racer.
+  // Green laser beam from the META VIBER's eyes to a moving racer.
   _fireLaser(rc) {
+    const r = rc.robot;
+    this._spawnLaserBeam(r.pos.x, r.pos.y + 0.7, r.pos.z);
+  }
+
+  // Warning shot fired the instant RED begins: a beam into the track ahead, so
+  // the RED call-out lands right after the shot instead of before it.
+  _fireScanLaser() {
     const meta = this.mapObjects && this.mapObjects.meta;
     if (!meta) return;
-    const r = rc.robot;
+    this._spawnLaserBeam(meta.group.position.x, 0.35, meta.group.position.z + 16);
+    audio.playSpearHit();
+  }
+
+  _spawnLaserBeam(tx, ty, tz) {
+    const meta = this.mapObjects && this.mapObjects.meta;
+    if (!meta) return;
     const sx = meta.group.position.x;
     const sy = meta.height * 0.72; // eye height on the big model
     const sz = meta.group.position.z;
-    const tx = r.pos.x;
-    const ty = r.pos.y + 0.7;
-    const tz = r.pos.z;
     const dx = tx - sx;
     const dy = ty - sy;
     const dz = tz - sz;
