@@ -1,0 +1,28 @@
+# Neon Cyberpunk Halloween Material File: 03_neon_bat
+
+newmtl Deep_Black_PBR
+Ka 0.04 0.02 0.07
+Kd 0.0400 0.0240 0.0700
+Ke 0.0200 0.0100 0.0500
+Ks 0.6000 0.3000 0.9000
+Ns 90.00
+d 1.0000
+illum 2
+
+newmtl Witch_Purple_Emissive
+Ka 0.04 0.02 0.07
+Kd 0.4820 0.1840 0.9690
+Ke 0.4820 0.1840 0.9690
+Ks 0.9000 0.5000 1.0000
+Ns 75.00
+d 1.0000
+illum 2
+
+newmtl Eye_Glow_Emissive
+Ka 0.04 0.02 0.07
+Kd 1.0000 0.9000 0.7000
+Ke 1.0000 0.9000 0.7000
+Ks 1.0000 1.0000 1.0000
+Ns 100.00
+d 1.0000
+illum 2

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { buildProp, buildNeonSlab } from "./props.js";
 import { COLORS, RACE_BATTERY_RESPAWN } from "./constants.js";
+import { preloadHalloweenAssets, makeHalo } from "./halloweenAssets.js";
 
 /**
  * VIBER RACE course builder.
@@ -93,81 +94,31 @@ function getGlowTexture() {
 }
 
 // ---------------------------------------------------------------------------
-// Halloween decoration textures (canvas, cached). Only built when the spooky
-// race theme is on, so the plain neon maps pay nothing.
+// Halloween carved-face texture (canvas, cached). The 3D pumpkin itself comes
+// from assets/halloween/models; this decal makes the carved face glow on top.
+// Only built when the spooky race theme is on.
 // ---------------------------------------------------------------------------
-let halTex = null;
-function getHalloweenTextures() {
-  if (halTex) return halTex;
-  const mk = (w, h, draw) => {
-    const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
-    draw(c.getContext("2d"), w, h);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  };
-
-  const face = mk(128, 128, (g) => {
-    g.clearRect(0, 0, 128, 128);
-    g.fillStyle = "#ffcf5c";
-    g.shadowColor = "#ff8a00";
-    g.shadowBlur = 16;
-    // eyes
-    g.beginPath(); g.moveTo(30, 50); g.lineTo(54, 34); g.lineTo(54, 60); g.closePath(); g.fill();
-    g.beginPath(); g.moveTo(98, 50); g.lineTo(74, 34); g.lineTo(74, 60); g.closePath(); g.fill();
-    // jagged mouth
-    g.beginPath();
-    g.moveTo(32, 80); g.lineTo(46, 96); g.lineTo(56, 80); g.lineTo(66, 98);
-    g.lineTo(78, 80); g.lineTo(96, 84); g.lineTo(92, 102); g.lineTo(36, 102);
-    g.closePath(); g.fill();
-  });
-
-  const web = mk(128, 128, (g) => {
-    g.clearRect(0, 0, 128, 128);
-    g.strokeStyle = "rgba(220,230,255,0.85)";
-    g.lineWidth = 1.6;
-    const cx = 64, cy = 64;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 60, cy + Math.sin(a) * 60); g.stroke();
-    }
-    for (let r = 14; r <= 58; r += 14) {
-      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
-    }
-  });
-
-  const ghost = mk(64, 64, (g) => {
-    g.clearRect(0, 0, 64, 64);
-    g.fillStyle = "rgba(205,240,255,0.96)";
-    g.shadowColor = "#9fdcff";
-    g.shadowBlur = 14;
-    g.beginPath();
-    g.arc(32, 26, 18, Math.PI, 0);
-    g.lineTo(50, 50); g.lineTo(42, 44); g.lineTo(34, 52); g.lineTo(26, 44); g.lineTo(18, 52); g.lineTo(14, 50);
-    g.closePath(); g.fill();
-    g.shadowBlur = 0;
-    g.fillStyle = "rgba(10,6,18,0.9)";
-    g.beginPath(); g.arc(26, 24, 2.6, 0, Math.PI * 2); g.fill();
-    g.beginPath(); g.arc(38, 24, 2.6, 0, Math.PI * 2); g.fill();
-  });
-
-  const bat = mk(64, 40, (g) => {
-    g.clearRect(0, 0, 64, 40);
-    g.fillStyle = "rgba(190,120,255,0.96)";
-    g.shadowColor = "#7b2ff7";
-    g.shadowBlur = 12;
-    g.beginPath();
-    g.moveTo(32, 20);
-    g.lineTo(24, 14); g.lineTo(6, 8); g.lineTo(12, 20); g.lineTo(2, 22); g.lineTo(18, 28); g.lineTo(26, 26);
-    g.lineTo(32, 34);
-    g.lineTo(38, 26); g.lineTo(46, 28); g.lineTo(62, 22); g.lineTo(52, 20); g.lineTo(58, 8); g.lineTo(40, 14);
-    g.closePath(); g.fill();
-  });
-
-  halTex = { face, web, ghost, bat };
-  return halTex;
+let halFaceTex = null;
+function getHalloweenFaceTexture() {
+  if (halFaceTex) return halFaceTex;
+  const c = document.createElement("canvas");
+  c.width = c.height = 128;
+  const g = c.getContext("2d");
+  g.clearRect(0, 0, 128, 128);
+  g.fillStyle = "#ffcf5c";
+  g.shadowColor = "#ff8a00";
+  g.shadowBlur = 16;
+  // eyes
+  g.beginPath(); g.moveTo(30, 50); g.lineTo(54, 34); g.lineTo(54, 60); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(98, 50); g.lineTo(74, 34); g.lineTo(74, 60); g.closePath(); g.fill();
+  // jagged mouth
+  g.beginPath();
+  g.moveTo(32, 80); g.lineTo(46, 96); g.lineTo(56, 80); g.lineTo(66, 98);
+  g.lineTo(78, 80); g.lineTo(96, 84); g.lineTo(92, 102); g.lineTo(36, 102);
+  g.closePath(); g.fill();
+  halFaceTex = new THREE.CanvasTexture(c);
+  halFaceTex.colorSpace = THREE.SRGBColorSpace;
+  return halFaceTex;
 }
 
 // ---------------------------------------------------------------------------
@@ -287,9 +238,10 @@ export class RaceCourse {
     this._mats = [];
     this._textures = [];
     this._anim = []; // (dt, t) => void decorations
+    this._alive = true;
     this._pumpkinMat = null;
     this._pumpkins = [];
-    this._drifters = []; // drifting bat / ghost sprites
+    this._drifters = []; // drifting bat / ghost props
 
     this.buildPlatforms();
     this.buildMovers();
@@ -601,85 +553,150 @@ export class RaceCourse {
   }
 
   // ---- Halloween decorations ---------------------------------------------
+  // The 3D props (pumpkins, bats, ghosts) come from assets/halloween/models
+  // and are cloned in once the kit has loaded. Until then the track simply has
+  // no spooky props — the race itself never waits on decoration.
   buildHalloweenDecor() {
-    const tex = getHalloweenTextures();
     const half = this.halfWidth;
     const finishS = this.finishS;
 
-    // Glowing jack-o-lanterns along the sides of the track.
-    const bodyGeo = new THREE.SphereGeometry(0.5, 14, 10);
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0xff6a00,
-      emissive: 0xff7a10,
-      emissiveIntensity: 0.9,
-      roughness: 0.55,
-      metalness: 0.1,
+    // Cobweb decal material (PNG from the generated kit).
+    preloadHalloweenAssets().then((assets) => {
+      if (!this._alive || !assets) return;
+      this._buildCobwebs(assets, half, finishS);
+      this._buildPumpkins(assets, half, finishS);
+      this._buildDrifters(assets, half, finishS);
     });
-    const stemGeo = new THREE.CylinderGeometry(0.06, 0.09, 0.24, 6);
-    const stemMat = new THREE.MeshStandardMaterial({ color: 0x2a4d1a, emissive: 0x1a3a12, emissiveIntensity: 0.3, roughness: 0.8 });
-    const faceGeo = new THREE.PlaneGeometry(0.74, 0.74);
-    const faceMat = new THREE.MeshBasicMaterial({ map: tex.face, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
-    this._geos.push(bodyGeo, stemGeo, faceGeo);
-    this._mats.push(bodyMat, stemMat, faceMat);
-    this._pumpkinMat = bodyMat;
+  }
+
+  _buildCobwebs(assets, half, finishS) {
+    if (!assets.textures.cobweb) return;
+    const webGeo = new THREE.PlaneGeometry(2.6, 2.6);
+    const webMat = new THREE.MeshBasicMaterial({
+      map: assets.textures.cobweb,
+      transparent: true,
+      opacity: 0.5,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      color: 0xcbb6ff,
+    });
+    this._geos.push(webGeo);
+    this._mats.push(webMat);
+
+    for (let s = 12; s < finishS - 6; s += 22) {
+      const side = Math.floor(s / 22) % 2 === 0 ? -1 : 1;
+      const x = side * (half - 0.9);
+      const surf = this.getSurfaceAt(x, -s);
+      if (!surf) continue;
+      const web = new THREE.Mesh(webGeo, webMat);
+      web.rotation.x = -Math.PI / 2;
+      // Corner sits on the platform edge, web spills inward.
+      web.rotation.z = side < 0 ? -Math.PI / 2 : Math.PI / 2;
+      web.position.set(x, surf.y + 0.035, -s);
+      this.root.add(web);
+    }
+  }
+
+  _buildPumpkins(assets, half, finishS) {
+    if (!assets.models.pumpkin) return;
+
+    const bodyMat = assets.materials.Pumpkin_Orange_PBR;
+    const faceMat = assets.materials.Face_Glow_Emissive;
+    this._pumpkinMat = bodyMat || null;
+    this._pumpkinFaceMat = faceMat || null;
+
+    const faceGeo = new THREE.PlaneGeometry(0.62, 0.62);
+    const decalMat = new THREE.MeshBasicMaterial({
+      map: getHalloweenFaceTexture(),
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this._geos.push(faceGeo);
+    this._mats.push(decalMat);
 
     const spots = [];
     for (let s = 8; s < finishS - 4; s += 15) {
       spots.push([-(half - 1.1), s]);
       spots.push([half - 1.1, s + 7]);
     }
+
+    let lights = 0;
     spots.forEach(([x, s], i) => {
       const surf = this.getSurfaceAt(x, -s);
       if (!surf) return;
-      const g = new THREE.Group();
-      const body = new THREE.Mesh(bodyGeo, bodyMat);
-      body.scale.set(1, 0.82, 1);
-      body.position.y = 0.34;
-      const stem = new THREE.Mesh(stemGeo, stemMat);
-      stem.position.y = 0.72;
-      const face = new THREE.Mesh(faceGeo, faceMat);
-      face.position.set(0, 0.38, 0.47);
-      g.add(body, stem, face);
+      const g = assets.models.pumpkin.clone(true);
+      const baseRot = x < 0 ? Math.PI / 2 : -Math.PI / 2; // face the track centre
       g.position.set(x, surf.y, -s);
-      g.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2; // face the track centre
-      g.scale.setScalar(0.9 + ((i * 13) % 5) * 0.12);
+      g.rotation.y = baseRot;
+      g.scale.setScalar(0.9 + ((i * 13) % 5) * 0.1);
+
+      // Glowing carved face on the track-facing side.
+      const face = new THREE.Mesh(faceGeo, decalMat);
+      face.position.set(0, 0.55, 0.52);
+      g.add(face);
+
+      // A few warm pools of light — capped so the scene stays cheap.
+      if (lights < 3 && i % 7 === 3) {
+        const light = new THREE.PointLight(0xff6a00, 4.2, 6.5, 2);
+        light.position.set(0, 0.75, 0.25);
+        g.add(light);
+        lights++;
+      }
+
       this.root.add(g);
-      this._pumpkins.push({ group: g, phase: Math.random() * 6.283 });
+      this._pumpkins.push({
+        group: g,
+        baseY: surf.y,
+        baseRot,
+        phase: Math.random() * 6.283,
+      });
     });
+  }
 
-    // Cobwebs laid flat on the floor near the platform edges.
-    const webGeo = new THREE.PlaneGeometry(2.2, 2.2);
-    const webMat = new THREE.MeshBasicMaterial({ map: tex.web, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
-    this._geos.push(webGeo);
-    this._mats.push(webMat);
-    for (let s = 12; s < finishS - 6; s += 22) {
-      const side = Math.floor(s / 22) % 2 === 0 ? -1 : 1;
-      const x = side * (half - 0.6);
-      const surf = this.getSurfaceAt(x, -s);
-      if (!surf) continue;
-      const web = new THREE.Mesh(webGeo, webMat);
-      web.rotation.x = -Math.PI / 2;
-      web.rotation.z = Math.random() * Math.PI;
-      web.position.set(x, surf.y + 0.03, -s);
-      this.root.add(web);
-    }
+  _buildDrifters(assets, half, finishS) {
+    const hasBat = !!assets.models.bat;
+    const hasGhost = !!assets.models.ghost;
+    if (!hasBat && !hasGhost) return;
 
-    // Drifting bats + ghosts (additive sprites, cheap).
-    const ghostMat = new THREE.SpriteMaterial({ map: tex.ghost, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.85 });
-    const batMat = new THREE.SpriteMaterial({ map: tex.bat, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 });
-    this._mats.push(ghostMat, batMat);
+    // The .mtl wing emissive is shared; store it for the flap pulse.
+    this._batWingMat = assets.materials.Witch_Purple_Emissive || null;
+
     for (let i = 0; i < 14; i++) {
-      const isGhost = i % 2 === 0;
-      const sp = new THREE.Sprite(isGhost ? ghostMat : batMat);
+      const wantGhost = i % 2 === 0;
+      const isGhost = wantGhost ? hasGhost : false;
+      if (!isGhost && !hasBat) continue;
+
+      const template = isGhost ? assets.models.ghost : assets.models.bat;
+      const node = template.clone(true);
       const s = 6 + Math.random() * Math.max(10, finishS - 12);
       const bx = (Math.random() - 0.5) * (half * 2 + 6);
-      const by = 2 + Math.random() * 3.5;
-      sp.position.set(bx, by, -s);
-      const sc = isGhost ? 1.1 + Math.random() * 0.7 : 1.3 + Math.random() * 0.8;
-      sp.scale.set(sc, sc * (isGhost ? 1.25 : 0.7), 1);
-      this.root.add(sp);
+      const by = isGhost ? 1.8 + Math.random() * 2.6 : 3.0 + Math.random() * 2.6;
+      const sc = isGhost ? 0.9 + Math.random() * 0.5 : 0.8 + Math.random() * 0.5;
+      node.position.set(bx, by, -s);
+      node.scale.setScalar(sc);
+
+      if (isGhost) {
+        const halo = makeHalo(assets, 0x7b2ff7, 0.12, 1.2);
+        if (halo) {
+          halo.position.set(0, 0.8, 0);
+          node.add(halo);
+        }
+      } else {
+        const halo = makeHalo(assets, 0x7b2ff7, 0.09, 1.0);
+        if (halo) {
+          halo.position.set(0, 0.45, 0);
+          node.add(halo);
+        }
+      }
+
+      this.root.add(node);
       this._drifters.push({
-        sp,
+        obj: node,
+        isGhost,
+        wingL: node.getObjectByName("wingL") || null,
+        wingR: node.getObjectByName("wingR") || null,
         bx,
         by,
         bz: -s,
@@ -687,6 +704,7 @@ export class RaceCourse {
         ampY: 0.4 + Math.random() * 0.8,
         speed: 0.3 + Math.random() * 0.5,
         phase: Math.random() * 6.283,
+        yaw: (Math.random() - 0.5) * 0.7,
       });
     }
   }
@@ -694,15 +712,33 @@ export class RaceCourse {
   _updateHalloween(dt) {
     const t = this.time;
     if (this._pumpkinMat) {
-      this._pumpkinMat.emissiveIntensity = 0.7 + 0.35 * Math.sin(t * 3.2);
+      this._pumpkinMat.emissiveIntensity = 0.8 + 0.3 * Math.sin(t * 3.2);
+    }
+    if (this._pumpkinFaceMat) {
+      this._pumpkinFaceMat.emissiveIntensity = 1.15 + 0.3 * Math.sin(t * 3.2 + 0.8);
+    }
+    if (this._batWingMat) {
+      this._batWingMat.emissiveIntensity = 1.0 + 0.35 * Math.sin(t * 4.4);
     }
     for (const p of this._pumpkins) {
-      p.group.rotation.z = Math.sin(t * 1.5 + p.phase) * 0.05;
+      p.group.position.y = p.baseY + Math.sin(t * 2.0 + p.phase) * 0.05;
+      p.group.rotation.y = p.baseRot + Math.sin(t * 0.9 + p.phase) * 0.07;
     }
     for (const d of this._drifters) {
-      d.sp.position.x = d.bx + Math.sin(t * d.speed + d.phase) * d.ampX;
-      d.sp.position.y = d.by + Math.sin(t * d.speed * 1.7 + d.phase) * d.ampY;
-      d.sp.position.z = d.bz + Math.cos(t * d.speed + d.phase) * 2.0;
+      const wobble = Math.sin(t * d.speed + d.phase);
+      d.obj.position.x = d.bx + wobble * d.ampX;
+      d.obj.position.y = d.by + Math.sin(t * d.speed * 1.7 + d.phase) * d.ampY;
+      d.obj.position.z = d.bz + Math.cos(t * d.speed + d.phase) * 2.0;
+      if (d.isGhost) {
+        d.obj.rotation.z = Math.sin(t * 1.3 + d.phase) * 0.12;
+        d.obj.rotation.y = d.yaw + wobble * 0.18;
+      } else {
+        const flap = Math.sin(t * 9 + d.phase) * 0.55;
+        if (d.wingL) d.wingL.rotation.y = flap;
+        if (d.wingR) d.wingR.rotation.y = -flap;
+        d.obj.rotation.y = d.yaw + wobble * 0.25;
+        d.obj.rotation.z = Math.sin(t * 2.1 + d.phase) * 0.18;
+      }
     }
   }
 
@@ -848,6 +884,7 @@ export class RaceCourse {
   }
 
   dispose() {
+    this._alive = false;
     this.clearHoles();
     this.scene.remove(this.root);
     for (const prop of this.props) if (prop.dispose) prop.dispose();
@@ -858,6 +895,8 @@ export class RaceCourse {
     this.props = [];
     this.platforms = [];
     this.spinners = [];
+    this._pumpkins = [];
+    this._drifters = [];
     this.sliders = [];
     this.batteries = [];
     this._anim = [];

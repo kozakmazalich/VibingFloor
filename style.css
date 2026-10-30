@@ -3085,10 +3085,94 @@ body.arena-loading #start-menu {
 }
 
 .race-card {
-  max-width: 480px;
-  gap: 14px;
+  max-width: 620px;
+  gap: 0;
   max-height: 92vh;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.85),
+              0 0 40px rgba(255, 106, 0, 0.18),
+              0 0 80px rgba(123, 47, 247, 0.12);
+}
+.race-card .menu-title {
+  background: linear-gradient(135deg, #ff9a3c 0%, #fff2dd 48%, #b06bff 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.race-card .neon-badge.magenta {
+  background: rgba(255, 106, 0, 0.14);
+  color: #ff9a3c;
+  box-shadow: 0 0 10px rgba(255, 106, 0, 0.2);
+}
+.race-card .neon-badge.magenta .live-dot {
+  background: #ff6a00;
+  box-shadow: 0 0 8px #ff6a00;
+}
+.race-scroll {
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 106, 0, 0.45) transparent;
+}
+.race-scroll::-webkit-scrollbar { width: 6px; }
+.race-scroll::-webkit-scrollbar-track { background: transparent; }
+.race-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 106, 0, 0.45);
+  border-radius: 999px;
+}
+
+/* Wide screens: two independent columns (map + racers / difficulty + theme)
+   so each column packs tightly without leaving dead space. */
+.race-columns {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.race-col { display: contents; }
+
+@media (min-width: 700px) {
+  .race-card { max-width: 720px; }
+  .race-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .race-col {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+  }
+  .race-col .race-map-grid,
+  .race-col .race-tabs,
+  .race-col .race-tabs.race-tabs-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shorter laptop viewports: trim decorative copy so the whole setup and the
+   CTA fit without cutting a panel in half. */
+@media (max-height: 820px) {
+  .race-card {
+    max-height: 96vh;
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+  .race-scroll { gap: 10px; }
+  .race-card .menu-tagline,
+  .race-card .race-rules { display: none; }
+  .race-select-panel { padding: 8px 10px; gap: 7px; }
 }
 .race-select-panel {
   width: 100%;
@@ -3101,10 +3185,10 @@ body.arena-loading #start-menu {
 }
 .race-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
-.race-tabs.race-tabs-2 { grid-template-columns: 1fr 1fr; }
+.race-tabs.race-tabs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .race-size-btn,
 .race-diff-btn {
   background: rgba(16, 24, 48, 0.85);
@@ -3144,7 +3228,7 @@ body.arena-loading #start-menu {
 /* Race map selector + theme toggle (Halloween orange accent) */
 .race-map-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .race-map-btn,
@@ -3198,6 +3282,59 @@ body.arena-loading #start-menu {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.race-map-btn .tab-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.18;
+}
+.race-size-btn,
+.race-diff-btn,
+.race-map-btn,
+.race-theme-btn {
+  min-width: 0;
+}
+.race-map-btn .tab-status-badge,
+.race-theme-btn .tab-status-badge {
+  flex: 0 0 auto;
+}
+
+/* Race setup adapts down to phones: one map per row, stacked difficulty. */
+@media (max-width: 560px) {
+  .race-card {
+    padding: 20px 16px;
+    gap: 12px;
+  }
+  .race-select-panel { padding: 9px 10px; }
+  .race-map-grid { grid-template-columns: 1fr; }
+  .race-tabs { grid-template-columns: 1fr; }
+  .race-tabs.race-tabs-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .race-map-btn,
+  .race-theme-btn { padding: 9px 11px; }
+}
+
+/* The optional auth chip would cover the focused race setup on small screens. */
+body:has(#race-menu:not(.hidden)) .vib-privy-badge {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  /* Keep the optional auth chip accessible on phones without letting it sit on
+     top of the start-menu wordmark. */
+  body:has(#start-menu:not(.hidden)) #start-menu .menu-card {
+    padding-top: 58px;
+  }
+}
+
+/* Keep the primary actions reachable while the setup content scrolls. */
+.race-card .menu-actions {
+  width: 100%;
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
 }
 
 /* Spooky race tint on the HUD panels */
@@ -3413,3 +3550,149 @@ body.race-mode .island-status { border-color: rgba(255, 45, 149, 0.28); }
 @media (prefers-reduced-motion: reduce) {
   .race-countdown.pop { animation: none; }
 }
+
+/* =========================================================================
+   HALLOWEEN — VIBER RACE menu button decoration
+   The generated neon plaque (assets/halloween/button-frame.png) is applied as
+   a 9-slice border so the pumpkin / bat corners stay intact around any button
+   width, while the centre stretches invisibly behind the actual CTA.
+   ========================================================================= */
+.hw-btn-wrap {
+  --hw-frame-x: 34px;
+  --hw-frame-y: 30px;
+  position: relative;
+  display: flex;
+  overflow: visible;
+}
+.hw-btn-wrap > .cyber-btn {
+  flex: 1 1 auto;
+  z-index: 1;
+}
+.hw-btn-wrap::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--hw-frame-y)) calc(-1 * var(--hw-frame-x));
+  z-index: 0;
+  pointer-events: none;
+  border-style: solid;
+  border-width: var(--hw-frame-y) var(--hw-frame-x);
+  border-image-source: url("assets/halloween/button-frame.png");
+  border-image-slice: 90 fill;
+  border-image-width: var(--hw-frame-y) var(--hw-frame-x);
+  border-image-repeat: stretch;
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), filter 0.22s ease;
+  filter: drop-shadow(0 0 10px rgba(255, 106, 0, 0.28)) drop-shadow(0 0 18px rgba(123, 47, 247, 0.22));
+  will-change: transform;
+}
+.hw-btn-wrap:hover::before {
+  transform: scale(1.035);
+  filter: drop-shadow(0 0 16px rgba(255, 106, 0, 0.6)) drop-shadow(0 0 28px rgba(123, 47, 247, 0.45));
+}
+
+.cyber-btn-viber {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+  color: #ffe9d0;
+  font-size: 14px;
+  letter-spacing: 2.2px;
+  text-shadow: 0 0 14px rgba(255, 106, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.85);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), color 0.18s ease;
+}
+.cyber-btn-viber:hover {
+  color: #ffffff;
+  transform: translateY(-2px) scale(1.06);
+}
+.cyber-btn-viber .btn-icon {
+  color: #ffb066;
+  text-shadow: 0 0 12px rgba(255, 106, 0, 0.9);
+}
+.cyber-btn-viber .key-tag {
+  border-color: rgba(255, 154, 60, 0.55);
+  color: #ffd9b0;
+  box-shadow: 0 0 10px rgba(255, 106, 0, 0.24), inset 0 0 8px rgba(255, 106, 0, 0.16);
+}
+
+@media (max-width: 640px) {
+  .hw-btn-wrap { --hw-frame-x: 20px; --hw-frame-y: 24px; }
+}
+
+@media (min-width: 861px) {
+  .start-card .menu-actions .hw-btn-wrap { grid-column: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cyber-btn-viber,
+  .hw-btn-wrap::before { transition: none; }
+  .cyber-btn-viber:hover { transform: translateY(-2px); }
+  .hw-btn-wrap:hover::before { transform: none; }
+}
+
+/* =========================================================================
+   HALLOWEEN — neon bloom toggle in the race setup
+   ========================================================================= */
+.race-glow-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 11px;
+  background: rgba(16, 24, 48, 0.78);
+  border: 1px solid rgba(123, 47, 247, 0.32);
+  border-radius: 10px;
+  color: #8f9ab4;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.race-glow-toggle:hover {
+  border-color: rgba(255, 106, 0, 0.5);
+  color: #d8e2f6;
+}
+.race-glow-toggle .glow-orb {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a2a55;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.6);
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+.race-glow-toggle .glow-state {
+  margin-left: auto;
+  color: #64748b;
+  letter-spacing: 1.5px;
+}
+.race-glow-toggle.active {
+  color: #ffcf9a;
+  border-color: rgba(255, 106, 0, 0.55);
+  box-shadow: 0 0 14px rgba(255, 106, 0, 0.18), inset 0 0 14px rgba(123, 47, 247, 0.16);
+}
+.race-glow-toggle.active .glow-orb {
+  background: #ff6a00;
+  box-shadow: 0 0 10px #ff6a00, 0 0 18px rgba(255, 106, 0, 0.5);
+}
+.race-glow-toggle.active .glow-state { color: #ff6a00; }
+
+/* =========================================================================
+   HALLOWEEN — cobweb HUD corners (mirrored top-right)
+   ========================================================================= */
+body.race-mode.halloween-race #in-game-hud::before,
+body.race-mode.halloween-race #in-game-hud::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: clamp(96px, 13vw, 176px);
+  aspect-ratio: 1 / 1;
+  background: url("assets/halloween/cobweb.png") top left / contain no-repeat;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: -1;
+  filter: drop-shadow(0 0 6px rgba(123, 47, 247, 0.55));
+}
+body.race-mode.halloween-race #in-game-hud::before { left: 0; }
+body.race-mode.halloween-race #in-game-hud::after { right: 0; transform: scaleX(-1); }

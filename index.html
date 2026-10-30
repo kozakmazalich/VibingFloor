@@ -296,15 +296,13 @@
             <span class="btn-text">INITIALIZE BATTLE</span>
             <span class="key-tag">SPACE</span>
           </button>
-          <button id="btn-menu-race" class="cyber-btn cyber-btn-race">
-            <span class="btn-corner tl"></span>
-            <span class="btn-corner tr"></span>
-            <span class="btn-corner bl"></span>
-            <span class="btn-corner br"></span>
-            <span class="btn-icon">⚑</span>
-            <span class="btn-text">VIBER RACE</span>
-            <span class="key-tag">NEW</span>
-          </button>
+          <div class="hw-btn-wrap">
+            <button id="btn-menu-race" class="cyber-btn cyber-btn-viber">
+              <span class="btn-icon">⚑</span>
+              <span class="btn-text">VIBER RACE</span>
+              <span class="key-tag">NEW</span>
+            </button>
+          </div>
           <button id="btn-menu-online" class="cyber-btn cyber-btn-online">
             <span class="btn-corner tl"></span>
             <span class="btn-corner tr"></span>
@@ -448,12 +446,15 @@
     <!-- 1.6 VIBER RACE SETUP PANEL -->
     <div id="race-menu" class="menu-screen hidden">
       <div class="menu-card race-card">
-        <div class="neon-badge magenta">
+        <div class="race-scroll">
+          <div class="neon-badge magenta">
           <span class="live-dot"></span>OBSTACLE COURSE // JETPACK RACE
         </div>
         <h2 class="menu-title" style="font-size: 32px">VIBER RACE</h2>
         <p class="menu-tagline">FIRST TO THE FINISH GATE WINS — GRAB ⚡ BATTERIES, JETPACK THE SHORTCUTS</p>
 
+        <div class="race-columns">
+          <div class="race-col">
         <div class="race-select-panel">
           <div class="select-label">RACE MAP:</div>
           <div class="race-map-grid">
@@ -512,6 +513,8 @@
           </div>
         </div>
 
+          </div>
+          <div class="race-col">
         <div class="race-select-panel">
           <div class="select-label">BOT DIFFICULTY:</div>
           <div class="race-tabs">
@@ -557,6 +560,13 @@
               <span class="tab-status-badge">SELECT</span>
             </button>
           </div>
+          <button id="btn-race-glow" class="race-glow-toggle active" title="Toggle the emissive bloom on the Halloween race">
+            <span class="glow-orb"></span>
+            <span class="glow-label">NEON BLOOM</span>
+            <span id="race-glow-state" class="glow-state">ON</span>
+          </button>
+        </div>
+          </div>
         </div>
 
         <div class="race-rules">
@@ -564,6 +574,7 @@
           <span><span class="key-badge mini">SPACE</span> JUMP</span>
           <span><span class="key-badge mini">SHIFT</span> DASH</span>
           <span><span class="key-badge mini">Q</span> JETPACK (1 ⚡ PER BURST)</span>
+        </div>
         </div>
 
         <div class="menu-actions">

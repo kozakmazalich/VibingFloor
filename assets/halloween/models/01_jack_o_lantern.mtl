@@ -1,0 +1,28 @@
+# Neon Cyberpunk Halloween Material File: 01_jack_o_lantern
+
+newmtl Pumpkin_Orange_PBR
+Ka 0.04 0.02 0.07
+Kd 1.0000 0.4160 0.0000
+Ke 0.2500 0.0800 0.0000
+Ks 0.7000 0.3500 0.9000
+Ns 80.00
+d 1.0000
+illum 2
+
+newmtl Stem_Green_PBR
+Ka 0.04 0.02 0.07
+Kd 0.1800 0.4200 0.1500
+Ke 0.0400 0.0200 0.0800
+Ks 0.4000 0.2000 0.6000
+Ns 45.00
+d 1.0000
+illum 2
+
+newmtl Face_Glow_Emissive
+Ka 0.04 0.02 0.07
+Kd 1.0000 0.8100 0.3600
+Ke 1.0000 0.8100 0.3600
+Ks 1.0000 1.0000 1.0000
+Ns 100.00
+d 1.0000
+illum 2

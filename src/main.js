@@ -15,6 +15,7 @@ import { openProfile, wireProfileButtons } from "./profile.js";
 import { addWin, setSyncedVibBalance } from "./staking.js";
 import { initPrivyAuth, creditWinToPrivyWallet } from "./privyAuth.js";
 import { formatRaceTime } from "./race.js";
+import { preloadHalloweenAssets, buildMoonMesh } from "./halloweenAssets.js";
 
 // DOM Elements: Menus & Overlays
 const startMenuEl = document.getElementById("start-menu");
@@ -46,6 +47,8 @@ const raceSizeEls = Array.from(document.querySelectorAll(".race-size-btn"));
 const raceDiffEls = Array.from(document.querySelectorAll(".race-diff-btn"));
 const raceMapEls = Array.from(document.querySelectorAll(".race-map-btn"));
 const raceThemeEls = Array.from(document.querySelectorAll(".race-theme-btn"));
+const btnRaceGlowEl = document.getElementById("btn-race-glow");
+const raceGlowStateEl = document.getElementById("race-glow-state");
 const raceCountdownEl = document.getElementById("race-countdown");
 const raceMapEl = document.getElementById("race-map");
 const raceLightEl = document.getElementById("race-light");
@@ -276,7 +279,7 @@ const camera = new THREE.PerspectiveCamera(
   46,
   window.innerWidth / window.innerHeight,
   0.1,
-  100
+  900
 );
 
 // Initial camera transform
@@ -299,6 +302,81 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// 3.5 Optional bloom for the Halloween race theme.
+// Loaded lazily (and only while racing) so the battle arena and the menu keep
+// the original no-post-processing budget. Bloom itself runs at half resolution
+// with 2x MSAA on the composer target to stay 60fps-friendly on an M1 Air.
+const BLOOM = { strength: 1.4, radius: 0.7, threshold: 0.85 };
+let composer = null;
+let bloomPass = null;
+let bloomTried = false;
+let bloomFailed = false;
+
+function ensureComposer() {
+  if (composer || bloomTried) return composer;
+  bloomTried = true;
+
+  Promise.all([
+    import("three/addons/postprocessing/EffectComposer.js"),
+    import("three/addons/postprocessing/RenderPass.js"),
+    import("three/addons/postprocessing/UnrealBloomPass.js"),
+    import("three/addons/postprocessing/OutputPass.js"),
+  ])
+    .then(([{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }]) => {
+      composer = new EffectComposer(renderer);
+      // Multisampled composer target: the default framebuffer's MSAA does not
+      // carry over to a render target, so without this the race looks jagged.
+      composer.renderTarget1.samples = 2;
+      composer.renderTarget2.samples = 2;
+      composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      composer.addPass(new RenderPass(scene, camera));
+      bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        BLOOM.strength,
+        BLOOM.radius,
+        BLOOM.threshold
+      );
+      composer.addPass(bloomPass);
+      composer.addPass(new OutputPass());
+      resizeComposer();
+    })
+    .catch((err) => {
+      bloomFailed = true;
+      composer = null;
+      console.warn("[bloom] post-processing unavailable, using direct render", err);
+    });
+
+  return null;
+}
+
+function resizeComposer() {
+  if (!composer || !bloomPass) return;
+  const ratio = Math.min(window.devicePixelRatio, 1.5);
+  composer.setPixelRatio(ratio);
+  composer.setSize(window.innerWidth, window.innerHeight);
+  // EffectComposer.setSize pushes the full effective size into every pass;
+  // shrink the bloom mips back to half resolution.
+  bloomPass.setSize((window.innerWidth * ratio) / 2, (window.innerHeight * ratio) / 2);
+}
+
+function renderFrame() {
+  const useBloom =
+    raceBloom &&
+    raceHalloween &&
+    game.mode === "race" &&
+    game.state !== "menu" &&
+    !bloomFailed;
+
+  if (useBloom) {
+    if (!composer) ensureComposer();
+    if (composer) {
+      composer.render();
+      return;
+    }
+  }
+  renderer.render(scene, camera);
+}
 
 // 4. OrbitControls with smooth auto-orbit during Start Menu
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -442,34 +520,25 @@ function createCyberEmbers() {
 }
 const embers = createCyberEmbers();
 
-// 6.5 Halloween sky: a big full moon that rides with the race camera.
+// 6.5 Halloween sky: the generated full moon (OBJ sphere + PNG surface) rides
+// with the race camera, far enough out to read as a skybox dome.
 function createMoon() {
-  const c = document.createElement("canvas");
-  c.width = c.height = 256;
-  const g = c.getContext("2d");
-  const grd = g.createRadialGradient(128, 128, 12, 128, 128, 128);
-  grd.addColorStop(0, "rgba(255,248,224,1)");
-  grd.addColorStop(0.68, "rgba(255,238,190,0.98)");
-  grd.addColorStop(0.84, "rgba(255,226,160,0.35)");
-  grd.addColorStop(1, "rgba(255,220,150,0)");
-  g.fillStyle = grd;
-  g.fillRect(0, 0, 256, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
   const group = new THREE.Group();
-  const disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
-  disc.scale.set(46, 46, 1);
-  group.add(disc);
-  const halo = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.45, fog: false })
-  );
-  halo.scale.set(96, 96, 1);
-  group.add(halo);
   group.visible = false;
   scene.add(group);
+
+  preloadHalloweenAssets().then((assets) => {
+    const moon = buildMoonMesh(assets);
+    if (!moon) return;
+    moon.scale.setScalar(26); // sphere diameter 2 -> 52 world units
+    group.add(moon);
+  });
+
   return group;
 }
 const moonGroup = createMoon();
+const _moonDir = new THREE.Vector3();
+const _moonNdc = new THREE.Vector3(-0.55, 0.66, 0.5);
 
 // Saved arena atmosphere, so the Halloween theme can switch it on and off.
 const _atmo = {
@@ -1041,7 +1110,13 @@ function syncRaceBackdrop() {
   if (moonGroup) {
     const hal = !!(game.race && game.race.halloween) && game.mode === "race";
     moonGroup.visible = hal;
-    if (hal) moonGroup.position.set(camera.position.x - 46, 62, camera.position.z - 150);
+    if (hal) {
+      // Project the moon from a fixed sky-band NDC point so it stays framed
+      // above the track no matter how steep the chase camera looks down.
+      camera.updateMatrixWorld();
+      _moonDir.copy(_moonNdc).unproject(camera).sub(camera.position).normalize();
+      moonGroup.position.copy(camera.position).addScaledVector(_moonDir, 400);
+    }
   }
 }
 
@@ -1820,6 +1895,7 @@ let raceRacers = 5;
 let raceDifficulty = "normal";
 let raceMapChoice = "random"; // "random" | "cyber" | "islands" | "redlight"
 let raceHalloween = true; // spooky theme on by default
+let raceBloom = true; // emissive bloom while the Halloween race is running
 
 function markTabs(els, isActive) {
   els.forEach((btn) => {
@@ -1856,6 +1932,11 @@ function selectRaceTheme(theme, silent = false) {
   markTabs(raceThemeEls, (btn) => (btn.dataset.theme === "halloween") === raceHalloween);
 }
 
+function syncRaceGlow() {
+  if (btnRaceGlowEl) btnRaceGlowEl.classList.toggle("active", raceBloom);
+  if (raceGlowStateEl) raceGlowStateEl.textContent = raceBloom ? "ON" : "OFF";
+}
+
 function startRaceFromMenu() {
   try {
     audio.playClick();
@@ -1879,9 +1960,18 @@ raceSizeEls.forEach((btn) => btn.addEventListener("click", () => selectRaceSize(
 raceDiffEls.forEach((btn) => btn.addEventListener("click", () => selectRaceDifficulty(btn.dataset.diff)));
 raceMapEls.forEach((btn) => btn.addEventListener("click", () => selectRaceMap(btn.dataset.map)));
 raceThemeEls.forEach((btn) => btn.addEventListener("click", () => selectRaceTheme(btn.dataset.theme)));
+if (btnRaceGlowEl) {
+  btnRaceGlowEl.addEventListener("click", () => {
+    audio.playClick();
+    raceBloom = !raceBloom;
+    syncRaceGlow();
+  });
+}
 
 btnMenuRaceEl.addEventListener("click", () => {
   audio.playClick();
+  // Warm the Halloween kit while the setup panel is open.
+  preloadHalloweenAssets();
   // Start from the battle difficulty the player already picked.
   selectRaceDifficulty(game.difficulty || "normal", true);
   startMenuEl.classList.add("hidden");
@@ -1905,6 +1995,7 @@ selectRaceSize(5, true);
 selectRaceDifficulty("normal", true);
 selectRaceMap("random", true);
 selectRaceTheme("halloween", true);
+syncRaceGlow();
 
 // UI Event Listeners: Online 1v1 panel
 btnMenuOnlineEl.addEventListener("click", () => {
@@ -2110,6 +2201,7 @@ window.addEventListener("resize", () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  resizeComposer();
 });
 
 // Animation loop
@@ -2174,7 +2266,7 @@ function animate() {
   }
 
   // Render scene
-  renderer.render(scene, camera);
+  renderFrame();
 
   // 3D fighter showcase (spins the selected character in the menu)
   updateShowcase3D(now);

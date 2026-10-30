@@ -1,0 +1,19 @@
+# Neon Cyberpunk Halloween Material File: 06_viber_race_button_frame
+
+newmtl Dark_Metallic_Base
+Ka 0.04 0.02 0.07
+Kd 0.0600 0.0400 0.1000
+Ke 0.0200 0.0100 0.0400
+Ks 0.8000 0.7000 0.9500
+Ns 95.00
+d 1.0000
+illum 2
+
+newmtl Neon_Orange_Purple_Rim
+Ka 0.04 0.02 0.07
+Kd 1.0000 0.4160 0.0000
+Ke 0.9500 0.3800 0.0500
+Ks 1.0000 0.6000 0.9000
+Ns 100.00
+d 1.0000
+illum 2
