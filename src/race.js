@@ -110,10 +110,11 @@ export class RaceMode {
   // ---------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------
-  enter({ racers = 5, difficulty = "normal" } = {}) {
+  enter({ racers = 5, difficulty = "normal", mapId = null, halloween = true } = {}) {
     const g = this.game;
     const total = racers >= 10 ? 10 : 5;
     this.difficulty = RACE_DIFFICULTIES[difficulty] ? difficulty : "normal";
+    this.halloween = !!halloween;
 
     // Tear down the battle arena so only the course renders.
     g.fx.clear();
@@ -135,11 +136,11 @@ export class RaceMode {
     p1.speedMult = RACE_PLAYER_SPEED_MULT;
     p1.combatDisabled = true;
 
-    // Pick a random map from the pool (avoid an immediate repeat), then build
-    // that map's own track layout.
-    this.mapDef = pickRaceMap(this.mapId);
+    // Map pick: an explicit choice wins, otherwise random (avoid a repeat).
+    const chosen = RACE_MAPS.find((m) => m.id === mapId);
+    this.mapDef = chosen || pickRaceMap(this.mapId);
     this.mapId = this.mapDef.id;
-    this.course = new RaceCourse(g.scene, this.mapDef.layout);
+    this.course = new RaceCourse(g.scene, this.mapDef.layout, { halloween: this.halloween });
     this._setupMap();
     if (g.ui.onRaceEvent) {
       g.ui.onRaceEvent({ type: "map", name: this.mapDef.name, tagline: this.mapDef.tagline });

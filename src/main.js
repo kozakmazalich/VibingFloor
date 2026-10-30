@@ -44,6 +44,8 @@ const btnRaceStartEl = document.getElementById("btn-race-start");
 const btnRaceBackEl = document.getElementById("btn-race-back");
 const raceSizeEls = Array.from(document.querySelectorAll(".race-size-btn"));
 const raceDiffEls = Array.from(document.querySelectorAll(".race-diff-btn"));
+const raceMapEls = Array.from(document.querySelectorAll(".race-map-btn"));
+const raceThemeEls = Array.from(document.querySelectorAll(".race-theme-btn"));
 const raceCountdownEl = document.getElementById("race-countdown");
 const raceMapEl = document.getElementById("race-map");
 const raceLightEl = document.getElementById("race-light");
@@ -440,6 +442,63 @@ function createCyberEmbers() {
 }
 const embers = createCyberEmbers();
 
+// 6.5 Halloween sky: a big full moon that rides with the race camera.
+function createMoon() {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(128, 128, 12, 128, 128, 128);
+  grd.addColorStop(0, "rgba(255,248,224,1)");
+  grd.addColorStop(0.68, "rgba(255,238,190,0.98)");
+  grd.addColorStop(0.84, "rgba(255,226,160,0.35)");
+  grd.addColorStop(1, "rgba(255,220,150,0)");
+  g.fillStyle = grd;
+  g.fillRect(0, 0, 256, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const group = new THREE.Group();
+  const disc = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+  disc.scale.set(46, 46, 1);
+  group.add(disc);
+  const halo = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.45, fog: false })
+  );
+  halo.scale.set(96, 96, 1);
+  group.add(halo);
+  group.visible = false;
+  scene.add(group);
+  return group;
+}
+const moonGroup = createMoon();
+
+// Saved arena atmosphere, so the Halloween theme can switch it on and off.
+const _atmo = {
+  bg: scene.background.getHex(),
+  fogColor: scene.fog.color.getHex(),
+  fogDensity: scene.fog.density,
+  ambient: ambientLight.color.getHex(),
+  ambientInt: ambientLight.intensity,
+  dir: dirLight.color.getHex(),
+};
+
+function applyRaceAtmosphere(hal) {
+  if (hal) {
+    scene.background.setHex(0x0a0612); // deep black
+    scene.fog.color.setHex(0x0a0612);
+    scene.fog.density = 0.03; // darker, thicker fog
+    ambientLight.color.setHex(0x2a1440); // witch-purple fill
+    ambientLight.intensity = 1.5;
+    dirLight.color.setHex(0xffd9b0); // warm moonlight key
+  } else {
+    scene.background.setHex(_atmo.bg);
+    scene.fog.color.setHex(_atmo.fogColor);
+    scene.fog.density = _atmo.fogDensity;
+    ambientLight.color.setHex(_atmo.ambient);
+    ambientLight.intensity = _atmo.ambientInt;
+    dirLight.color.setHex(_atmo.dir);
+  }
+}
+
 // 7. Sound State Sync
 function syncSoundUI(isMuted) {
   const icon = isMuted ? "🔇" : "🔊";
@@ -490,6 +549,11 @@ const game = new Game(scene, camera, {
 
     const isRace = !!(info && info.race);
     setRaceMode(isRace);
+    if (isRace) {
+      const hal = !!(info && info.halloween);
+      applyRaceAtmosphere(hal);
+      document.body.classList.toggle("halloween-race", hal);
+    }
 
     // Rebuild the survivors strip for this match's roster
     renderSurvivors(isRace ? info.racers : game.robots);
@@ -972,6 +1036,13 @@ function syncRaceBackdrop() {
   dirLight.position.set(raceLook.x + 18, 30, raceLook.z + 14);
   dirLight.target.position.set(raceLook.x, 0, raceLook.z);
   dirLight.target.updateMatrixWorld();
+
+  // Halloween full moon rides high in the sky ahead of the camera.
+  if (moonGroup) {
+    const hal = !!(game.race && game.race.halloween) && game.mode === "race";
+    moonGroup.visible = hal;
+    if (hal) moonGroup.position.set(camera.position.x - 46, 62, camera.position.z - 150);
+  }
 }
 
 function snapRaceCamera() {
@@ -1012,6 +1083,9 @@ function setRaceMode(on) {
     dirLight.position.set(18, 30, 14);
     dirLight.target.position.set(0, 0, 0);
     dirLight.target.updateMatrixWorld();
+    if (moonGroup) moonGroup.visible = false;
+    applyRaceAtmosphere(false);
+    document.body.classList.remove("halloween-race");
     if (raceCountdownEl) raceCountdownEl.classList.add("hidden");
   }
 }
@@ -1741,8 +1815,11 @@ if (menuActionsEl) {
 
 // UI Event Listeners: VIBER RACE setup panel
 const RACE_DIFFS = ["easy", "normal", "hard"];
+const RACE_MAP_IDS = ["random", "cyber", "islands", "redlight"];
 let raceRacers = 5;
 let raceDifficulty = "normal";
+let raceMapChoice = "random"; // "random" | "cyber" | "islands" | "redlight"
+let raceHalloween = true; // spooky theme on by default
 
 function markTabs(els, isActive) {
   els.forEach((btn) => {
@@ -1766,6 +1843,19 @@ function selectRaceDifficulty(level, silent = false) {
   markTabs(raceDiffEls, (btn) => btn.dataset.diff === level);
 }
 
+function selectRaceMap(id, silent = false) {
+  if (!RACE_MAP_IDS.includes(id)) return;
+  if (!silent) audio.playClick();
+  raceMapChoice = id;
+  markTabs(raceMapEls, (btn) => btn.dataset.map === id);
+}
+
+function selectRaceTheme(theme, silent = false) {
+  if (!silent) audio.playClick();
+  raceHalloween = theme !== "neon";
+  markTabs(raceThemeEls, (btn) => (btn.dataset.theme === "halloween") === raceHalloween);
+}
+
 function startRaceFromMenu() {
   try {
     audio.playClick();
@@ -1774,7 +1864,12 @@ function startRaceFromMenu() {
   }
   game.onMenuSpace = null;
   try {
-    game.startRace({ racers: raceRacers, difficulty: raceDifficulty });
+    game.startRace({
+      racers: raceRacers,
+      difficulty: raceDifficulty,
+      mapId: raceMapChoice === "random" ? null : raceMapChoice,
+      halloween: raceHalloween,
+    });
   } catch (e) {
     console.error("startRace failed:", e);
   }
@@ -1782,6 +1877,8 @@ function startRaceFromMenu() {
 
 raceSizeEls.forEach((btn) => btn.addEventListener("click", () => selectRaceSize(Number(btn.dataset.racers))));
 raceDiffEls.forEach((btn) => btn.addEventListener("click", () => selectRaceDifficulty(btn.dataset.diff)));
+raceMapEls.forEach((btn) => btn.addEventListener("click", () => selectRaceMap(btn.dataset.map)));
+raceThemeEls.forEach((btn) => btn.addEventListener("click", () => selectRaceTheme(btn.dataset.theme)));
 
 btnMenuRaceEl.addEventListener("click", () => {
   audio.playClick();
@@ -1806,6 +1903,8 @@ btnRaceBackEl.addEventListener("click", () => {
 
 selectRaceSize(5, true);
 selectRaceDifficulty("normal", true);
+selectRaceMap("random", true);
+selectRaceTheme("halloween", true);
 
 // UI Event Listeners: Online 1v1 panel
 btnMenuOnlineEl.addEventListener("click", () => {

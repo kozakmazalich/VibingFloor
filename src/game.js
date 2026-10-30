@@ -665,6 +665,7 @@ export class Game {
         scores: this.scores,
         race: true,
         racers: this.race.racerRobots(),
+        halloween: !!this.race.halloween,
       });
     }
   }

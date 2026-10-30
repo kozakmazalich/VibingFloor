@@ -93,6 +93,84 @@ function getGlowTexture() {
 }
 
 // ---------------------------------------------------------------------------
+// Halloween decoration textures (canvas, cached). Only built when the spooky
+// race theme is on, so the plain neon maps pay nothing.
+// ---------------------------------------------------------------------------
+let halTex = null;
+function getHalloweenTextures() {
+  if (halTex) return halTex;
+  const mk = (w, h, draw) => {
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    draw(c.getContext("2d"), w, h);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+
+  const face = mk(128, 128, (g) => {
+    g.clearRect(0, 0, 128, 128);
+    g.fillStyle = "#ffcf5c";
+    g.shadowColor = "#ff8a00";
+    g.shadowBlur = 16;
+    // eyes
+    g.beginPath(); g.moveTo(30, 50); g.lineTo(54, 34); g.lineTo(54, 60); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(98, 50); g.lineTo(74, 34); g.lineTo(74, 60); g.closePath(); g.fill();
+    // jagged mouth
+    g.beginPath();
+    g.moveTo(32, 80); g.lineTo(46, 96); g.lineTo(56, 80); g.lineTo(66, 98);
+    g.lineTo(78, 80); g.lineTo(96, 84); g.lineTo(92, 102); g.lineTo(36, 102);
+    g.closePath(); g.fill();
+  });
+
+  const web = mk(128, 128, (g) => {
+    g.clearRect(0, 0, 128, 128);
+    g.strokeStyle = "rgba(220,230,255,0.85)";
+    g.lineWidth = 1.6;
+    const cx = 64, cy = 64;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * 60, cy + Math.sin(a) * 60); g.stroke();
+    }
+    for (let r = 14; r <= 58; r += 14) {
+      g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.stroke();
+    }
+  });
+
+  const ghost = mk(64, 64, (g) => {
+    g.clearRect(0, 0, 64, 64);
+    g.fillStyle = "rgba(205,240,255,0.96)";
+    g.shadowColor = "#9fdcff";
+    g.shadowBlur = 14;
+    g.beginPath();
+    g.arc(32, 26, 18, Math.PI, 0);
+    g.lineTo(50, 50); g.lineTo(42, 44); g.lineTo(34, 52); g.lineTo(26, 44); g.lineTo(18, 52); g.lineTo(14, 50);
+    g.closePath(); g.fill();
+    g.shadowBlur = 0;
+    g.fillStyle = "rgba(10,6,18,0.9)";
+    g.beginPath(); g.arc(26, 24, 2.6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.arc(38, 24, 2.6, 0, Math.PI * 2); g.fill();
+  });
+
+  const bat = mk(64, 40, (g) => {
+    g.clearRect(0, 0, 64, 40);
+    g.fillStyle = "rgba(190,120,255,0.96)";
+    g.shadowColor = "#7b2ff7";
+    g.shadowBlur = 12;
+    g.beginPath();
+    g.moveTo(32, 20);
+    g.lineTo(24, 14); g.lineTo(6, 8); g.lineTo(12, 20); g.lineTo(2, 22); g.lineTo(18, 28); g.lineTo(26, 26);
+    g.lineTo(32, 34);
+    g.lineTo(38, 26); g.lineTo(46, 28); g.lineTo(62, 22); g.lineTo(52, 20); g.lineTo(58, 8); g.lineTo(40, 14);
+    g.closePath(); g.fill();
+  });
+
+  halTex = { face, web, ghost, bat };
+  return halTex;
+}
+
+// ---------------------------------------------------------------------------
 // Battery pickup (+1 jetpack charge). Geometry/materials are shared by every
 // battery; only the group transform and visibility are per-instance.
 // ---------------------------------------------------------------------------
@@ -181,9 +259,10 @@ class Battery {
 // The course
 // ---------------------------------------------------------------------------
 export class RaceCourse {
-  constructor(scene, layout) {
+  constructor(scene, layout, opts = {}) {
     this.scene = scene;
     this.layout = layout;
+    this.halloween = !!opts.halloween;
     this.root = new THREE.Group();
     this.root.name = "viber-race-course";
     scene.add(this.root);
@@ -208,6 +287,9 @@ export class RaceCourse {
     this._mats = [];
     this._textures = [];
     this._anim = []; // (dt, t) => void decorations
+    this._pumpkinMat = null;
+    this._pumpkins = [];
+    this._drifters = []; // drifting bat / ghost sprites
 
     this.buildPlatforms();
     this.buildMovers();
@@ -215,12 +297,40 @@ export class RaceCourse {
     this.buildGates();
     this.buildSigns();
     this.buildScenery();
+    if (this.halloween) this.buildHalloweenDecor();
     for (const [x, s, y] of layout.batteries) {
       const grounded = y == null;
       const surf = grounded ? this.getSurfaceAt(x, -s) : null;
       const by = grounded ? (surf ? surf.y : 0) + 0.75 : y;
       this.batteries.push(new Battery(x, by, -s, grounded, this.root));
     }
+  }
+
+  // Halloween palette remap: cyan/magenta edges become witch purple / pumpkin
+  // orange, keeping the neon glow. No-op for the plain neon theme.
+  _col(c) {
+    if (!this.halloween) return c;
+    switch (c) {
+      case COLORS.accentCyan:
+        return 0x7b2ff7; // witch purple
+      case COLORS.accentMagenta:
+        return 0xff6a00; // pumpkin orange
+      case COLORS.tileWarning:
+        return 0xff6a00;
+      case 0xa855f7:
+        return 0x7b2ff7;
+      case 0xffd700:
+        return 0xff6a00;
+      case 0x39ff14:
+        return 0xa020f0; // spooky purple for green edges
+      default:
+        return c;
+    }
+  }
+
+  // Checkpoint "reached" tint (distinct from the active colour).
+  _reachedColor() {
+    return this.halloween ? 0xff6a00 : AC.green;
   }
 
   // ---- building -----------------------------------------------------------
@@ -235,7 +345,7 @@ export class RaceCourse {
     const x = (x0 + x1) / 2;
     const z = -(s0 + s1) / 2;
     // Raised platforms get a body that reaches back down below the track.
-    const slab = buildNeonSlab(w, d, color, { height: y > 0.5 ? y + 0.6 : 0.6 });
+    const slab = buildNeonSlab(w, d, this._col(color), { height: y > 0.5 ? y + 0.6 : 0.6 });
     slab.group.position.set(x, y, z);
     this.root.add(slab.group);
     this._track(slab);
@@ -245,7 +355,8 @@ export class RaceCourse {
   }
 
   addProp(def) {
-    const prop = buildProp(def);
+    const themed = this.halloween && def && def.color != null ? { ...def, color: this._col(def.color) } : def;
+    const prop = buildProp(themed);
     if (!prop) return null;
     this.root.add(prop.group);
     this.props.push(prop);
@@ -276,9 +387,10 @@ export class RaceCourse {
       const cp = { index: i, s, z: -s, x: 0 };
       this.checkpoints.push(cp);
       if (i === 0) return; // the start gate marks checkpoint 0
-      const postMat = new THREE.MeshBasicMaterial({ color: AC.cyan });
+      const cpColor = this._col(AC.cyan);
+      const postMat = new THREE.MeshBasicMaterial({ color: cpColor });
       const stripMat = new THREE.MeshBasicMaterial({
-        color: AC.cyan,
+        color: cpColor,
         transparent: true,
         opacity: 0.55,
         depthWrite: false,
@@ -310,13 +422,14 @@ export class RaceCourse {
     });
   }
 
-  // Tint a checkpoint green once the PLAYER has activated it.
+  // Tint a checkpoint once the PLAYER has activated it.
   markCheckpoint(index) {
     const cp = this.checkpoints[index];
     if (!cp || !cp.mats || cp.reached) return;
     cp.reached = true;
-    cp.mats.postMat.color.setHex(AC.green);
-    cp.mats.stripMat.color.setHex(AC.green);
+    const reached = this._reachedColor();
+    cp.mats.postMat.color.setHex(reached);
+    cp.mats.stripMat.color.setHex(reached);
     cp.flash = 0.6;
   }
 
@@ -375,15 +488,15 @@ export class RaceCourse {
   buildGates() {
     const L = this.layout;
     const sg = L.startGate;
-    this.buildGate(sg.s, sg.x0, sg.x1, sg.label, sg.color, false);
+    this.buildGate(sg.s, sg.x0, sg.x1, sg.label, this._col(sg.color), false);
     const fg = L.finishGate;
-    const finish = this.buildGate(L.finishS, fg.x0, fg.x1, "\u2691 FINISH \u2691", fg.color, true);
+    const finish = this.buildGate(L.finishS, fg.x0, fg.x1, "\u2691 FINISH \u2691", this._col(fg.color), true);
     // Landmark ring behind the finish gate, visible down the whole track.
     const ringCfg = L.ring || { x: 0, y: 4, sOffset: 4 };
     const ringGeo = new THREE.TorusGeometry(8.5, 0.16, 10, 96);
-    const ringMat = new THREE.MeshBasicMaterial({ color: ringCfg.color ?? AC.cyan, transparent: true, opacity: 0.85 });
+    const ringMat = new THREE.MeshBasicMaterial({ color: this._col(ringCfg.color ?? AC.cyan), transparent: true, opacity: 0.85 });
     const ring2Geo = new THREE.TorusGeometry(10.2, 0.08, 8, 96);
-    const ring2Mat = new THREE.MeshBasicMaterial({ color: ringCfg.color2 ?? AC.magenta, transparent: true, opacity: 0.6 });
+    const ring2Mat = new THREE.MeshBasicMaterial({ color: this._col(ringCfg.color2 ?? AC.magenta), transparent: true, opacity: 0.6 });
     this._geos.push(ringGeo, ring2Geo);
     this._mats.push(ringMat, ring2Mat);
     const ring = new THREE.Mesh(ringGeo, ringMat);
@@ -420,7 +533,7 @@ export class RaceCourse {
 
   buildSigns() {
     for (const s of this.layout.signs || []) {
-      this.addSign(s.text, s.x, s.y, s.s, s.color, s.width);
+      this.addSign(s.text, s.x, s.y, s.s, this._col(s.color), s.width);
     }
   }
 
@@ -447,7 +560,7 @@ export class RaceCourse {
       dummy.scale.set(1, h, 1);
       dummy.updateMatrix();
       pylons.setMatrixAt(i, dummy.matrix);
-      pylons.setColorAt(i, color.setHex(accentAt(s)));
+      pylons.setColorAt(i, color.setHex(this._col(accentAt(s))));
     });
     pylons.instanceMatrix.needsUpdate = true;
     if (pylons.instanceColor) pylons.instanceColor.needsUpdate = true;
@@ -474,7 +587,7 @@ export class RaceCourse {
       dummy.scale.set(w, h, 3 + rnd() * 5);
       dummy.updateMatrix();
       towers.setMatrixAt(i, dummy.matrix);
-      const tint = accentAt(s);
+      const tint = this._col(accentAt(s));
       color.setHex(tint).multiplyScalar(0.07 + rnd() * 0.06);
       towers.setColorAt(i, color);
     }
@@ -485,6 +598,112 @@ export class RaceCourse {
     this._geos.push(pylonGeo, towerGeo);
     this._mats.push(pylonMat, towerMat);
     this._instanced = [pylons, towers];
+  }
+
+  // ---- Halloween decorations ---------------------------------------------
+  buildHalloweenDecor() {
+    const tex = getHalloweenTextures();
+    const half = this.halfWidth;
+    const finishS = this.finishS;
+
+    // Glowing jack-o-lanterns along the sides of the track.
+    const bodyGeo = new THREE.SphereGeometry(0.5, 14, 10);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xff6a00,
+      emissive: 0xff7a10,
+      emissiveIntensity: 0.9,
+      roughness: 0.55,
+      metalness: 0.1,
+    });
+    const stemGeo = new THREE.CylinderGeometry(0.06, 0.09, 0.24, 6);
+    const stemMat = new THREE.MeshStandardMaterial({ color: 0x2a4d1a, emissive: 0x1a3a12, emissiveIntensity: 0.3, roughness: 0.8 });
+    const faceGeo = new THREE.PlaneGeometry(0.74, 0.74);
+    const faceMat = new THREE.MeshBasicMaterial({ map: tex.face, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+    this._geos.push(bodyGeo, stemGeo, faceGeo);
+    this._mats.push(bodyMat, stemMat, faceMat);
+    this._pumpkinMat = bodyMat;
+
+    const spots = [];
+    for (let s = 8; s < finishS - 4; s += 15) {
+      spots.push([-(half - 1.1), s]);
+      spots.push([half - 1.1, s + 7]);
+    }
+    spots.forEach(([x, s], i) => {
+      const surf = this.getSurfaceAt(x, -s);
+      if (!surf) return;
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(bodyGeo, bodyMat);
+      body.scale.set(1, 0.82, 1);
+      body.position.y = 0.34;
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.y = 0.72;
+      const face = new THREE.Mesh(faceGeo, faceMat);
+      face.position.set(0, 0.38, 0.47);
+      g.add(body, stem, face);
+      g.position.set(x, surf.y, -s);
+      g.rotation.y = x < 0 ? Math.PI / 2 : -Math.PI / 2; // face the track centre
+      g.scale.setScalar(0.9 + ((i * 13) % 5) * 0.12);
+      this.root.add(g);
+      this._pumpkins.push({ group: g, phase: Math.random() * 6.283 });
+    });
+
+    // Cobwebs laid flat on the floor near the platform edges.
+    const webGeo = new THREE.PlaneGeometry(2.2, 2.2);
+    const webMat = new THREE.MeshBasicMaterial({ map: tex.web, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+    this._geos.push(webGeo);
+    this._mats.push(webMat);
+    for (let s = 12; s < finishS - 6; s += 22) {
+      const side = Math.floor(s / 22) % 2 === 0 ? -1 : 1;
+      const x = side * (half - 0.6);
+      const surf = this.getSurfaceAt(x, -s);
+      if (!surf) continue;
+      const web = new THREE.Mesh(webGeo, webMat);
+      web.rotation.x = -Math.PI / 2;
+      web.rotation.z = Math.random() * Math.PI;
+      web.position.set(x, surf.y + 0.03, -s);
+      this.root.add(web);
+    }
+
+    // Drifting bats + ghosts (additive sprites, cheap).
+    const ghostMat = new THREE.SpriteMaterial({ map: tex.ghost, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.85 });
+    const batMat = new THREE.SpriteMaterial({ map: tex.bat, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 });
+    this._mats.push(ghostMat, batMat);
+    for (let i = 0; i < 14; i++) {
+      const isGhost = i % 2 === 0;
+      const sp = new THREE.Sprite(isGhost ? ghostMat : batMat);
+      const s = 6 + Math.random() * Math.max(10, finishS - 12);
+      const bx = (Math.random() - 0.5) * (half * 2 + 6);
+      const by = 2 + Math.random() * 3.5;
+      sp.position.set(bx, by, -s);
+      const sc = isGhost ? 1.1 + Math.random() * 0.7 : 1.3 + Math.random() * 0.8;
+      sp.scale.set(sc, sc * (isGhost ? 1.25 : 0.7), 1);
+      this.root.add(sp);
+      this._drifters.push({
+        sp,
+        bx,
+        by,
+        bz: -s,
+        ampX: 1.5 + Math.random() * 2.5,
+        ampY: 0.4 + Math.random() * 0.8,
+        speed: 0.3 + Math.random() * 0.5,
+        phase: Math.random() * 6.283,
+      });
+    }
+  }
+
+  _updateHalloween(dt) {
+    const t = this.time;
+    if (this._pumpkinMat) {
+      this._pumpkinMat.emissiveIntensity = 0.7 + 0.35 * Math.sin(t * 3.2);
+    }
+    for (const p of this._pumpkins) {
+      p.group.rotation.z = Math.sin(t * 1.5 + p.phase) * 0.05;
+    }
+    for (const d of this._drifters) {
+      d.sp.position.x = d.bx + Math.sin(t * d.speed + d.phase) * d.ampX;
+      d.sp.position.y = d.by + Math.sin(t * d.speed * 1.7 + d.phase) * d.ampY;
+      d.sp.position.z = d.bz + Math.cos(t * d.speed + d.phase) * 2.0;
+    }
   }
 
   // ---- queries -------------------------------------------------------------
@@ -598,6 +817,7 @@ export class RaceCourse {
   // ---- lifecycle -----------------------------------------------------------
   update(dt) {
     this.time += dt;
+    if (this.halloween) this._updateHalloween(dt);
     for (const prop of this.props) prop.update(dt);
     for (const b of this.batteries) b.update(dt, this.time);
     for (const fn of this._anim) fn(dt, this.time);
@@ -621,8 +841,9 @@ export class RaceCourse {
       if (!cp.mats) continue;
       cp.reached = false;
       cp.flash = 0;
-      cp.mats.postMat.color.setHex(AC.cyan);
-      cp.mats.stripMat.color.setHex(AC.cyan);
+      const base = this._col(AC.cyan);
+      cp.mats.postMat.color.setHex(base);
+      cp.mats.stripMat.color.setHex(base);
     }
   }
 
