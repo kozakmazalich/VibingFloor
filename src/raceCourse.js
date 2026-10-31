@@ -42,7 +42,18 @@ function textTexture(text, { color = "#00e5ff", w = 512, h = 128, size = 62, bg 
     g.lineWidth = 6;
     g.strokeRect(3, 3, w - 6, h - 6);
   }
-  g.font = `900 ${size}px Orbitron, "JetBrains Mono", monospace`;
+  // Fit the line to the canvas: Orbitron bold runs wide, and long labels
+  // ("METEOR ISLANDS — JUMP!", "RED LIGHT GREEN LIGHT") were being clipped at
+  // the canvas edges — the first word lost letters.
+  const fontFor = (px) => `900 ${px}px Orbitron, "JetBrains Mono", monospace`;
+  g.font = fontFor(size);
+  const maxTextWidth = w * 0.9;
+  const measured = g.measureText(text).width;
+  const fitted = measured > maxTextWidth
+    ? Math.max(10, Math.floor(size * (maxTextWidth / measured)))
+    : size;
+  if (fitted !== size) g.font = fontFor(fitted);
+
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.shadowColor = color;
@@ -386,6 +397,74 @@ export class RaceCourse {
     cp.flash = 0.6;
   }
 
+  // Low-profile start: chequered strip on the floor plus two slim neon posts
+  // at the corridor edges. Nothing crosses the camera's view down the track.
+  buildStartLine(s, x0, x1, color) {
+    const line = this.buildFinishLine(s, x0, x1, 2.0);
+    const g = line.group;
+
+    const postGeo = new THREE.BoxGeometry(0.3, 3.4, 0.3);
+    const postMat = new THREE.MeshStandardMaterial({
+      color: 0x11162a,
+      metalness: 0.75,
+      roughness: 0.32,
+      emissive: color,
+      emissiveIntensity: 0.35,
+    });
+    const capGeo = new THREE.BoxGeometry(0.44, 0.16, 0.44);
+    const capMat = new THREE.MeshBasicMaterial({ color });
+    this._geos.push(postGeo, capGeo);
+    this._mats.push(postMat, capMat);
+
+    for (const x of [x0 - 0.4, x1 + 0.4]) {
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(x, 1.7, 0);
+      g.add(post);
+      const cap = new THREE.Mesh(capGeo, capMat);
+      cap.position.set(x, 3.45, 0);
+      g.add(cap);
+    }
+
+    this.root.add(g);
+    return { group: g, postMat, stripMat: null };
+  }
+
+  // Chequered finish line painted on the track, no overhead banner.
+  buildFinishLine(s, x0, x1, depth = 2.2) {
+    const g = new THREE.Group();
+    g.position.set(0, 0, -s);
+
+    const width = x1 - x0;
+    const cx = (x0 + x1) / 2;
+    const ctex = checkerTexture();
+    ctex.wrapS = THREE.RepeatWrapping;
+    ctex.wrapT = THREE.RepeatWrapping;
+    // The source canvas holds 16x4 chequer squares; size them to ~0.55 world
+    // units so they read as a real start/finish line from the chase camera.
+    const square = 0.55;
+    ctex.repeat.set(width / (square * 16), depth / (square * 4));
+
+    const lineGeo = new THREE.PlaneGeometry(width, depth);
+    const lineMat = new THREE.MeshBasicMaterial({
+      map: ctex,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    });
+    this._geos.push(lineGeo);
+    this._mats.push(lineMat);
+    this._textures.push(ctex);
+
+    const line = new THREE.Mesh(lineGeo, lineMat);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(cx, 0.02, 0);
+    line.renderOrder = 1;
+    g.add(line);
+
+    this.root.add(g);
+    return { group: g, postMat: null, stripMat: null };
+  }
+
   buildGate(s, x0, x1, text, color, checker) {
     const g = new THREE.Group();
     g.position.set(0, 0, -s);
@@ -456,9 +535,17 @@ export class RaceCourse {
   buildGates() {
     const L = this.layout;
     const sg = L.startGate;
-    this.buildGate(sg.s, sg.x0, sg.x1, sg.label, this._col(sg.color), false);
+    // The wide corridor map opts out of the overhead START banner: it sat right
+    // in the chase camera at the line and blocked the whole first stretch.
+    const start = sg.banner === false
+      ? this.buildStartLine(sg.s, sg.x0, sg.x1, this._col(sg.color))
+      : this.buildGate(sg.s, sg.x0, sg.x1, sg.label, this._col(sg.color), false);
     const fg = L.finishGate;
-    const finish = this.buildGate(L.finishS, fg.x0, fg.x1, "\u2691 FINISH \u2691", this._col(fg.color), true);
+    // Maps can opt out of the overhead FINISH banner and mark the line on the
+    // floor with a plain black/white chequer instead (map 3's corridor).
+    const finish = fg.banner === false
+      ? this.buildFinishLine(L.finishS, fg.x0, fg.x1)
+      : this.buildGate(L.finishS, fg.x0, fg.x1, "\u2691 FINISH \u2691", this._col(fg.color), true);
     // Landmark ring behind the finish gate, visible down the whole track.
     const ringCfg = L.ring || { x: 0, y: 4, sOffset: 4 };
     const ringGeo = new THREE.TorusGeometry(8.5, 0.16, 10, 96);
@@ -476,7 +563,7 @@ export class RaceCourse {
       ring.rotation.z += dt * 0.4;
       ring2.rotation.z -= dt * 0.25;
       ring2.rotation.y = Math.sin(t * 0.5) * 0.25;
-      finish.stripMat.color.setHSL((t * 0.15) % 1, 1, 0.55);
+      if (finish.stripMat) finish.stripMat.color.setHSL((t * 0.15) % 1, 1, 0.55);
     });
   }
 
