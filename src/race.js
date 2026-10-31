@@ -39,7 +39,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 // ---------------------------------------------------------------------------
 const RL_GREEN_DUR = 4.0; // seconds of GREEN LIGHT (run)
 const RL_RED_DUR = 5.0; // seconds of RED LIGHT (announcement + scan)
-const RL_REACTION = 2.6; // hear "RED LIGHT" and STOP before the scan starts
+const RL_REACTION = 1.0; // hear "RED LIGHT" and stop — 1s before the scan starts
 const RL_MOVE_SPEED = 0.35; // horizontal speed above this counts as moving
 const RL_SHOT_CD = 0.6; // min seconds between two shots on the same racer
 
@@ -165,6 +165,10 @@ export class RaceMode {
       this.racers.push(rc);
     }
 
+    // Halloween race: every racer wears the bat-wing jetpack instead of the
+    // standard pack. Neon theme keeps the original pack.
+    for (const rc of this.racers) rc.robot.setHalloweenMode(this.halloween);
+
     this.restart(false);
   }
 
@@ -258,7 +262,10 @@ export class RaceMode {
   exit() {
     const g = this.game;
     for (const rc of this.racers) {
-      if (rc.isPlayer) continue;
+      if (rc.isPlayer) {
+        rc.robot.setHalloweenMode(false);
+        continue;
+      }
       rc.robot.raceController = null;
       rc.robot.dispose();
     }
@@ -768,6 +775,9 @@ export class RaceMode {
         // Map 3 starts on GREEN — call it out as the race begins.
         if (this.mapDef && this.mapDef.hazard === "redlight") audio.playVoice("green");
         g.keys["KeyQ"] = false; // a Q tapped during the countdown must not fire at GO
+      } else {
+        // Robot.update is paused during the countdown; keep idle wings alive.
+        for (const rc of this.racers) rc.robot.tickBatWings(dt, false);
       }
       this.emitStatus();
       return;
@@ -811,6 +821,9 @@ export class RaceMode {
     this.resolveSpinners(dt);
     this.resolveBumps();
     this.collectBatteries();
+    // Halloween decor is solid enough to shatter: run into a jack-o'-lantern
+    // and it bursts into flying shards.
+    if (course.halloween) course.checkPumpkins(this.racers, g.fx);
 
     // 5. Progress: checkpoints, finish, respawn.
     for (const rc of this.racers) this.trackProgress(rc, dt);

@@ -45,6 +45,7 @@ import {
 } from "./constants.js";
 import { audio } from "./audio.js";
 import { buildViber, CHARACTERS } from "./vibers.js";
+import { HalloweenBatWingsJetpack } from "./HalloweenBatWingsJetpack.js";
 
 // Shared jetpack geometry. Per-robot materials so idle pulse and burn flicker stay independent.
 // A proper 3D backpack (matching the Jetpack.png icon): a central rounded body
@@ -179,6 +180,11 @@ export class Robot {
     this.jpFuelPopIndex = -1;
     this._emptyJetpackBurn = false; // last charge spent; pack stays up until the flame dies
 
+    // Halloween race: bat-wing jetpack replaces the standard pack.
+    this.halloweenMode = false;
+    this.batWings = null;
+    this._batWingTime = 0;
+
     // Dash ability (SHIFT): burst + afterimage trail
     this.dashCooldown = 0;
     this.dashTimer = 0; // remaining burst time (>0 = dashing)
@@ -259,6 +265,11 @@ export class Robot {
     this.group.add(this.modelGroup);
     this.has3DModel = true;
     if (this.jetpack) this.attachJetpack();
+    if (this.batWings) this.attachBatWings();
+    if (this.halloweenMode) {
+      if (this.jetpack) this.jetpack.visible = false;
+      if (this.batWings) this.batWings.root.visible = true;
+    }
   }
 
   // Low-poly 3D jetpack: a central body shell with two vertical jet-engine
@@ -535,6 +546,21 @@ export class Robot {
 
   syncJetpack() {
     const show = this.heldItem === "jetpack" || this.jetpackBurn > 0;
+
+    if (this.halloweenMode) {
+      // Wings replace the pack entirely; keep the pack built (hidden) so the
+      // existing burn/fuel logic and nozzle bookkeeping still run.
+      if (!this.jetpack) this.attachJetpack();
+      if (!this.batWings || this.batWings.root.parent !== this.modelGroup) this.attachBatWings();
+      if (this.batWings) this.batWings.root.visible = true;
+      if (this.jetpack) {
+        this.jetpack.visible = false;
+        if (this.jpFlames) for (const f of this.jpFlames) f.mesh.visible = false;
+      }
+      return;
+    }
+
+    if (this.batWings) this.batWings.root.visible = false;
     if (show) this.attachJetpack();
     if (!this.jetpack) return;
     this.jetpack.visible = show;
@@ -544,7 +570,79 @@ export class Robot {
     }
   }
 
+  // Sit the bat-wing jetpack on the same back surface as the standard pack.
+  attachBatWings() {
+    if (!this.modelGroup || !this.viber) return;
+    if (!this.batWings) this.batWings = new HalloweenBatWingsJetpack();
+    const root = this.batWings.root;
+    if (root.parent !== this.modelGroup) {
+      if (root.parent) root.parent.remove(root);
+      this.modelGroup.add(root);
+    }
+
+    root.scale.setScalar(1);
+    root.position.set(0, 0, 0);
+    root.rotation.set(0, 0, 0);
+    this.modelGroup.updateMatrixWorld(true);
+
+    const ref = (this.viber && this.viber.body) || this.viber.root;
+    const torsoWorld = ref.getWorldPosition(new THREE.Vector3());
+    _jpBox.setFromObject(ref);
+    _jpBox.getSize(_jpSize);
+    const torsoW = Math.max(_jpSize.x, _jpSize.z);
+    const torsoHalfD = torsoW / 2;
+
+    const raw = this.batWings.rawSize;
+    const s = (torsoW * 2.6) / (raw.width || 1);
+    root.scale.setScalar(s);
+
+    const back = new THREE.Vector3(0, 0, 1).applyQuaternion(
+      this.modelGroup.getWorldQuaternion(new THREE.Quaternion())
+    );
+    const torsoBack = new THREE.Vector3().copy(torsoWorld).addScaledVector(back, torsoHalfD + 0.03);
+    const rootHalfD = (raw.depth * s) / 2;
+    const centerWorld = new THREE.Vector3().copy(torsoBack).addScaledVector(back, rootHalfD);
+    centerWorld.y += torsoW * 0.38;
+
+    this.modelGroup.worldToLocal(centerWorld);
+    root.position.copy(centerWorld);
+    root.rotation.set(0, 0, 0);
+    root.visible = this.halloweenMode;
+  }
+
+  /** Called by RaceMode when entering/exiting a Halloween race. */
+  setHalloweenMode(enabled) {
+    this.halloweenMode = !!enabled;
+    if (this.halloweenMode) {
+      if (!this.jetpack) this.attachJetpack();
+      this.attachBatWings();
+      if (this.batWings) this.batWings.root.visible = true;
+      if (this.jetpack) this.jetpack.visible = false;
+      if (this.jpFlames) for (const f of this.jpFlames) f.mesh.visible = false;
+    } else if (this.batWings) {
+      this.batWings.root.visible = false;
+    }
+    this.syncJetpack();
+  }
+
+  /** Advance the bat-wing flap independently of the standard pack (also used
+   *  during the race countdown, when Robot.update is paused). */
+  tickBatWings(dt, active = this.jetpackBurn > 0) {
+    if (!this.halloweenMode || !this.batWings) return;
+    this._batWingTime += dt;
+    this.batWings.update(this._batWingTime, !!active);
+  }
+
+  disposeBatWings() {
+    if (!this.batWings) return;
+    this.batWings.dispose();
+    this.batWings = null;
+  }
+
   updateJetpack(dt, fxManager) {
+    if (this.halloweenMode && this.batWings) {
+      this.tickBatWings(dt, this.jetpackBurn > 0);
+    }
     if (!this.jetpack) return;
     if (this.state === "eliminated") {
       this.jetpackBurn = 0;
@@ -584,7 +682,11 @@ export class Robot {
         const dirZ = -Math.cos(this.facingAngle);
         const backX = -dirX;
         const backZ = -dirZ;
-        for (const nozzle of this.jpNozzles) {
+        const emitters =
+          this.halloweenMode && this.batWings ? this.batWings.getBoostEmitters() : this.jpNozzles || [];
+        const emberA = this.halloweenMode ? 0x7b2ff7 : 0x9af6ff;
+        const emberB = this.halloweenMode ? 0xff6a00 : 0xffe7a8;
+        for (const nozzle of emitters) {
           nozzle.getWorldPosition(_jpWorld);
           fxManager.spawnEmber(
             _jpWorld.x,
@@ -592,7 +694,9 @@ export class Robot {
             _jpWorld.z,
             backX * (2.4 + Math.random() * 2.2) + (Math.random() - 0.5) * 0.8,
             -2.6 - Math.random() * 3.4,
-            backZ * (2.4 + Math.random() * 2.2) + (Math.random() - 0.5) * 0.8
+            backZ * (2.4 + Math.random() * 2.2) + (Math.random() - 0.5) * 0.8,
+            emberA,
+            emberB
           );
         }
       }
@@ -736,6 +840,7 @@ export class Robot {
       this.portraitPath = meta.portrait;
     }
     if (this.jetpack && this.jetpack.parent) this.jetpack.parent.remove(this.jetpack);
+    if (this.batWings && this.batWings.root.parent) this.batWings.root.parent.remove(this.batWings.root);
     if (this.modelGroup) {
       this.group.remove(this.modelGroup);
       this.modelGroup = null;
@@ -1167,7 +1272,12 @@ export class Robot {
       this.fxJetpackCount = (this.fxJetpackCount || 0) + 1;
       audio.playJetpack();
       if (fxManager) {
-        fxManager.spawnSparkBurst(this.pos.x, this.pos.y + 0.2, this.pos.z, 10, 0x00e5ff, 0.9);
+        const burstColor = this.halloweenMode
+          ? Math.random() < 0.5
+            ? 0x7b2ff7
+            : 0xff6a00
+          : 0x00e5ff;
+        fxManager.spawnSparkBurst(this.pos.x, this.pos.y + 0.2, this.pos.z, 10, burstColor, 0.9);
       }
       if (onScreenShake) onScreenShake(0.22);
       return true;
@@ -2368,6 +2478,7 @@ export class Robot {
   dispose() {
     this.clearDashGhosts();
     this.disposeJetpack();
+    this.disposeBatWings();
     this.scene.remove(this.group);
   }
 }

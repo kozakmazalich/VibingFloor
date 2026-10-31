@@ -7,6 +7,7 @@
  */
 
 import * as THREE from 'three';
+import { ViberDancer } from './src/viberDance.js';
 
 // ============================================================================
 // 1. PRIZE TIERS CONFIGURATION
@@ -85,6 +86,11 @@ let pointerLeft = null;
 let pointerRight = null;
 let glowRingMat = null;
 
+// Dancing winner viber, bottom-right of the drum (same routine as the menu).
+let dancer = null;
+const DANCER_HEIGHT = 2.4;
+const DANCER_Z = 1.9;
+
 // Particles
 let particleSystem = null;
 let particlePositions = null;
@@ -141,6 +147,9 @@ export function showPrizeDrum(onComplete, options = {}) {
   selectedTierIndex = roll.index;
   selectedTier = roll.tier;
 
+  // 1b. Pick the winner model that dances beside the drum.
+  if (dancer) dancer.setCharacter(options.character);
+
   // 2. Reset visual states from previous runs
   resetVisualsForNewSpin();
 
@@ -194,6 +203,9 @@ export function updatePrizeDrum(now = performance.now()) {
 
   // Subtle idle camera/frame float for cyberpunk feel
   frameGroup.position.y = Math.sin(now * 0.0025) * 0.05;
+
+  // The winner keeps dancing for the whole spin (same loop as the menu).
+  if (dancer) dancer.update(now / 1000, dt);
 
   if (animPhase === 'SPINNING') {
     const t = Math.min(elapsed / SPIN_DURATION, 1.0);
@@ -463,10 +475,25 @@ function initPrizeDrumResources() {
   winnerCardMesh.renderOrder = 10;
   rootGroup.add(winnerCardMesh);
 
-  // --- E. Lightweight Confetti / Particle Burst ---
+  // --- E. Dancing Winner Viber (bottom-right of the drum) ---
+  // MeshLambert needs light, so add the cheapest possible rig: one flat
+  // ambient and one key light. Two lights, no shadows, no extra passes.
+  scene.add(new THREE.AmbientLight(0x9fb4ff, 1.15));
+  const dancerKey = new THREE.DirectionalLight(0xffffff, 1.9);
+  dancerKey.position.set(2.5, 4, 6);
+  scene.add(dancerKey);
+  const dancerRim = new THREE.DirectionalLight(0xff2d95, 0.7);
+  dancerRim.position.set(-3, 1.5, -2);
+  scene.add(dancerRim);
+
+  dancer = new ViberDancer({ height: DANCER_HEIGHT });
+  scene.add(dancer.root);
+  layoutDancer();
+
+  // --- F. Lightweight Confetti / Particle Burst ---
   initParticles();
 
-  // --- F. Standalone Overlay Renderer (Fallback if game renderer isn't passed) ---
+  // --- G. Standalone Overlay Renderer (Fallback if game renderer isn't passed) ---
   if (!sharedRenderer) {
     standaloneContainer = document.createElement('div');
     Object.assign(standaloneContainer.style, {
@@ -802,6 +829,7 @@ function setSceneOpacity(alpha) {
   backdropMat.opacity = 0.92 * alpha;
   winnerCardMat.opacity = alpha;
   glowRingMat.opacity = 0.4 * alpha;
+  if (dancer) dancer.setOpacity(alpha);
   for (let i = 0; i < panelItems.length; i++) {
     panelItems[i].mat.opacity = (winnerCardMesh.visible ? 0.25 : 1.0) * alpha;
   }
@@ -864,4 +892,19 @@ function fitDrumToAspect() {
   const frameHalfWidth = (DRUM_WIDTH + 2.4) / 2; // + rims, pointers, margin
   const neededDist = frameHalfWidth / Math.tan((camera.fov * Math.PI) / 360) / aspect;
   camera.position.set(0, 0, Math.max(11.5, DRUM_RADIUS + neededDist));
+  layoutDancer();
+}
+
+// Park the dancing viber at the bottom-right of the drum, inside the camera
+// frustum at the dancer's own depth. Recomputed on resize so it never drifts
+// off-screen (the dancer sits closer to the camera than the drum, so the
+// frustum has to be evaluated at DANCER_Z, not z = 0).
+function layoutDancer() {
+  if (!dancer || !camera) return;
+  const dist = Math.max(1, camera.position.z - DANCER_Z);
+  const halfH = dist * Math.tan((camera.fov * Math.PI) / 360);
+  const halfW = halfH * camera.aspect;
+  const x = Math.min(halfW - 1.2, DRUM_WIDTH / 2 + 1.2);
+  const y = -halfH + 0.55;
+  dancer.root.position.set(x, y, DANCER_Z);
 }

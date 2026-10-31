@@ -30,6 +30,138 @@ body {
   touch-action: none;
 }
 
+/* =========================================
+   BOOT / LOADING SCREEN
+   Sits above everything from the very first paint (it is plain HTML+CSS, so
+   it is visible while the ES modules and CDN chunks are still downloading).
+   main.js advances the bar and fades it out once the game is genuinely ready.
+   ========================================= */
+.boot-loader {
+  position: fixed;
+  inset: 0;
+  /* Above every in-app overlay, including the injected auth chip (9500). */
+  z-index: 9600;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(120% 90% at 50% 0%, #0d1230 0%, #070812 55%, #05060c 100%);
+  overflow: hidden;
+  transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.boot-loader.is-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.boot-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0.8;
+}
+.boot-aurora {
+  /* Same hero glow as the menu, slightly dimmer so the panel reads. */
+  opacity: 0.75;
+}
+.boot-panel {
+  position: relative;
+  z-index: 1;
+  width: min(520px, calc(100vw - 40px));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.boot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: #b9e8ff;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  background: rgba(8, 14, 32, 0.72);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.18), inset 0 0 12px rgba(0, 229, 255, 0.08);
+}
+.boot-title {
+  margin: 0;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 900;
+  font-size: clamp(26px, 6vw, 46px);
+  letter-spacing: 0.08em;
+  line-height: 1.05;
+  color: #ffffff;
+  text-shadow: 0 0 18px rgba(0, 229, 255, 0.5), 0 0 44px rgba(255, 45, 149, 0.3);
+}
+.boot-title span {
+  color: #ff2d95;
+  text-shadow: 0 0 18px rgba(255, 45, 149, 0.65), 0 0 44px rgba(255, 45, 149, 0.35);
+}
+.boot-sub {
+  margin: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.34em;
+  color: #7d93bd;
+  text-transform: uppercase;
+}
+.boot-bar {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgba(0, 229, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(0, 229, 255, 0.22);
+  overflow: hidden;
+}
+.boot-bar-fill {
+  width: 0%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #00e5ff 0%, #7b2ff7 55%, #ff2d95 100%);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.7), 0 0 28px rgba(255, 45, 149, 0.35);
+  transition: width 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.boot-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #8aa0c7;
+  text-transform: uppercase;
+}
+.boot-meta #boot-percent {
+  color: #00e5ff;
+}
+.boot-tip {
+  margin-top: 4px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: rgba(138, 160, 199, 0.55);
+  min-height: 14px;
+  transition: opacity 0.3s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .boot-aurora {
+    animation: none;
+  }
+}
+
 /* Planet-orbit load state. The mesh is in the WebGL scene; this is just the caption.
    The menu scrim lifts so the orbits read instead of a blurred half-built arena. */
 .arena-loader {
@@ -169,33 +301,6 @@ body.arena-loading #start-menu {
   0%   { transform: rotate(-5deg) scale(1) translate(0, 0); }
   50%  { transform: rotate(3deg) scale(1.09) translate(2%, -1.6%); }
   100% { transform: rotate(-2deg) scale(1.05) translate(-2%, 1.6%); }
-}
-
-/* Neon cyber grid floor — cheap CSS-only depth cue (performance-optimization:
-   gradients render once, then a slow transform moves the whole layer). */
-.menu-grid {
-  position: absolute;
-  left: -20%;
-  right: -20%;
-  bottom: -10%;
-  height: 55%;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(0, 229, 255, 0.09) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 229, 255, 0.09) 1px, transparent 1px);
-  background-size: 46px 46px;
-  transform: perspective(340px) rotateX(62deg);
-  transform-origin: 50% 100%;
-  mask-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 55%, #000 100%);
-  -webkit-mask-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.7) 55%, #000 100%);
-  animation: gridScroll 7s linear infinite;
-  will-change: transform;
-  opacity: 0.7;
-}
-
-@keyframes gridScroll {
-  from { background-position: 0 0, 0 0; }
-  to   { background-position: 0 46px, 0 0; }
 }
 
 /* Faint CRT scanlines over everything — sells the "arena broadcast" vibe at
@@ -2358,7 +2463,6 @@ body.arena-loading #start-menu {
   .t3d-oo,
   .t3d-word,
   .menu-aurora,
-  .menu-grid,
   .menu-scanlines,
   .start-card::before {
     animation: none;

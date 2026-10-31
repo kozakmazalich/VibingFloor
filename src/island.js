@@ -95,6 +95,19 @@ export class Island {
     }
   }
 
+  // The main menu no longer shows a live arena preview behind the panels, so
+  // the whole board (tiles + props) can be parked off-screen and restored the
+  // moment a match starts. Tiles keep their own visibility rules otherwise.
+  setArenaVisible(visible) {
+    const show = !!visible;
+    for (const tile of this.allTiles) {
+      if (tile && tile.group) tile.group.visible = show;
+    }
+    for (const prop of this.props || []) {
+      if (prop && prop.group) prop.group.visible = show;
+    }
+  }
+
   buildGrid() {
     this.clear();
     this.grid = Array.from({ length: this.gridSize }, () => Array(this.gridSize).fill(null));

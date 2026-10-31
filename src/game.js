@@ -281,6 +281,21 @@ export class Game {
     if (mapIndex < 0 || mapIndex >= MAPS.length) return;
     if (mapIndex === this.currentMapIndex) return;
     this.currentMapIndex = mapIndex;
+    // The start menu no longer shows a live arena preview (main.js parks the
+    // whole board), so rebuilding 400 tiles just to hide them costs a visible
+    // hitch in the menu backdrop. Defer the build to the next match start.
+    if (this.state === "menu") {
+      this._mapDirty = true;
+      return;
+    }
+    this._queueArena();
+  }
+
+  // Build an arena selection that was deferred while the menu was up. Used by
+  // the online entry point, which does not go through startGame().
+  flushPendingArena() {
+    if (!this._mapDirty) return;
+    this._mapDirty = false;
     this._queueArena();
   }
 
@@ -633,6 +648,12 @@ export class Game {
   startGame() {
     // A map swap may still be streaming tiles in. Wait for it, then start,
     // so the round never begins on a half-built or previous arena.
+    if (this._mapDirty) {
+      this._mapDirty = false;
+      this._startAfterLoad = true; // _pumpArena starts the match when it settles
+      this._queueArena();
+      return;
+    }
     if (this._arenaBusy) {
       this._startAfterLoad = true;
       return;

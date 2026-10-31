@@ -753,11 +753,17 @@ class SoundSystem {
   // LIGHT VOICES — "GREEN LIGHT" / "RED LIGHT" clips for race map 3.
   // Fetched + decoded once, then played instantly on each phase flip.
   // =====================================================================
-  preloadVoices() {
-    this.ensureContext();
-    if (!this.ctx) return;
+  preloadVoices(unlock = true) {
+    // Boot uses unlock=false: create the context (so fetch+decode can run
+    // before the first tap) but do not start the music until a real gesture.
+    if (unlock) this.ensureContext();
+    else if (!this.ctx) this.init();
+    if (!this.ctx) return Promise.resolve(false);
     this._loadVoice("green", "GREEN.mp3");
     this._loadVoice("red", "RED.mp3");
+    return Promise.allSettled(
+      [this.voicePromises.green, this.voicePromises.red].filter(Boolean)
+    );
   }
 
   // Music + voice on/off (exposed by the map-3 HUD clicker).

@@ -312,6 +312,7 @@ let composer = null;
 let bloomPass = null;
 let bloomTried = false;
 let bloomFailed = false;
+let raceLowDpr = false;
 
 function ensureComposer() {
   if (composer || bloomTried) return composer;
@@ -360,6 +361,18 @@ function resizeComposer() {
   bloomPass.setSize((window.innerWidth * ratio) / 2, (window.innerHeight * ratio) / 2);
 }
 
+/** Bloom is the only extra full-screen pass left in the race, but it is still
+ *  the most expensive thing on screen: cap the race canvas at 1.5x DPR while it
+ *  is on so the bloom mips and the effects stay inside the M1 frame budget. */
+function setRaceRenderScale(low, force = false) {
+  const ratio = Math.min(window.devicePixelRatio, low ? 1.5 : 2);
+  if (!force && low === raceLowDpr && renderer.getPixelRatio() === ratio) return;
+  raceLowDpr = low;
+  renderer.setPixelRatio(ratio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  if (composer) resizeComposer();
+}
+
 function renderFrame() {
   const useBloom =
     raceBloom &&
@@ -367,6 +380,8 @@ function renderFrame() {
     game.mode === "race" &&
     game.state !== "menu" &&
     !bloomFailed;
+
+  setRaceRenderScale(useBloom);
 
   if (useBloom) {
     if (!composer) ensureComposer();
@@ -530,15 +545,20 @@ function createMoon() {
   preloadHalloweenAssets().then((assets) => {
     const moon = buildMoonMesh(assets);
     if (!moon) return;
-    moon.scale.setScalar(26); // sphere diameter 2 -> 52 world units
+    moon.scale.setScalar(22); // sphere diameter 2 -> 44 world units
     group.add(moon);
   });
 
   return group;
 }
 const moonGroup = createMoon();
-const _moonDir = new THREE.Vector3();
-const _moonNdc = new THREE.Vector3(-0.55, 0.66, 0.5);
+// The Halloween moon is a real object on the MAP: one fixed world position per
+// race, parked far down the track. It is never re-anchored to the camera, so
+// running forward leaves it exactly where it is (only camera rotation moves it
+// across the view, like any distant object).
+const MOON_FAR_AHEAD = 420; // extra distance beyond the finish line
+const MOON_HEIGHT = 13;
+const MOON_SIDE = -0.16; // fraction of the forward distance, to the left
 
 // Saved arena atmosphere, so the Halloween theme can switch it on and off.
 const _atmo = {
@@ -607,6 +627,24 @@ function frameMenuCamera(gridSize) {
   controls.update();
 }
 
+// The arena is gameplay-only now: the start menu shows the aurora backdrop and
+// the planet instead of a live board preview.
+function setArenaPreviewVisible(visible) {
+  if (game.island && game.island.setArenaVisible) game.island.setArenaVisible(visible);
+  for (const r of game.robots || []) {
+    if (r && r.group) r.group.visible = visible;
+  }
+}
+
+// The abyss floor grid and the wireframe horizon are part of the playable
+// scene, but from the menu camera they read as a stray grid over the whole
+// background — park them while the start screen is up.
+function setMenuBackdropHidden(hidden) {
+  const show = !hidden;
+  if (cyberGrid) cyberGrid.visible = show;
+  if (horizonGrid) horizonGrid.visible = show;
+}
+
 const game = new Game(scene, camera, {
   onGameStart: (info) => {
     startMenuEl.classList.add("hidden");
@@ -634,6 +672,8 @@ const game = new Game(scene, camera, {
     controls.autoRotate = false;
     arenaLoader.setVisible(false);
     if (isRace) snapRaceCamera();
+    setMenuBackdropHidden(false);
+    if (!isRace) setArenaPreviewVisible(true);
   },
 
   // Fired whenever the fighter roster changes (bot count / map rebuild)
@@ -659,7 +699,11 @@ const game = new Game(scene, camera, {
   },
 
   onArenaReady: (mapDef) => {
-    if (game.state === "menu") frameMenuCamera(mapDef && mapDef.gridSize);
+    if (game.state === "menu") {
+      frameMenuCamera(mapDef && mapDef.gridSize);
+      setArenaPreviewVisible(false);
+      setMenuBackdropHidden(true);
+    }
   },
 
   onMenu: () => {
@@ -678,6 +722,8 @@ const game = new Game(scene, camera, {
     // Planet is the menu backdrop for as long as this screen is up.
     arenaLoader.setVisible(true);
     frameMenuCamera(game.island.gridSize);
+    setArenaPreviewVisible(false);
+    setMenuBackdropHidden(true);
 
     controls.autoRotate = true;
     controls.autoRotateSpeed = 0.55;
@@ -941,7 +987,7 @@ const game = new Game(scene, camera, {
           // Privy embedded wallet and syncs the on-chain balance to the profile.
           creditWinToPrivyWallet(wonAmount);
         },
-        { renderer, manualLoop: true }
+        { renderer, manualLoop: true, character: game.p1 ? game.p1.charIndex : 0 }
       );
     } else {
       // Loss / draw / not in the top-N -> no drum, just the normal screen
@@ -1106,16 +1152,19 @@ function syncRaceBackdrop() {
   dirLight.target.position.set(raceLook.x, 0, raceLook.z);
   dirLight.target.updateMatrixWorld();
 
-  // Halloween full moon rides high in the sky ahead of the camera.
+  // Halloween full moon: pinned to the map, far beyond the finish line.
   if (moonGroup) {
     const hal = !!(game.race && game.race.halloween) && game.mode === "race";
     moonGroup.visible = hal;
     if (hal) {
-      // Project the moon from a fixed sky-band NDC point so it stays framed
-      // above the track no matter how steep the chase camera looks down.
-      camera.updateMatrixWorld();
-      _moonDir.copy(_moonNdc).unproject(camera).sub(camera.position).normalize();
-      moonGroup.position.copy(camera.position).addScaledVector(_moonDir, 400);
+      const course = game.race.course;
+      // Place it once per race (and re-place when the course is rebuilt).
+      if (course && moonGroup.userData.course !== course) {
+        moonGroup.userData.course = course;
+        const ahead = (course.finishS || 200) + MOON_FAR_AHEAD;
+        moonGroup.position.set(ahead * MOON_SIDE, MOON_HEIGHT, -ahead);
+        moonGroup.updateMatrixWorld(true);
+      }
     }
   }
 }
@@ -1641,6 +1690,12 @@ function updateShowcase3D(t) {
 
 initShowcase3D();
 
+// The start screen is already up at boot (the Game constructor builds the
+// island synchronously, before any onArenaReady fires), so park the arena here
+// once. onGameStart brings it back for the match.
+setArenaPreviewVisible(false);
+setMenuBackdropHidden(true);
+
 // 9. Character Switching Logic (6 Viber fighters + 6 cutout agents, 2 pages)
 const charButtons = [
   { el: btnCharJpgEl, type: "robot1_jpg", page: 1 },
@@ -2008,11 +2063,15 @@ btnMenuOnlineEl.addEventListener("click", () => {
 
 btnOnlineHostEl.addEventListener("click", () => {
   audio.playClick();
+  // The online path does not go through startGame(), so build any arena the
+  // player picked in the menu now — the peer handshake gives it time to settle.
+  game.flushPendingArena();
   net.host();
 });
 
 btnOnlineJoinEl.addEventListener("click", () => {
   audio.playClick();
+  game.flushPendingArena();
   net.join(onlineCodeInputEl ? onlineCodeInputEl.value : "");
 });
 
@@ -2200,7 +2259,7 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, raceLowDpr ? 1.5 : 2));
   resizeComposer();
 });
 
@@ -2211,6 +2270,9 @@ function animate() {
   requestAnimationFrame(animate);
 
   const dt = Math.min(clock.getDelta(), 0.1);
+
+  // Boot overlay: animate the progress bar until the game is ready.
+  updateBootLoader(dt);
 
   // Update game simulation
   game.update(dt);
@@ -2280,5 +2342,143 @@ function animate() {
   }
 }
 
+// ============================================================================
+// 12. BOOT / LOADING SCREEN
+// The overlay is plain HTML+CSS, so it covers the app from the first paint (while
+// the three.js CDN modules are still downloading). It stays up until the fonts,
+// portraits, Halloween kit, voice clips and a few warm frames are ready.
+// ============================================================================
+const bootLoaderEl = document.getElementById("boot-loader");
+const bootBarEl = document.getElementById("boot-bar");
+const bootFillEl = document.getElementById("boot-bar-fill");
+const bootPercentEl = document.getElementById("boot-percent");
+const bootStatusEl = document.getElementById("boot-status");
+const bootTipEl = document.getElementById("boot-tip");
+
+const BOOT_TIPS = [
+  "TIP · HOLD SHIFT TO DASH",
+  "TIP · PRESS Q FOR THE JETPACK",
+  "TIP · E THRUSTS THE SPEAR, G THROWS A GRENADE",
+  "TIP · IN VIBER RACE, REACH THE CHECKPOINTS",
+  "TIP · HALLOWEEN MAPS HIDE METEORS AND PUMPKINS",
+];
+
+const bootState = { shown: 0, target: 0, tip: 0, tipTimer: 0, done: false };
+
+function bootSetTarget(pct, label) {
+  bootState.target = Math.max(bootState.target, Math.min(100, pct));
+  if (label && bootStatusEl) bootStatusEl.textContent = label;
+}
+
+// Ease the bar toward the target so it never jumps; called from the main loop.
+function updateBootLoader(dt) {
+  if (bootState.done) return;
+  const { target } = bootState;
+  bootState.shown += (target - bootState.shown) * Math.min(1, dt * 9);
+  if (target - bootState.shown < 0.3) bootState.shown = target;
+  const pct = Math.round(bootState.shown);
+  if (bootFillEl) bootFillEl.style.width = `${pct}%`;
+  if (bootPercentEl) bootPercentEl.textContent = `${pct}%`;
+  if (bootBarEl) bootBarEl.setAttribute("aria-valuenow", String(pct));
+
+  bootState.tipTimer -= dt;
+  if (bootState.tipTimer <= 0 && bootTipEl) {
+    bootState.tipTimer = 2.6;
+    bootState.tip = (bootState.tip + 1) % BOOT_TIPS.length;
+    bootTipEl.textContent = BOOT_TIPS[bootState.tip];
+  }
+}
+
+const bootDelay = (ms) => new Promise((r) => setTimeout(r, ms));
+const bootFrames = (n) =>
+  new Promise((resolve) => {
+    let left = n;
+    const step = () => (--left <= 0 ? resolve() : requestAnimationFrame(step));
+    requestAnimationFrame(step);
+  });
+
+// Wait for the menu's <img> portraits, but never block the boot on a bad file.
+function bootWaitForImages(limitMs) {
+  const imgs = Array.from(document.querySelectorAll("#start-menu img"));
+  const loads = imgs.map((img) =>
+    img.complete
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          img.addEventListener("load", resolve, { once: true });
+          img.addEventListener("error", resolve, { once: true });
+        })
+  );
+  return Promise.race([Promise.all(loads), bootDelay(limitMs)]);
+}
+
+async function runBootLoader() {
+  if (!bootLoaderEl) return;
+  const started = performance.now();
+
+  try {
+    bootSetTarget(12, "INITIALIZING RENDERER");
+    await bootFrames(2);
+
+    bootSetTarget(30, "LOADING FONTS");
+    await Promise.race([
+      Promise.allSettled([
+        document.fonts.load('900 40px "Orbitron"'),
+        document.fonts.load('700 16px "JetBrains Mono"'),
+        document.fonts.load('800 16px Rajdhani'),
+        document.fonts.ready,
+      ]),
+      bootDelay(2500),
+    ]);
+
+    bootSetTarget(46, "LOADING FIGHTER PORTRAITS");
+    await bootWaitForImages(2500);
+
+    bootSetTarget(66, "LOADING HALLOWEEN ASSETS");
+    // Already warming since startup; cap the wait so a slow network still
+    // reaches the menu (the race keeps streaming it in the background).
+    await Promise.race([
+      preloadHalloweenAssets().catch(() => null),
+      bootDelay(9000),
+    ]);
+
+    bootSetTarget(84, "DECODING VOICE PACK");
+    // Audio is optional at boot: a blocked/old audio module must never stall
+    // or break the loader.
+    try {
+      const voices = audio.preloadVoices(false);
+      if (voices && typeof voices.then === "function") {
+        await Promise.race([voices.catch(() => null), bootDelay(4000)]);
+      }
+    } catch {
+      /* keep booting */
+    }
+
+    bootSetTarget(94, "COMPILING SHADERS");
+    await bootFrames(4);
+  } catch (err) {
+    // Never trap the player on the loader — the menu works regardless.
+    console.warn("[boot] warm-up skipped", err);
+  }
+
+  // Keep the screen up long enough to read, but do not stall a fast boot.
+  const elapsed = performance.now() - started;
+  if (elapsed < 1150) await bootDelay(1150 - elapsed);
+
+  bootSetTarget(100, "READY");
+  // Let the bar visibly finish before the fade.
+  await bootDelay(260);
+
+  bootState.done = true;
+  if (bootFillEl) bootFillEl.style.width = "100%";
+  if (bootPercentEl) bootPercentEl.textContent = "100%";
+  bootLoaderEl.classList.add("is-hidden");
+  bootLoaderEl.setAttribute("aria-hidden", "true");
+  // Drop it from the layer tree once the fade is over.
+  setTimeout(() => {
+    bootLoaderEl.style.display = "none";
+  }, 700);
+}
+
+runBootLoader();
 animate();
 

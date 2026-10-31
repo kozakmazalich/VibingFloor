@@ -43,6 +43,27 @@
     <!-- Three.js Canvas -->
     <canvas id="game-canvas"></canvas>
 
+    <!-- 0. BOOT / LOADING SCREEN — covers the app until the game is ready -->
+    <div id="boot-loader" class="boot-loader" role="status" aria-live="polite">
+      <div class="boot-bg" aria-hidden="true">
+        <div class="menu-aurora boot-aurora"></div>
+        <div class="menu-scanlines"></div>
+      </div>
+      <div class="boot-panel">
+        <div class="boot-badge"><span class="live-dot"></span>SYSTEM BOOT</div>
+        <h1 class="boot-title">VIBING <span>FLOOR</span></h1>
+        <p class="boot-sub">3D CYBER BATTLE ROYALE</p>
+        <div class="boot-bar" id="boot-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="boot-bar-fill" id="boot-bar-fill"></div>
+        </div>
+        <div class="boot-meta">
+          <span id="boot-status">INITIALIZING</span>
+          <span id="boot-percent" class="tabular">0%</span>
+        </div>
+        <div class="boot-tip" id="boot-tip">TIP · HOLD SHIFT TO DASH</div>
+      </div>
+    </div>
+
     <!-- Shown while an arena streams in. The planet itself is in the 3D scene. -->
     <div id="arena-loader" class="arena-loader hidden" aria-hidden="true">
       <p class="arena-loader-label"><span>LOADING</span> <strong id="arena-loader-name">ARENA</strong></p>
@@ -53,7 +74,6 @@
       <!-- Shining aurora background (huly-style hero glow, CSS-only) + cyber grid -->
       <div class="menu-aurora-wrap" aria-hidden="true">
         <div class="menu-aurora"></div>
-        <div class="menu-grid"></div>
         <div class="menu-scanlines"></div>
       </div>
       <div class="menu-card start-card">

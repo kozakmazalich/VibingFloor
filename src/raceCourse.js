@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { buildProp, buildNeonSlab } from "./props.js";
 import { COLORS, RACE_BATTERY_RESPAWN } from "./constants.js";
-import { preloadHalloweenAssets, makeHalo } from "./halloweenAssets.js";
+import { preloadHalloweenAssets } from "./halloweenAssets.js";
 
 /**
  * VIBER RACE course builder.
@@ -30,7 +30,7 @@ const AC = {
 // ---------------------------------------------------------------------------
 // Shared canvas textures
 // ---------------------------------------------------------------------------
-function textTexture(text, { color = "#00e5ff", w = 512, h = 128, size = 62, bg = "rgba(8,10,24,0.78)" } = {}) {
+function textTexture(text, { color = "#00e5ff", w = 512, h = 128, size = 62, bg = "rgba(8,10,24,0.78)", blur = 18 } = {}) {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -46,7 +46,7 @@ function textTexture(text, { color = "#00e5ff", w = 512, h = 128, size = 62, bg 
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.shadowColor = color;
-  g.shadowBlur = 18;
+  g.shadowBlur = blur;
   g.fillStyle = "#ffffff";
   g.fillText(text, w / 2, h / 2 + 2);
   g.shadowBlur = 0;
@@ -241,6 +241,7 @@ export class RaceCourse {
     this._alive = true;
     this._pumpkinMat = null;
     this._pumpkins = [];
+    this._shards = null; // pooled pumpkin shards (built on first smash)
     this._drifters = []; // drifting bat / ghost props
 
     this.buildPlatforms();
@@ -390,17 +391,27 @@ export class RaceCourse {
     g.position.set(0, 0, -s);
     const width = x1 - x0;
     const cx = (x0 + x1) / 2;
+    const bannerW = width * 0.9;
+    const bannerH = bannerW / 8;
+    // The finish gate is a white nameplate: keep its own glow low so the banner
+    // stays the brightest element and the letters never wash out in the bloom.
+    const postGlow = checker ? 0.3 : 0.55;
+    const beamGlow = checker ? 0.1 : 0.2;
     const postGeo = new THREE.BoxGeometry(0.42, 4.2, 0.42);
-    const postMat = new THREE.MeshStandardMaterial({ color: 0x161b2e, metalness: 0.8, roughness: 0.3, emissive: color, emissiveIntensity: 0.55 });
-    const beamGeo = new THREE.BoxGeometry(width + 0.9, 0.9, 0.36);
-    const beamMat = new THREE.MeshStandardMaterial({ color: 0x0f1324, metalness: 0.7, roughness: 0.35, emissive: color, emissiveIntensity: 0.2 });
-    const tex = textTexture(text, { color: `#${color.toString(16).padStart(6, "0")}`, w: 1024, h: 128, size: 78, bg: null });
-    const bannerGeo = new THREE.PlaneGeometry(width * 0.9, (width * 0.9) / 8);
+    const postMat = new THREE.MeshStandardMaterial({ color: 0x161b2e, metalness: 0.8, roughness: 0.3, emissive: color, emissiveIntensity: postGlow });
+    const beamGeo = new THREE.BoxGeometry(width + 0.9, bannerH + 0.2, 0.36);
+    const beamMat = new THREE.MeshStandardMaterial({ color: 0x0f1324, metalness: 0.7, roughness: 0.35, emissive: color, emissiveIntensity: beamGlow });
+    const tex = textTexture(text, { color: `#${color.toString(16).padStart(6, "0")}`, w: 1024, h: 128, size: 78, bg: null, blur: 7 });
+    const bannerGeo = new THREE.PlaneGeometry(bannerW, bannerH);
     const bannerMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+    // Opaque dark nameplate between the glowing beam and the text. Without it
+    // the beam's glow bled straight through the transparent glyph area.
+    const plateGeo = new THREE.BoxGeometry(bannerW + 0.16, bannerH + 0.08, 0.08);
+    const plateMat = new THREE.MeshBasicMaterial({ color: 0x05060f });
     const stripGeo = new THREE.BoxGeometry(width + 0.9, 0.06, 0.06);
-    const stripMat = new THREE.MeshBasicMaterial({ color });
-    this._geos.push(postGeo, beamGeo, bannerGeo, stripGeo);
-    this._mats.push(postMat, beamMat, bannerMat, stripMat);
+    const stripMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 });
+    this._geos.push(postGeo, beamGeo, bannerGeo, plateGeo, stripGeo);
+    this._mats.push(postMat, beamMat, bannerMat, plateMat, stripMat);
     this._textures.push(tex);
     for (const x of [x0 - 0.45, x1 + 0.45]) {
       const post = new THREE.Mesh(postGeo, postMat);
@@ -409,12 +420,17 @@ export class RaceCourse {
       g.add(post);
     }
     const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.position.set(cx, 4.2, 0);
+    beam.position.set(cx, 4.2, -0.06);
     g.add(beam);
+    const plate = new THREE.Mesh(plateGeo, plateMat);
+    plate.position.set(cx, 4.2, 0.14);
+    g.add(plate);
     const banner = new THREE.Mesh(bannerGeo, bannerMat);
-    banner.position.set(cx, 4.2, 0.19);
+    banner.position.set(cx, 4.2, 0.2);
     g.add(banner);
-    for (const y of [3.73, 4.67]) {
+    // Neon edging sits just OUTSIDE the banner, hugging the beam's edges, so it
+    // frames the text instead of glowing across it.
+    for (const y of [4.2 - bannerH / 2 - 0.09, 4.2 + bannerH / 2 + 0.09]) {
       const strip = new THREE.Mesh(stripGeo, stripMat);
       strip.position.set(cx, y, 0.2);
       g.add(strip);
@@ -460,7 +476,7 @@ export class RaceCourse {
       ring.rotation.z += dt * 0.4;
       ring2.rotation.z -= dt * 0.25;
       ring2.rotation.y = Math.sin(t * 0.5) * 0.25;
-      finish.stripMat.color.setHSL((t * 0.15) % 1, 1, 0.6);
+      finish.stripMat.color.setHSL((t * 0.15) % 1, 1, 0.55);
     });
   }
 
@@ -638,19 +654,27 @@ export class RaceCourse {
       g.add(face);
 
       // A few warm pools of light — capped so the scene stays cheap.
+      let pumpkinLight = null;
       if (lights < 3 && i % 7 === 3) {
-        const light = new THREE.PointLight(0xff6a00, 4.2, 6.5, 2);
-        light.position.set(0, 0.75, 0.25);
-        g.add(light);
+        pumpkinLight = new THREE.PointLight(0xff6a00, 4.2, 6.5, 2);
+        pumpkinLight.position.set(0, 0.75, 0.25);
+        g.add(pumpkinLight);
         lights++;
       }
 
       this.root.add(g);
       this._pumpkins.push({
         group: g,
+        light: pumpkinLight,
+        lightIntensity: pumpkinLight ? pumpkinLight.intensity : 0,
         baseY: surf.y,
         baseRot,
         phase: Math.random() * 6.283,
+        x,
+        z: -s,
+        y: surf.y,
+        radius: 0.46 * g.scale.x + 0.2,
+        broken: false,
       });
     });
   }
@@ -660,10 +684,9 @@ export class RaceCourse {
     const hasGhost = !!assets.models.ghost;
     if (!hasBat && !hasGhost) return;
 
-    // The .mtl wing emissive is shared; store it for the flap pulse.
-    this._batWingMat = assets.materials.Witch_Purple_Emissive || null;
-
-    for (let i = 0; i < 14; i++) {
+    // Eight drifters: enough to sell the Halloween skyline without paying for
+    // a dozen HD props every frame (they are decorative, not gameplay).
+    for (let i = 0; i < 8; i++) {
       const wantGhost = i % 2 === 0;
       const isGhost = wantGhost ? hasGhost : false;
       if (!isGhost && !hasBat) continue;
@@ -677,24 +700,13 @@ export class RaceCourse {
       node.position.set(bx, by, -s);
       node.scale.setScalar(sc);
 
-      if (isGhost) {
-        const halo = makeHalo(assets, 0x7b2ff7, 0.12, 1.2);
-        if (halo) {
-          halo.position.set(0, 0.8, 0);
-          node.add(halo);
-        }
-      } else {
-        const halo = makeHalo(assets, 0x7b2ff7, 0.09, 1.0);
-        if (halo) {
-          halo.position.set(0, 0.45, 0);
-          node.add(halo);
-        }
-      }
-
+      const body = node.getObjectByName("body") || null;
       this.root.add(node);
       this._drifters.push({
         obj: node,
         isGhost,
+        body,
+        bodyBaseY: body ? body.position.y : 0,
         wingL: node.getObjectByName("wingL") || null,
         wingR: node.getObjectByName("wingR") || null,
         bx,
@@ -717,10 +729,8 @@ export class RaceCourse {
     if (this._pumpkinFaceMat) {
       this._pumpkinFaceMat.emissiveIntensity = 1.15 + 0.3 * Math.sin(t * 3.2 + 0.8);
     }
-    if (this._batWingMat) {
-      this._batWingMat.emissiveIntensity = 1.0 + 0.35 * Math.sin(t * 4.4);
-    }
     for (const p of this._pumpkins) {
+      if (p.broken) continue;
       p.group.position.y = p.baseY + Math.sin(t * 2.0 + p.phase) * 0.05;
       p.group.rotation.y = p.baseRot + Math.sin(t * 0.9 + p.phase) * 0.07;
     }
@@ -729,16 +739,161 @@ export class RaceCourse {
       d.obj.position.x = d.bx + wobble * d.ampX;
       d.obj.position.y = d.by + Math.sin(t * d.speed * 1.7 + d.phase) * d.ampY;
       d.obj.position.z = d.bz + Math.cos(t * d.speed + d.phase) * 2.0;
+
       if (d.isGhost) {
-        d.obj.rotation.z = Math.sin(t * 1.3 + d.phase) * 0.12;
+        // Gentle hover + tail/body sway.
+        if (d.body) {
+          d.body.position.y = d.bodyBaseY + Math.sin(t * 2.8 + d.phase) * 0.18;
+          d.body.rotation.z = Math.sin(t * 2.0 + d.phase) * 0.08;
+        }
         d.obj.rotation.y = d.yaw + wobble * 0.18;
       } else {
-        const flap = Math.sin(t * 9 + d.phase) * 0.55;
-        if (d.wingL) d.wingL.rotation.y = flap;
-        if (d.wingR) d.wingR.rotation.y = -flap;
+        // Wing flap on both Z and Y, plus a soft body bob.
+        const flap = Math.sin(t * 9.0 + d.phase) * 0.38;
+        if (d.wingL) {
+          d.wingL.rotation.z = -flap;
+          d.wingL.rotation.y = -flap;
+        }
+        if (d.wingR) {
+          d.wingR.rotation.z = flap;
+          d.wingR.rotation.y = flap;
+        }
+        if (d.body) {
+          d.body.position.y = d.bodyBaseY + Math.sin(t * 4.5 + d.phase) * 0.12;
+        }
         d.obj.rotation.y = d.yaw + wobble * 0.25;
-        d.obj.rotation.z = Math.sin(t * 2.1 + d.phase) * 0.18;
+        d.obj.rotation.z = Math.sin(t * 2.1 + d.phase) * 0.12;
       }
+    }
+  }
+
+  // ---- breakable pumpkins ---------------------------------------------------
+  // A racer that runs into a jack-o'-lantern smashes it: the pumpkin disappears
+  // and its shards fly out, tumble and fade. Purely cosmetic — no knockback.
+  checkPumpkins(racers, fx) {
+    if (!this._pumpkins.length || !racers) return;
+    for (const p of this._pumpkins) {
+      if (p.broken) continue;
+      const reach = p.radius + 0.34;
+      const reachSq = reach * reach;
+      for (const rc of racers) {
+        const robot = rc && rc.robot ? rc.robot : rc;
+        const pos = robot && robot.pos;
+        if (!pos) continue;
+        if (robot.state && robot.state !== "alive") continue;
+        const dx = pos.x - p.x;
+        const dz = pos.z - p.z;
+        if (dx * dx + dz * dz > reachSq) continue;
+        if (Math.abs(pos.y - p.y) > 1.7) continue;
+        this._smashPumpkin(p, fx);
+        break;
+      }
+    }
+  }
+
+  _ensureShardPool() {
+    if (this._shards && this._shards.length) return;
+    const geo = new THREE.TetrahedronGeometry(0.14, 0);
+    this._geos.push(geo);
+    this._shards = [];
+    for (let i = 0; i < 14; i++) {
+      const glow = i % 4 === 0; // a few glowing "face" bits
+      const mat = new THREE.MeshStandardMaterial({
+        color: glow ? 0xffcf5c : 0xff6a00,
+        emissive: glow ? 0xffa53a : 0x7a2a00,
+        emissiveIntensity: glow ? 1.7 : 0.55,
+        roughness: 0.5,
+        metalness: 0.05,
+        flatShading: true,
+        transparent: true,
+        opacity: 1,
+      });
+      this._mats.push(mat);
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.visible = false;
+      this.root.add(mesh);
+      this._shards.push({
+        mesh,
+        mat,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+        rx: 0,
+        ry: 0,
+        rz: 0,
+        life: 0,
+        maxLife: 1,
+        floorY: 0,
+      });
+    }
+  }
+
+  _smashPumpkin(p, fx) {
+    p.broken = true;
+    // Hide the pumpkin's meshes but keep the group (and any point light) alive:
+    // dropping a light changes the scene's light count, which makes three.js
+    // recompile every lit material mid-race — a visible freeze right when you
+    // run into a pumpkin. Zeroing the intensity keeps the count constant.
+    p.group.traverse((o) => {
+      if (o.isMesh) o.visible = false;
+    });
+    if (p.light) p.light.intensity = 0;
+
+    if (fx) {
+      fx.spawnSparkBurst(p.x, p.y + 0.45, p.z, 16, 0xff6a00, 1.1);
+      fx.spawnImpactFlash(p.x, p.y + 0.4, p.z);
+    }
+
+    this._ensureShardPool();
+    for (const s of this._shards) {
+      if (s.life > 0) continue;
+      const a = Math.random() * Math.PI * 2;
+      const speed = 1.1 + Math.random() * 2.1;
+      s.mesh.position.set(
+        p.x + (Math.random() - 0.5) * 0.34,
+        p.y + 0.3 + Math.random() * 0.5,
+        p.z + (Math.random() - 0.5) * 0.34
+      );
+      s.mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+      s.mesh.visible = true;
+      s.mat.opacity = 1;
+      s.vx = Math.cos(a) * speed;
+      s.vz = Math.sin(a) * speed;
+      s.vy = 2.2 + Math.random() * 2.6;
+      s.rx = (Math.random() - 0.5) * 12;
+      s.ry = (Math.random() - 0.5) * 12;
+      s.rz = (Math.random() - 0.5) * 12;
+      s.life = 0.85 + Math.random() * 0.45;
+      s.maxLife = s.life;
+      s.floorY = p.y;
+    }
+  }
+
+  _updateShards(dt) {
+    if (!this._shards) return;
+    for (const s of this._shards) {
+      if (s.life <= 0) continue;
+      s.life -= dt;
+      if (s.life <= 0) {
+        s.life = 0;
+        s.mesh.visible = false;
+        continue;
+      }
+      s.vy -= 15 * dt;
+      const pos = s.mesh.position;
+      pos.x += s.vx * dt;
+      pos.y += s.vy * dt;
+      pos.z += s.vz * dt;
+      if (pos.y < s.floorY + 0.06 && s.vy < 0) {
+        pos.y = s.floorY + 0.06;
+        s.vy *= -0.34; // small bounce, then it settles
+        s.vx *= 0.6;
+        s.vz *= 0.6;
+      }
+      s.mesh.rotation.x += s.rx * dt;
+      s.mesh.rotation.y += s.ry * dt;
+      s.mesh.rotation.z += s.rz * dt;
+      s.mat.opacity = Math.min(1, (s.life / s.maxLife) * 2.4);
     }
   }
 
@@ -854,6 +1009,7 @@ export class RaceCourse {
   update(dt) {
     this.time += dt;
     if (this.halloween) this._updateHalloween(dt);
+    this._updateShards(dt);
     for (const prop of this.props) prop.update(dt);
     for (const b of this.batteries) b.update(dt, this.time);
     for (const fn of this._anim) fn(dt, this.time);
@@ -871,6 +1027,20 @@ export class RaceCourse {
   reset() {
     this.time = 0;
     this.clearHoles(); // a fresh race restores the meteored floor
+    for (const p of this._pumpkins) {
+      p.broken = false;
+      p.group.visible = true;
+      p.group.traverse((o) => {
+        if (o.isMesh) o.visible = true;
+      });
+      if (p.light) p.light.intensity = p.lightIntensity;
+    }
+    if (this._shards) {
+      for (const s of this._shards) {
+        s.life = 0;
+        s.mesh.visible = false;
+      }
+    }
     for (const prop of this.props) if (prop.reset) prop.reset();
     for (const b of this.batteries) b.reset();
     for (const cp of this.checkpoints) {
@@ -897,6 +1067,7 @@ export class RaceCourse {
     this.spinners = [];
     this._pumpkins = [];
     this._drifters = [];
+    this._shards = null;
     this.sliders = [];
     this.batteries = [];
     this._anim = [];

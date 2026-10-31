@@ -1,34 +1,40 @@
 import * as THREE from "three";
 import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
 import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import {
+  buildNeonBat,
+  buildNeonGhost,
+  prepareHdBat,
+  prepareHdGhost,
+} from "./halloweenCreatures.js";
 
 /**
  * Halloween asset kit (Neon-Cyberpunk 3D set).
  *
- * Loads the six generated assets once and hands out normalized templates that
+ * Loads the generated props once and hands out normalized templates that
  * raceCourse.js / main.js clone. Everything is cached at module level: clones
  * share geometry + materials, so a whole track costs only a handful of MB and
  * a few extra draw calls.
  *
  *   assets/halloween/pumpkin.png       2D reference / UI use
  *   assets/halloween/cobweb.png        ground + HUD corner web
- *   assets/halloween/bat.png           UI fallback
- *   assets/halloween/ghost.png         UI fallback
  *   assets/halloween/moon.png          moon surface (spherical-mapped)
- *   assets/halloween/button-frame.png  menu CTA frame
- *   assets/halloween/models/*.obj/mtl  3D props
+ *   assets/halloween/button-frame.png  menu CTA frame (CSS)
+ *   assets/halloween/models/*.obj/mtl  pumpkin + moon props
+ *   assets/halloween/hd/*.glb          authored HD bat + ghost
+ *
+ * The bat and ghost use the authored GLB models; the procedural builders in
+ * halloweenCreatures.js remain as a fallback if a GLB cannot be fetched.
  */
 
 const ROOT = "assets/halloween/";
 const OBJ_ROOT = `${ROOT}models/`;
+const HD_ROOT = `${ROOT}hd/`;
 
 const MODEL_FILES = {
   pumpkin: "01_jack_o_lantern",
-  cobweb: "02_cobweb_corner",
-  bat: "03_neon_bat",
-  ghost: "04_glowing_ghost",
   moon: "05_full_moon",
-  frame: "06_viber_race_button_frame",
 };
 
 let assetsPromise = null;
@@ -53,6 +59,20 @@ async function loadObj(name) {
   materials.preload();
   const objLoader = new OBJLoader().setMaterials(materials).setPath(OBJ_ROOT);
   return objLoader.loadAsync(`${name}.obj`);
+}
+
+function loadGltf(file) {
+  return new Promise((resolve) => {
+    new GLTFLoader().load(
+      HD_ROOT + file,
+      (gltf) => resolve(gltf),
+      undefined,
+      (err) => {
+        console.warn(`[halloween] could not load ${file}, using procedural fallback`, err);
+        resolve(null);
+      }
+    );
+  });
 }
 
 /** Scale an object to `height` world units with its base at y = 0 and its
@@ -87,7 +107,7 @@ function centerOnOrigin(obj, diameter) {
 }
 
 /** Emissive channels in the .mtl files are authored for bloom; push them a
- *  little so the pumpkin face, bat wings and ghost rim actually glow. */
+ *  little so the pumpkin face actually glows. */
 function prepMaterials(root, materialsByName) {
   root.traverse((o) => {
     if (!o.isMesh) return;
@@ -104,48 +124,6 @@ function prepMaterials(root, materialsByName) {
       }
     }
   });
-}
-
-/** The bat's wing membrane is one flat mesh; split it down the spine so each
- *  side can flap independently around the body. */
-function splitBatWings(template) {
-  const wing = template.getObjectByName("Bat_Wing_Membranes");
-  if (!wing || !wing.parent) return;
-  const geo = wing.geometry;
-  const pos = geo.getAttribute("position");
-  if (!pos) return;
-
-  const left = [];
-  const right = [];
-  for (let i = 0; i + 2 < pos.count; i += 3) {
-    const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
-    const target = cx < 0 ? left : right;
-    for (let k = 0; k < 3; k++) {
-      target.push(pos.getX(i + k), pos.getY(i + k), pos.getZ(i + k));
-    }
-  }
-  if (!left.length || !right.length) return;
-
-  const makeGeo = (points) => {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
-    g.computeVertexNormals();
-    return g;
-  };
-
-  const parent = wing.parent;
-  const material = wing.material;
-  wing.removeFromParent();
-
-  for (const [name, points] of [
-    ["wingL", left],
-    ["wingR", right],
-  ]) {
-    const pivot = new THREE.Group();
-    pivot.name = name;
-    pivot.add(new THREE.Mesh(makeGeo(points), material));
-    parent.add(pivot);
-  }
 }
 
 /** Spherical UVs for the moon sphere (the generated OBJ has no UV channel). */
@@ -181,13 +159,11 @@ function softGlowTexture() {
 
 async function buildAssets() {
   const texLoader = new THREE.TextureLoader();
-  const [pumpkinTex, cobwebTex, batTex, ghostTex, moonTex, frameTex] = await Promise.all([
-    loadTexture(texLoader, "pumpkin.png"),
+  const [cobwebTex, moonTex, batGltf, ghostGltf] = await Promise.all([
     loadTexture(texLoader, "cobweb.png"),
-    loadTexture(texLoader, "bat.png"),
-    loadTexture(texLoader, "ghost.png"),
     loadTexture(texLoader, "moon.png"),
-    loadTexture(texLoader, "button-frame.png"),
+    loadGltf("03_neon_bat_hd.glb"),
+    loadGltf("04_glowing_ghost_hd.glb"),
   ]);
 
   const loaded = await Promise.all(
@@ -211,27 +187,18 @@ async function buildAssets() {
     models.pumpkin = group;
   }
 
-  if (objs.bat) {
-    const { group } = normalizeToBase(objs.bat, 0.95);
-    prepMaterials(group, materials);
-    splitBatWings(group);
-    models.bat = group;
+  // Authored HD creatures, with the procedural versions as a safety net.
+  try {
+    models.bat = batGltf ? prepareHdBat(batGltf.scene) : buildNeonBat();
+  } catch (err) {
+    console.warn("[halloween] HD bat prep failed, using procedural fallback", err);
+    models.bat = buildNeonBat();
   }
-
-  if (objs.ghost) {
-    const { group } = normalizeToBase(objs.ghost, 1.5);
-    prepMaterials(group, materials);
-    group.traverse((o) => {
-      if (!o.isMesh) return;
-      const list = Array.isArray(o.material) ? o.material : [o.material];
-      for (const m of list) {
-        if (!m) continue;
-        m.transparent = true;
-        m.opacity = 0.85;
-        m.depthWrite = false;
-      }
-    });
-    models.ghost = group;
+  try {
+    models.ghost = ghostGltf ? prepareHdGhost(ghostGltf.scene) : buildNeonGhost();
+  } catch (err) {
+    console.warn("[halloween] HD ghost prep failed, using procedural fallback", err);
+    models.ghost = buildNeonGhost();
   }
 
   if (objs.moon) {
@@ -244,12 +211,8 @@ async function buildAssets() {
 
   return {
     textures: {
-      pumpkin: pumpkinTex,
       cobweb: cobwebTex,
-      bat: batTex,
-      ghost: ghostTex,
       moon: moonTex,
-      frame: frameTex,
       glow: softGlowTexture(),
     },
     models,
@@ -281,7 +244,9 @@ export function buildMoonMesh(assets) {
     transparent: true,
     opacity: 0.85,
     depthWrite: false,
-    depthTest: false, // sky backdrop: draw above the course void, under the HUD
+    // Depth-tested sky object: banners, pylons and the finish gate in front of
+    // it now correctly occlude the disc instead of the moon painting over them.
+    depthTest: true,
     fog: false,
     side: THREE.DoubleSide, // generated sphere winding is inverted
     toneMapped: false,
@@ -314,20 +279,4 @@ export function buildMoonMesh(assets) {
   return group;
 }
 
-/** Small additive halo used behind ghosts / bats. */
-export function makeHalo(assets, color, opacity, size) {
-  if (!assets || !assets.textures.glow) return null;
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({
-      map: assets.textures.glow,
-      color,
-      transparent: true,
-      opacity,
-      depthWrite: false,
-      fog: false,
-      blending: THREE.AdditiveBlending,
-    })
-  );
-  sprite.scale.set(size, size, 1);
-  return sprite;
-}
+/** Build a moon object ready to live in the sky group (centred, diameter 2). */

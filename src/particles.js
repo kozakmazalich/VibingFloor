@@ -281,7 +281,7 @@ export class FXManager {
   }
 
   // Jetpack exhaust. Ring-buffered so a burn never allocates.
-  spawnEmber(x, y, z, vx, vy, vz) {
+  spawnEmber(x, y, z, vx, vy, vz, colorA = 0x9af6ff, colorB = 0xffe7a8) {
     this._ensureEmbers();
     const e = this.embers[this._emberCursor];
     this._emberCursor = (this._emberCursor + 1) % this.embers.length;
@@ -294,7 +294,7 @@ export class FXManager {
     e.vz = vz;
     e.maxLife = 0.26 + Math.random() * 0.22;
     e.life = e.maxLife;
-    e.mat.color.setHex(Math.random() < 0.72 ? 0x9af6ff : 0xffe7a8);
+    e.mat.color.setHex(Math.random() < 0.72 ? colorA : colorB);
     e.mat.opacity = 0.95;
   }
 
